@@ -215,11 +215,11 @@ const wbUrl = (code, iso3) => `https://data.worldbank.org/indicator/${code}?loca
 const imfUrl = (code, iso3) => `https://www.imf.org/external/datamapper/${code}@WEO/${iso3}`;
 
 const INDICATORS = [
-  { name: "Land area", unit: "sq km",
+  { name: "Land area", unit: "km²",
     sourceLabel: "World Bank · Land area (AG.LND.TOTL.K2)",
     sourceUrl: (iso3) => wbUrl("AG.LND.TOTL.K2", iso3),
     api: "wb", code: "AG.LND.TOTL.K2",
-    format: (v) => fmtInt(v) },
+    format: (v) => `${fmtInt(v)} km²` },
   { name: "GDP, current prices", unit: "USD billions",
     sourceLabel: "IMF WEO · GDP current prices (NGDPD)",
     sourceUrl: (iso3) => imfUrl("NGDPD", iso3),
