@@ -40,6 +40,23 @@
     z-index: 100;
   }
 
+  #back-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 5px 10px;
+    cursor: pointer;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: border-color 0.15s, color 0.15s;
+    flex-shrink: 0;
+  }
+  #back-btn:hover { border-color: var(--accent); color: var(--accent); }
+
   #book-title {
     flex: 1;
     font-size: 14px;
@@ -56,6 +73,7 @@
     gap: 8px;
     font-size: 12px;
     color: var(--muted);
+    flex-shrink: 0;
   }
 
   #progress-bar {
@@ -82,10 +100,7 @@
     bottom: var(--bar-h);
   }
 
-  #viewer {
-    width: 100%;
-    height: 100%;
-  }
+  #viewer { width: 100%; height: 100%; }
 
   .nav-btn {
     position: fixed;
@@ -105,9 +120,7 @@
     transition: background 0.15s, border-color 0.15s;
     z-index: 50;
   }
-
   .nav-btn:hover { background: #252830; border-color: var(--accent); }
-
   #prev-btn { left: 8px; }
   #next-btn { right: 8px; }
 
@@ -120,7 +133,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 16px;
+    gap: 12px;
     z-index: 100;
   }
 
@@ -136,6 +149,14 @@
   }
   .bar-btn:hover { border-color: var(--accent); color: var(--accent); }
 
+  #saved-badge {
+    font-size: 11px;
+    color: var(--muted);
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  #saved-badge.show { opacity: 1; }
+
   #toc-panel {
     position: fixed;
     top: var(--bar-h);
@@ -150,9 +171,7 @@
     transition: transform 0.25s ease;
     padding: 12px 0;
   }
-
   #toc-panel.open { transform: translateX(0); }
-
   #toc-panel h3 {
     font-size: 11px;
     font-weight: 600;
@@ -161,9 +180,7 @@
     color: var(--muted);
     padding: 0 16px 8px;
   }
-
   #toc-list { list-style: none; }
-
   #toc-list li a {
     display: block;
     padding: 7px 16px;
@@ -172,8 +189,8 @@
     text-decoration: none;
     transition: background 0.12s;
   }
-
   #toc-list li a:hover { background: rgba(91,155,213,0.12); color: var(--accent); }
+  #toc-list li a.active { color: var(--accent); background: rgba(91,155,213,0.08); }
 
   #loading {
     position: fixed;
@@ -186,18 +203,14 @@
     gap: 14px;
     z-index: 200;
   }
-
   .spinner {
-    width: 36px;
-    height: 36px;
+    width: 36px; height: 36px;
     border: 3px solid var(--border);
     border-top-color: var(--accent);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
-
   @keyframes spin { to { transform: rotate(360deg); } }
-
   #loading-text { font-size: 13px; color: var(--muted); }
 
   #error-msg {
@@ -211,8 +224,8 @@
     gap: 10px;
     z-index: 200;
   }
-
-  #error-msg p { font-size: 14px; color: var(--muted); }
+  #error-msg p { font-size: 14px; color: var(--muted); text-align: center; padding: 0 24px; }
+  #error-msg a { color: var(--accent); text-decoration: none; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -224,9 +237,11 @@
 
 <div id="error-msg">
   <p id="error-detail">Could not load the book.</p>
+  <a href="library.html">← Back to Library</a>
 </div>
 
 <div id="topbar">
+  <a id="back-btn" href="library.html">← Library</a>
   <span id="book-title">—</span>
   <div id="progress-wrap">
     <div id="progress-bar"><div id="progress-fill"></div></div>
@@ -247,6 +262,7 @@
   <button class="bar-btn" id="font-dec">A−</button>
   <button class="bar-btn" id="font-inc">A+</button>
   <button class="bar-btn" id="theme-toggle">Light / Dark</button>
+  <span id="saved-badge">Saved</span>
 </div>
 
 <div id="toc-panel">
@@ -255,14 +271,32 @@
 </div>
 
 <script>
-  // ── EPUB URL ──────────────────────────────────────────────────────────────
-  // Replace this with the raw GitHub URL of the .epub file once uploaded.
-  var EPUB_URL = '';
+  // ── Book catalogue (slug → raw GitHub URL) ────────────────────────────────
+  var BOOKS = {
+    'the-architects-apprentice': {
+      url: 'https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/the-architects-apprentice.epub',
+      title: 'The Architect\'s Apprentice',
+      author: 'Elif Shafak'
+    }
+  };
   // ─────────────────────────────────────────────────────────────────────────
 
-  var book, rendition;
-  var fontSize = 100;
-  var darkMode = true;
+  var params = new URLSearchParams(location.search);
+  var slug = params.get('book');
+  var bookMeta = slug && BOOKS[slug];
+
+  function storageKey() { return 'epub-progress:' + slug; }
+
+  function saveProgress(cfi) {
+    try { localStorage.setItem(storageKey(), cfi); } catch(e) {}
+    var badge = document.getElementById('saved-badge');
+    badge.classList.add('show');
+    setTimeout(function() { badge.classList.remove('show'); }, 1200);
+  }
+
+  function loadProgress() {
+    try { return localStorage.getItem(storageKey()); } catch(e) { return null; }
+  }
 
   function showError(msg) {
     document.getElementById('loading').style.display = 'none';
@@ -271,48 +305,60 @@
     document.getElementById('error-detail').textContent = msg || 'Could not load the book.';
   }
 
-  function applyTheme() {
-    if (!rendition) return;
-    if (darkMode) {
-      rendition.themes.override('background', '#0f1117');
-      rendition.themes.override('color', '#e8eaed');
-    } else {
-      rendition.themes.override('background', '#fafafa');
-      rendition.themes.override('color', '#1a1a1a');
-    }
-    document.body.style.background = darkMode ? '#0f1117' : '#f0f0f0';
-  }
-
-  if (!EPUB_URL) {
-    showError('No book loaded yet — the epub URL has not been configured.');
+  if (!bookMeta) {
+    showError('Unknown book. Please select a book from the library.');
   } else {
-    book = ePub(EPUB_URL);
-    rendition = book.renderTo('viewer', {
-      width: '100%',
-      height: '100%',
-      spread: 'none'
-    });
+    document.getElementById('book-title').textContent = bookMeta.title;
+    document.title = bookMeta.title;
 
-    rendition.display().then(function() {
+    var book = ePub(bookMeta.url);
+    var rendition = book.renderTo('viewer', { width: '100%', height: '100%', spread: 'none' });
+    var fontSize = 100;
+    var darkMode = true;
+
+    function applyTheme() {
+      rendition.themes.override('background', darkMode ? '#0f1117' : '#fafafa');
+      rendition.themes.override('color',      darkMode ? '#e8eaed' : '#1a1a1a');
+      rendition.themes.override('line-height', '1.7');
+      document.body.style.background = darkMode ? '#0f1117' : '#f0f0f0';
+    }
+
+    var savedCfi = loadProgress();
+    var displayPromise = savedCfi ? rendition.display(savedCfi) : rendition.display();
+
+    displayPromise.then(function() {
       document.getElementById('loading').style.display = 'none';
       applyTheme();
-    }).catch(function(err) {
-      showError('Failed to render book: ' + err.message);
+    }).catch(function() {
+      // Saved CFI might be stale; fall back to beginning
+      rendition.display().then(function() {
+        document.getElementById('loading').style.display = 'none';
+        applyTheme();
+      }).catch(function(err) {
+        showError('Failed to render book: ' + (err && err.message));
+      });
+    });
+
+    // Save progress on every page turn
+    rendition.on('relocated', function(loc) {
+      if (!loc || !loc.start) return;
+      saveProgress(loc.start.cfi);
+
+      // Update progress bar
+      var pct = book.locations.percentageFromCfi(loc.start.cfi);
+      if (pct !== undefined && !isNaN(pct)) {
+        document.getElementById('progress-fill').style.width = (pct * 100).toFixed(1) + '%';
+        document.getElementById('progress-label').textContent = Math.round(pct * 100) + '%';
+      }
+
+      // Highlight active TOC entry
+      document.querySelectorAll('#toc-list li a').forEach(function(a) {
+        a.classList.toggle('active', a.dataset.href === loc.start.href);
+      });
     });
 
     book.ready.then(function() {
-      var meta = book.package.metadata;
-      if (meta && meta.title) {
-        document.getElementById('book-title').textContent = meta.title;
-        document.title = meta.title;
-      }
       return book.locations.generate(1000);
-    }).then(function() {
-      rendition.on('relocated', function(loc) {
-        var pct = book.locations.percentageFromCfi(loc.start.cfi);
-        document.getElementById('progress-fill').style.width = (pct * 100).toFixed(1) + '%';
-        document.getElementById('progress-label').textContent = Math.round(pct * 100) + '%';
-      });
     }).catch(function() {});
 
     book.loaded.navigation.then(function(nav) {
@@ -322,6 +368,7 @@
         var a = document.createElement('a');
         a.href = '#';
         a.textContent = item.label.trim();
+        a.dataset.href = item.href;
         a.addEventListener('click', function(e) {
           e.preventDefault();
           rendition.display(item.href);
@@ -335,30 +382,27 @@
     document.getElementById('prev-btn').addEventListener('click', function() { rendition.prev(); });
     document.getElementById('next-btn').addEventListener('click', function() { rendition.next(); });
 
-    // Keyboard navigation
     document.addEventListener('keydown', function(e) {
-      if (e.key === 'ArrowLeft') rendition.prev();
+      if (e.key === 'ArrowLeft')  rendition.prev();
       if (e.key === 'ArrowRight') rendition.next();
+    });
+
+    document.getElementById('font-inc').addEventListener('click', function() {
+      fontSize = Math.min(fontSize + 10, 200);
+      rendition.themes.fontSize(fontSize + '%');
+    });
+    document.getElementById('font-dec').addEventListener('click', function() {
+      fontSize = Math.max(fontSize - 10, 60);
+      rendition.themes.fontSize(fontSize + '%');
+    });
+    document.getElementById('theme-toggle').addEventListener('click', function() {
+      darkMode = !darkMode;
+      applyTheme();
     });
   }
 
   document.getElementById('toc-toggle').addEventListener('click', function() {
     document.getElementById('toc-panel').classList.toggle('open');
-  });
-
-  document.getElementById('font-inc').addEventListener('click', function() {
-    fontSize = Math.min(fontSize + 10, 200);
-    if (rendition) rendition.themes.fontSize(fontSize + '%');
-  });
-
-  document.getElementById('font-dec').addEventListener('click', function() {
-    fontSize = Math.max(fontSize - 10, 60);
-    if (rendition) rendition.themes.fontSize(fontSize + '%');
-  });
-
-  document.getElementById('theme-toggle').addEventListener('click', function() {
-    darkMode = !darkMode;
-    applyTheme();
   });
 </script>
 </body>

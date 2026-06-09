@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Library</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d23;
+    --border: #2e3238;
+    --text: #e8eaed;
+    --muted: #8b9099;
+    --accent: #5b9bd5;
+    --card-hover: #1f2229;
+  }
+
+  html, body {
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  header {
+    padding: 32px 40px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+
+  header h1 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  header .sub {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 20px;
+    padding: 32px 40px;
+    max-width: 1200px;
+  }
+
+  .book-card {
+    display: block;
+    text-decoration: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.15s, background 0.15s, transform 0.15s;
+    cursor: pointer;
+  }
+  .book-card:hover {
+    border-color: var(--accent);
+    background: var(--card-hover);
+    transform: translateY(-2px);
+  }
+
+  .book-cover {
+    width: 100%;
+    aspect-ratio: 2/3;
+    background: linear-gradient(145deg, #1e2330, #252c3a);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .book-cover::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(91,155,213,0.08) 0%, transparent 60%);
+  }
+
+  .book-cover-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 2px;
+  }
+
+  .book-cover-placeholder {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    text-align: center;
+    line-height: 1.45;
+    z-index: 1;
+  }
+
+  .book-cover-icon {
+    font-size: 36px;
+    display: block;
+    margin-bottom: 12px;
+    opacity: 0.5;
+  }
+
+  .book-info {
+    padding: 12px 14px 14px;
+  }
+
+  .book-info .title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.35;
+    margin-bottom: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .book-info .author {
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .progress-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+
+  .resume-label {
+    font-size: 10px;
+    color: var(--accent);
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Library</h1>
+  <span class="sub">Select a book to read</span>
+</header>
+
+<div id="grid"></div>
+
+<script>
+  // ── Book catalogue ────────────────────────────────────────────────────────
+  // Add new books here as they are uploaded.
+  var BOOKS = [
+    {
+      slug: 'the-architects-apprentice',
+      title: "The Architect's Apprentice",
+      author: 'Elif Shafak',
+      cover: null  // set to image URL if a cover is available
+    }
+  ];
+  // ─────────────────────────────────────────────────────────────────────────
+
+  var grid = document.getElementById('grid');
+
+  BOOKS.forEach(function(book) {
+    var hasSaved = !!localStorage.getItem('epub-progress:' + book.slug);
+
+    var a = document.createElement('a');
+    a.className = 'book-card';
+    a.href = 'reader.html?book=' + encodeURIComponent(book.slug);
+
+    var coverDiv = document.createElement('div');
+    coverDiv.className = 'book-cover';
+
+    if (book.cover) {
+      var img = document.createElement('img');
+      img.className = 'book-cover-img';
+      img.src = book.cover;
+      img.alt = book.title;
+      coverDiv.appendChild(img);
+    } else {
+      var placeholder = document.createElement('div');
+      placeholder.className = 'book-cover-placeholder';
+      placeholder.innerHTML = '<span class="book-cover-icon">📖</span>' + book.title;
+      coverDiv.appendChild(placeholder);
+    }
+
+    var infoDiv = document.createElement('div');
+    infoDiv.className = 'book-info';
+    infoDiv.innerHTML =
+      '<div class="title">' + book.title + '</div>' +
+      '<div class="author">' + book.author + '</div>' +
+      (hasSaved ? '<div class="resume-label"><span class="progress-dot"></span>Resume reading</div>' : '');
+
+    a.appendChild(coverDiv);
+    a.appendChild(infoDiv);
+    grid.appendChild(a);
+  });
+</script>
+</body>
+</html>
