@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d23;
+    --border: #2e3238;
+    --text: #e8eaed;
+    --muted: #8b9099;
+    --accent: #5b9bd5;
+    --green: #4caf82;
+    --red: #e05c5c;
+    --warn: #e8a730;
+  }
+
+  html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+  header {
+    padding: 28px 40px 22px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  header .sub { font-size: 13px; color: var(--muted); }
+
+  main { max-width: 560px; margin: 48px auto; padding: 0 24px; }
+
+  section { margin-bottom: 36px; }
+  section h2 { font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 16px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px;
+  }
+
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+
+  input[type="text"], input[type="password"] {
+    width: 100%;
+    padding: 10px 13px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s;
+    margin-bottom: 12px;
+  }
+  input[type="text"]:focus, input[type="password"]:focus { border-color: var(--accent); }
+
+  .row { display: flex; gap: 12px; }
+  .row input { flex: 1; }
+
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 40px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    margin-bottom: 12px;
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); background: rgba(91,155,213,0.05); }
+  .drop-zone p { font-size: 14px; color: var(--muted); margin-top: 8px; }
+  .drop-zone .icon { font-size: 32px; }
+  .drop-zone .file-name { font-size: 13px; color: var(--accent); margin-top: 6px; font-weight: 500; }
+  #epub-input { display: none; }
+
+  button {
+    width: 100%;
+    padding: 10px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.88; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.secondary { background: none; border: 1px solid var(--border); color: var(--muted); }
+  button.secondary:hover { border-color: var(--muted); opacity: 1; }
+  button.danger { background: none; border: 1px solid var(--border); color: var(--red); }
+
+  .status-bar {
+    margin-top: 14px;
+    font-size: 13px;
+    min-height: 20px;
+    color: var(--muted);
+  }
+  .status-bar.ok  { color: var(--green); }
+  .status-bar.err { color: var(--red); }
+  .status-bar.working { color: var(--accent); }
+
+  .pat-row { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 0; }
+  .pat-row input { flex: 1; margin-bottom: 0; }
+  .pat-row button { width: auto; padding: 10px 16px; flex-shrink: 0; }
+
+  .pat-status { font-size: 12px; margin-top: 8px; min-height: 16px; color: var(--muted); }
+  .pat-status.ok  { color: var(--green); }
+  .pat-status.err { color: var(--red); }
+
+  .book-list { display: flex; flex-direction: column; gap: 8px; }
+  .book-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  .book-item .book-title { flex: 1; font-weight: 500; }
+  .book-item .book-author { color: var(--muted); font-size: 12px; }
+  .book-item .book-icon { font-size: 18px; }
+</style>
+</head>
+<body>
+
+<!-- Password Gate -->
+<div id="auth-overlay" style="position:fixed;inset:0;z-index:9999;background:#0f1117;display:flex;align-items:center;justify-content:center;">
+  <div style="background:#1a1d23;border:1px solid #2e3238;border-radius:12px;padding:36px 40px;width:320px;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,0.3);">
+    <div style="font-size:22px;font-weight:600;margin-bottom:6px;letter-spacing:-0.01em;color:#e8eaed;">Admin Access</div>
+    <div style="font-size:13px;color:#8b9099;margin-bottom:24px;">Enter password to continue</div>
+    <input id="auth-input" type="password" placeholder="Password"
+      style="width:100%;padding:10px 14px;border:1px solid #2e3238;border-radius:8px;font-size:15px;outline:none;margin-bottom:12px;background:#0f1117;color:#e8eaed;"
+      onkeydown="if(event.key==='Enter')checkAuth()" autofocus />
+    <div id="auth-error" style="color:#e8a730;font-size:13px;min-height:18px;margin-bottom:10px;"></div>
+    <button onclick="checkAuth()"
+      style="width:100%;padding:10px;background:#5b9bd5;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:500;cursor:pointer;">
+      Enter
+    </button>
+  </div>
+</div>
+
+<script>
+  function checkAuth() {
+    var val = document.getElementById('auth-input').value;
+    if (val === 'Admin') {
+      document.getElementById('auth-overlay').style.display = 'none';
+    } else {
+      document.getElementById('auth-error').textContent = 'Incorrect password.';
+      document.getElementById('auth-input').value = '';
+      document.getElementById('auth-input').focus();
+    }
+  }
+</script>
+
+<header>
+  <div>
+    <h1>Admin</h1>
+    <div class="sub">Manage library books</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- GitHub Token -->
+  <section>
+    <h2>GitHub Token</h2>
+    <div class="card">
+      <label for="pat-input">Personal Access Token (repo scope)</label>
+      <div class="pat-row">
+        <input type="password" id="pat-input" placeholder="ghp_…" autocomplete="off" />
+        <button onclick="savePat()">Save</button>
+        <button class="secondary" onclick="clearPat()">Clear</button>
+      </div>
+      <div class="pat-status" id="pat-status"></div>
+    </div>
+  </section>
+
+  <!-- Upload -->
+  <section>
+    <h2>Upload New Book</h2>
+    <div class="card">
+      <label>EPUB File</label>
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('epub-input').click()">
+        <div class="icon">📂</div>
+        <p>Click or drag &amp; drop an .epub file</p>
+        <div class="file-name" id="file-name"></div>
+      </div>
+      <input type="file" id="epub-input" accept=".epub" />
+
+      <div class="row">
+        <div style="flex:1;">
+          <label for="book-title">Title</label>
+          <input type="text" id="book-title" placeholder="Book Title" />
+        </div>
+        <div style="flex:1;">
+          <label for="book-author">Author</label>
+          <input type="text" id="book-author" placeholder="Author Name" />
+        </div>
+      </div>
+
+      <label for="book-slug">Slug (auto-filled, editable)</label>
+      <input type="text" id="book-slug" placeholder="book-slug" />
+
+      <button id="upload-btn" onclick="uploadBook()" disabled>Upload Book</button>
+      <div class="status-bar" id="upload-status"></div>
+    </div>
+  </section>
+
+  <!-- Book List -->
+  <section>
+    <h2>Current Books</h2>
+    <div class="book-list" id="book-list">
+      <div style="font-size:13px;color:var(--muted);">Loading…</div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  var REPO = 'saeed-alzeera/verdict-cat';
+  var BRANCH = 'main';
+  var selectedFile = null;
+
+  // ── PAT storage ───────────────────────────────────────────────────────────
+  function getPat() { return localStorage.getItem('admin-pat') || ''; }
+
+  function savePat() {
+    var val = document.getElementById('pat-input').value.trim();
+    if (!val) { setPatStatus('err', 'Token cannot be empty.'); return; }
+    localStorage.setItem('admin-pat', val);
+    document.getElementById('pat-input').value = '';
+    setPatStatus('ok', 'Token saved.');
+    checkUploadReady();
+  }
+
+  function clearPat() {
+    localStorage.removeItem('admin-pat');
+    document.getElementById('pat-input').value = '';
+    setPatStatus('', 'Token cleared.');
+    checkUploadReady();
+  }
+
+  function setPatStatus(cls, msg) {
+    var el = document.getElementById('pat-status');
+    el.className = 'pat-status' + (cls ? ' ' + cls : '');
+    el.textContent = msg;
+  }
+
+  // ── File picker / drop zone ───────────────────────────────────────────────
+  var dropZone = document.getElementById('drop-zone');
+
+  dropZone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+  dropZone.addEventListener('dragleave', function() {
+    dropZone.classList.remove('drag-over');
+  });
+  dropZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    var file = e.dataTransfer.files[0];
+    if (file) setFile(file);
+  });
+
+  document.getElementById('epub-input').addEventListener('change', function() {
+    if (this.files[0]) setFile(this.files[0]);
+  });
+
+  function setFile(file) {
+    if (!file.name.endsWith('.epub')) {
+      setUploadStatus('err', 'Please select a .epub file.');
+      return;
+    }
+    selectedFile = file;
+    document.getElementById('file-name').textContent = file.name;
+    // auto-fill slug from filename
+    var slug = file.name.replace(/\.epub$/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    document.getElementById('book-slug').value = slug;
+    checkUploadReady();
+  }
+
+  document.getElementById('book-title').addEventListener('input', checkUploadReady);
+  document.getElementById('book-author').addEventListener('input', checkUploadReady);
+  document.getElementById('book-slug').addEventListener('input', checkUploadReady);
+
+  function checkUploadReady() {
+    var ready = selectedFile &&
+      getPat() &&
+      document.getElementById('book-title').value.trim() &&
+      document.getElementById('book-author').value.trim() &&
+      document.getElementById('book-slug').value.trim();
+    document.getElementById('upload-btn').disabled = !ready;
+  }
+
+  // ── GitHub API helpers ────────────────────────────────────────────────────
+  async function ghGet(path) {
+    var r = await fetch('https://api.github.com/repos/' + REPO + path, {
+      headers: { Authorization: 'Bearer ' + getPat(), Accept: 'application/vnd.github+json' }
+    });
+    if (!r.ok) throw new Error('GitHub ' + r.status + ': ' + (await r.text()));
+    return r.json();
+  }
+
+  async function ghPut(path, body) {
+    var r = await fetch('https://api.github.com/repos/' + REPO + path, {
+      method: 'PUT',
+      headers: {
+        Authorization: 'Bearer ' + getPat(),
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error('GitHub ' + r.status + ': ' + (await r.text()));
+    return r.json();
+  }
+
+  async function getFileSha(path) {
+    try {
+      var data = await ghGet('/contents/' + path + '?ref=' + BRANCH);
+      return data.sha;
+    } catch(e) {
+      return null; // file doesn't exist yet
+    }
+  }
+
+  // ── Upload flow ───────────────────────────────────────────────────────────
+  async function uploadBook() {
+    var title  = document.getElementById('book-title').value.trim();
+    var author = document.getElementById('book-author').value.trim();
+    var slug   = document.getElementById('book-slug').value.trim();
+    var btn    = document.getElementById('upload-btn');
+
+    btn.disabled = true;
+
+    try {
+      // Step 1: upload epub binary
+      setUploadStatus('working', '1/3  Uploading epub file…');
+      var b64 = await toBase64(selectedFile);
+      var epubPath = 'books/' + slug + '.epub';
+      var existingSha = await getFileSha(epubPath);
+      var epubBody = {
+        message: 'Add book: ' + title,
+        content: b64,
+        branch: BRANCH
+      };
+      if (existingSha) epubBody.sha = existingSha;
+      await ghPut('/contents/' + epubPath, epubBody);
+
+      // Step 2: patch library.html
+      setUploadStatus('working', '2/3  Updating library…');
+      await patchFile('library.html', function(src) {
+        var newEntry = "    {\n      slug: '" + slug + "',\n      title: " + JSON.stringify(title) + ",\n      author: " + JSON.stringify(author) + ",\n      cover: null\n    }";
+        return src.replace(/(var BOOKS = \[)([\s\S]*?)(\];)/, function(_, open, body, close) {
+          var trimmed = body.trimEnd();
+          return open + trimmed + ',\n' + newEntry + '\n  ' + close;
+        });
+      }, 'Register book in library: ' + title);
+
+      // Step 3: patch reader.html
+      setUploadStatus('working', '3/3  Updating reader…');
+      var rawUrl = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/' + epubPath;
+      await patchFile('reader.html', function(src) {
+        var newEntry = "    " + JSON.stringify(slug) + ": {\n      url: " + JSON.stringify(rawUrl) + ",\n      title: " + JSON.stringify(title) + ",\n      author: " + JSON.stringify(author) + "\n    }";
+        return src.replace(/(var BOOKS = \{)([\s\S]*?)(\};)/, function(_, open, body, close) {
+          var trimmed = body.trimEnd();
+          return open + trimmed + ',\n' + newEntry + '\n  ' + close;
+        });
+      }, 'Register book in reader: ' + title);
+
+      setUploadStatus('ok', 'Done! "' + title + '" added to the library.');
+      selectedFile = null;
+      document.getElementById('file-name').textContent = '';
+      document.getElementById('epub-input').value = '';
+      document.getElementById('book-title').value = '';
+      document.getElementById('book-author').value = '';
+      document.getElementById('book-slug').value = '';
+      checkUploadReady();
+      loadBookList();
+
+    } catch(err) {
+      setUploadStatus('err', err.message || 'Upload failed.');
+      btn.disabled = false;
+      checkUploadReady();
+    }
+  }
+
+  async function patchFile(filename, patchFn, commitMsg) {
+    var data = await ghGet('/contents/' + filename + '?ref=' + BRANCH);
+    var src = atob(data.content.replace(/\n/g, ''));
+    var patched = patchFn(src);
+    if (patched === src) throw new Error('Could not patch ' + filename + ' — pattern not found.');
+    await ghPut('/contents/' + filename, {
+      message: commitMsg,
+      content: btoa(unescape(encodeURIComponent(patched))),
+      sha: data.sha,
+      branch: BRANCH
+    });
+  }
+
+  function toBase64(file) {
+    return new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function() {
+        // strip the data:...;base64, prefix
+        resolve(reader.result.split(',')[1]);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function setUploadStatus(cls, msg) {
+    var el = document.getElementById('upload-status');
+    el.className = 'status-bar' + (cls ? ' ' + cls : '');
+    el.textContent = msg;
+  }
+
+  // ── Book list ─────────────────────────────────────────────────────────────
+  async function loadBookList() {
+    var el = document.getElementById('book-list');
+    if (!getPat()) {
+      el.innerHTML = '<div style="font-size:13px;color:var(--muted);">Save a GitHub token above to view books.</div>';
+      return;
+    }
+    try {
+      var data = await ghGet('/contents/library.html?ref=' + BRANCH);
+      var src = atob(data.content.replace(/\n/g, ''));
+      var m = src.match(/var BOOKS = \[([\s\S]*?)\];/);
+      if (!m) throw new Error('Could not parse book list.');
+      var books = [];
+      var re = /slug:\s*'([^']+)'[\s\S]*?title:\s*([^\n,]+)[\s\S]*?author:\s*([^\n,]+)/g;
+      var match;
+      while ((match = re.exec(m[1])) !== null) {
+        books.push({
+          slug: match[1],
+          title: match[2].trim().replace(/^["']|["']$/g, ''),
+          author: match[3].trim().replace(/^["']|["']$/g, '')
+        });
+      }
+      if (!books.length) {
+        el.innerHTML = '<div style="font-size:13px;color:var(--muted);">No books yet.</div>';
+        return;
+      }
+      el.innerHTML = '';
+      books.forEach(function(b) {
+        var item = document.createElement('div');
+        item.className = 'book-item';
+        item.innerHTML = '<span class="book-icon">📖</span><div><div class="book-title">' + escHtml(b.title) + '</div><div class="book-author">' + escHtml(b.author) + '</div></div>';
+        el.appendChild(item);
+      });
+    } catch(e) {
+      el.innerHTML = '<div style="font-size:13px;color:var(--red);">' + escHtml(e.message) + '</div>';
+    }
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  if (getPat()) {
+    setPatStatus('ok', 'Token loaded from storage.');
+    loadBookList();
+  }
+  checkUploadReady();
+</script>
+</body>
+</html>
