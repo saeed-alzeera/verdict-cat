@@ -413,10 +413,14 @@
     document.getElementById('prev-btn').addEventListener('click', function() { rendition.prev(); });
     document.getElementById('next-btn').addEventListener('click', function() { rendition.next(); });
 
-    document.addEventListener('keydown', function(e) {
+    function handleArrowKey(e) {
       if (e.key === 'ArrowLeft')  rendition.prev();
       if (e.key === 'ArrowRight') rendition.next();
-    });
+    }
+    // Listen on the outer document (when focus is outside the epub iframe)
+    document.addEventListener('keydown', handleArrowKey);
+    // Listen on the rendition (when focus is inside the epub iframe)
+    rendition.on('keydown', handleArrowKey);
 
     document.getElementById('font-inc').addEventListener('click', function() {
       fontSize = Math.min(fontSize + 10, 200);
