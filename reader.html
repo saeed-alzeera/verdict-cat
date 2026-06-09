@@ -6,6 +6,7 @@
 <title>Reader</title>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
+<script src="gist.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -287,6 +288,9 @@
 
   function storageKey() { return 'epub-progress:' + slug; }
 
+  var lastGistChapter = null;
+  var gistIdleTimer   = null;
+
   function saveProgress(cfi) {
     try { localStorage.setItem(storageKey(), cfi); } catch(e) {}
     var badge = document.getElementById('saved-badge');
@@ -297,6 +301,15 @@
   function loadProgress() {
     try { return localStorage.getItem(storageKey()); } catch(e) { return null; }
   }
+
+  // Push to Gist: immediately on chapter change, debounced (30s) within a chapter
+  function scheduleGistPush(immediate) {
+    clearTimeout(gistIdleTimer);
+    if (immediate) { Gist.push(); }
+    else { gistIdleTimer = setTimeout(function() { Gist.push(); }, 30000); }
+  }
+
+  window.addEventListener('beforeunload', function() { Gist.push(); });
 
   function showError(msg) {
     document.getElementById('loading').style.display = 'none';
@@ -339,10 +352,13 @@
       });
     });
 
-    // Save progress on every page turn
+    // Save progress on every page turn; push to Gist on chapter change or after 30s idle
     rendition.on('relocated', function(loc) {
       if (!loc || !loc.start) return;
       saveProgress(loc.start.cfi);
+      var chapterChanged = loc.start.href !== lastGistChapter;
+      if (chapterChanged) lastGistChapter = loc.start.href;
+      scheduleGistPush(chapterChanged);
 
       // Update progress bar
       var pct = book.locations.percentageFromCfi(loc.start.cfi);
