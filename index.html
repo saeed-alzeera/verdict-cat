@@ -110,8 +110,11 @@
 
 <script>
   function checkAuth() {
-    if (document.getElementById('auth-input').value === '67DRA67') {
+    var val = document.getElementById('auth-input').value;
+    if (val === '67DRA67') {
       document.getElementById('auth-overlay').style.display = 'none';
+    } else if (val === 'YouNotMe') {
+      window.location.href = 'reader.html';
     } else {
       document.getElementById('auth-error').textContent = 'Incorrect password.';
       document.getElementById('auth-input').value = '';

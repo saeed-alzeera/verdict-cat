@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Reader</title>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d23;
+    --border: #2e3238;
+    --text: #e8eaed;
+    --muted: #8b9099;
+    --accent: #5b9bd5;
+    --bar-h: 52px;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    overflow: hidden;
+  }
+
+  #topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: var(--bar-h);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 12px;
+    z-index: 100;
+  }
+
+  #book-title {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  #progress-bar {
+    width: 120px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  #progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+
+  #viewer-wrap {
+    position: fixed;
+    top: var(--bar-h);
+    left: 60px;
+    right: 60px;
+    bottom: var(--bar-h);
+  }
+
+  #viewer {
+    width: 100%;
+    height: 100%;
+  }
+
+  .nav-btn {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 44px;
+    height: 44px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    color: var(--text);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, border-color 0.15s;
+    z-index: 50;
+  }
+
+  .nav-btn:hover { background: #252830; border-color: var(--accent); }
+
+  #prev-btn { left: 8px; }
+  #next-btn { right: 8px; }
+
+  #bottombar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: var(--bar-h);
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 100;
+  }
+
+  .bar-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 12px;
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .bar-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  #toc-panel {
+    position: fixed;
+    top: var(--bar-h);
+    left: 0;
+    bottom: var(--bar-h);
+    width: 260px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    z-index: 90;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    padding: 12px 0;
+  }
+
+  #toc-panel.open { transform: translateX(0); }
+
+  #toc-panel h3 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 16px 8px;
+  }
+
+  #toc-list { list-style: none; }
+
+  #toc-list li a {
+    display: block;
+    padding: 7px 16px;
+    font-size: 13px;
+    color: var(--text);
+    text-decoration: none;
+    transition: background 0.12s;
+  }
+
+  #toc-list li a:hover { background: rgba(91,155,213,0.12); color: var(--accent); }
+
+  #loading {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 14px;
+    z-index: 200;
+  }
+
+  .spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #loading-text { font-size: 13px; color: var(--muted); }
+
+  #error-msg {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 200;
+  }
+
+  #error-msg p { font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <div id="loading-text">Loading book…</div>
+</div>
+
+<div id="error-msg">
+  <p id="error-detail">Could not load the book.</p>
+</div>
+
+<div id="topbar">
+  <span id="book-title">—</span>
+  <div id="progress-wrap">
+    <div id="progress-bar"><div id="progress-fill"></div></div>
+    <span id="progress-label">—</span>
+  </div>
+</div>
+
+<button id="prev-btn" class="nav-btn" title="Previous page">&#8592;</button>
+
+<div id="viewer-wrap">
+  <div id="viewer"></div>
+</div>
+
+<button id="next-btn" class="nav-btn" title="Next page">&#8594;</button>
+
+<div id="bottombar">
+  <button class="bar-btn" id="toc-toggle">Contents</button>
+  <button class="bar-btn" id="font-dec">A−</button>
+  <button class="bar-btn" id="font-inc">A+</button>
+  <button class="bar-btn" id="theme-toggle">Light / Dark</button>
+</div>
+
+<div id="toc-panel">
+  <h3>Contents</h3>
+  <ul id="toc-list"></ul>
+</div>
+
+<script>
+  // ── EPUB URL ──────────────────────────────────────────────────────────────
+  // Replace this with the raw GitHub URL of the .epub file once uploaded.
+  var EPUB_URL = '';
+  // ─────────────────────────────────────────────────────────────────────────
+
+  var book, rendition;
+  var fontSize = 100;
+  var darkMode = true;
+
+  function showError(msg) {
+    document.getElementById('loading').style.display = 'none';
+    var el = document.getElementById('error-msg');
+    el.style.display = 'flex';
+    document.getElementById('error-detail').textContent = msg || 'Could not load the book.';
+  }
+
+  function applyTheme() {
+    if (!rendition) return;
+    if (darkMode) {
+      rendition.themes.override('background', '#0f1117');
+      rendition.themes.override('color', '#e8eaed');
+    } else {
+      rendition.themes.override('background', '#fafafa');
+      rendition.themes.override('color', '#1a1a1a');
+    }
+    document.body.style.background = darkMode ? '#0f1117' : '#f0f0f0';
+  }
+
+  if (!EPUB_URL) {
+    showError('No book loaded yet — the epub URL has not been configured.');
+  } else {
+    book = ePub(EPUB_URL);
+    rendition = book.renderTo('viewer', {
+      width: '100%',
+      height: '100%',
+      spread: 'none'
+    });
+
+    rendition.display().then(function() {
+      document.getElementById('loading').style.display = 'none';
+      applyTheme();
+    }).catch(function(err) {
+      showError('Failed to render book: ' + err.message);
+    });
+
+    book.ready.then(function() {
+      var meta = book.package.metadata;
+      if (meta && meta.title) {
+        document.getElementById('book-title').textContent = meta.title;
+        document.title = meta.title;
+      }
+      return book.locations.generate(1000);
+    }).then(function() {
+      rendition.on('relocated', function(loc) {
+        var pct = book.locations.percentageFromCfi(loc.start.cfi);
+        document.getElementById('progress-fill').style.width = (pct * 100).toFixed(1) + '%';
+        document.getElementById('progress-label').textContent = Math.round(pct * 100) + '%';
+      });
+    }).catch(function() {});
+
+    book.loaded.navigation.then(function(nav) {
+      var list = document.getElementById('toc-list');
+      nav.toc.forEach(function(item) {
+        var li = document.createElement('li');
+        var a = document.createElement('a');
+        a.href = '#';
+        a.textContent = item.label.trim();
+        a.addEventListener('click', function(e) {
+          e.preventDefault();
+          rendition.display(item.href);
+          document.getElementById('toc-panel').classList.remove('open');
+        });
+        li.appendChild(a);
+        list.appendChild(li);
+      });
+    });
+
+    document.getElementById('prev-btn').addEventListener('click', function() { rendition.prev(); });
+    document.getElementById('next-btn').addEventListener('click', function() { rendition.next(); });
+
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'ArrowLeft') rendition.prev();
+      if (e.key === 'ArrowRight') rendition.next();
+    });
+  }
+
+  document.getElementById('toc-toggle').addEventListener('click', function() {
+    document.getElementById('toc-panel').classList.toggle('open');
+  });
+
+  document.getElementById('font-inc').addEventListener('click', function() {
+    fontSize = Math.min(fontSize + 10, 200);
+    if (rendition) rendition.themes.fontSize(fontSize + '%');
+  });
+
+  document.getElementById('font-dec').addEventListener('click', function() {
+    fontSize = Math.max(fontSize - 10, 60);
+    if (rendition) rendition.themes.fontSize(fontSize + '%');
+  });
+
+  document.getElementById('theme-toggle').addEventListener('click', function() {
+    darkMode = !darkMode;
+    applyTheme();
+  });
+</script>
+</body>
+</html>
