@@ -55,6 +55,10 @@ export function NavMenu({ currentPath }: { readonly currentPath: string }) {
       </MenuItem>
 
       <MenuItem>
+        <MenuItemLink page={Pages.textTransport} />
+      </MenuItem>
+
+      <MenuItem>
         <SubMenu currentPath={currentPath} />
       </MenuItem>
     </div>

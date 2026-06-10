@@ -2,6 +2,7 @@ import { defaultLocale } from "@keybr/intl";
 import {
   mdiCarSide,
   mdiChartAreaspline,
+  mdiContentPaste,
   mdiHelpCircleOutline,
   mdiKeyboard,
   mdiKeyboardOutline,
@@ -256,6 +257,27 @@ export namespace Pages {
         }),
       },
     ],
+  } satisfies PageInfo;
+
+  export const textTransport = {
+    path: "/text-transport",
+    title: defineMessage({
+      id: "t_Text_Transport",
+      defaultMessage: "Text Transport",
+    }),
+    link: {
+      label: defineMessage({
+        id: "t_Text_Transport",
+        defaultMessage: "Text Transport",
+      }),
+      title: defineMessage({
+        id: "page.textTransport.description",
+        defaultMessage:
+          "Paste text on one device and access it from another.",
+      }),
+      icon: mdiContentPaste,
+    },
+    meta: [{ name: "robots", content: "noindex" }],
   } satisfies PageInfo;
 
   export const termsOfService = {
