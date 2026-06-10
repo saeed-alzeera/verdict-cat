@@ -3,6 +3,7 @@
 
 # Keys
 id_*
+.github-token
 
 # Compiled output
 packages/*/.types/

@@ -12,7 +12,6 @@ import { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { useIntl } from "react-intl";
 import { HashRouter, Route, Routes } from "react-router";
-import { GitHubSync } from "./GitHubSync.tsx";
 import { IntlLoader } from "./loader/IntlLoader.tsx";
 import { Template } from "./Template.tsx";
 import { ThemeProvider } from "./themes/ThemeProvider.tsx";
@@ -40,7 +39,6 @@ export function App() {
         <IntlLoader>
           <SettingsLoader>
             <ThemeProvider>
-              <GitHubSync />
               <PageRoutes />
             </ThemeProvider>
           </SettingsLoader>

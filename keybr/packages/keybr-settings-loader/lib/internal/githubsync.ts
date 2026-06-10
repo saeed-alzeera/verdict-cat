@@ -5,10 +5,9 @@ const REPO = "verdict-cat";
 const SETTINGS_PATH = "keybr/data/settings.json";
 const API = "https://api.github.com";
 
-const GITHUB_TOKEN_KEY = "keybr_github_token";
-
 function getToken(): string | null {
-  return localStorage.getItem(GITHUB_TOKEN_KEY);
+  const t = (globalThis as any).__GITHUB_TOKEN__;
+  return typeof t === "string" && t.length > 0 ? t : null;
 }
 
 type FileInfo = { content: string; sha: string };
