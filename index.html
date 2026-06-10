@@ -142,6 +142,8 @@
     if (val === '67DRA67') {
       document.getElementById('auth-overlay').style.display = 'none';
       document.getElementById('hub').style.display = 'flex';
+    } else if (val === 'GR-Reso') {
+      window.location.replace('numbers.html');
     } else {
       document.getElementById('auth-error').textContent = 'Incorrect password.';
       document.getElementById('auth-input').value = '';
