@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,17 +10,6 @@ const manifest = JSON.parse(
 const entry = manifest.entrypoints.browser;
 const cssFiles = entry.assets.css ?? [];
 const jsFiles = entry.assets.js ?? [];
-
-const tokenFile = join(__dirname, ".github-token");
-const githubToken = existsSync(tokenFile)
-  ? readFileSync(tokenFile, "utf8").trim()
-  : "";
-
-if (!githubToken) {
-  console.warn(
-    "Warning: no .github-token file found — GitHub sync will be disabled.",
-  );
-}
 
 const pageData = {
   base: "",
@@ -38,7 +27,6 @@ const html = `<!DOCTYPE html>
 <title>Keybr — Typing Practice</title>
 ${cssFiles.map((f) => `<link rel="stylesheet" href="${f}" />`).join("\n")}
 <script>var __PAGE_DATA__ = ${JSON.stringify(pageData)};</script>
-<script>var __GITHUB_TOKEN__ = ${JSON.stringify(githubToken)};</script>
 ${jsFiles.map((f) => `<script defer src="${f}"></script>`).join("\n")}
 </head>
 <body>
@@ -50,4 +38,3 @@ writeFileSync(join(__dirname, "index.html"), html);
 console.log("Generated keybr/index.html");
 console.log("CSS:", cssFiles);
 console.log("JS:", jsFiles);
-console.log("GitHub sync:", githubToken ? "enabled" : "disabled (no token)");

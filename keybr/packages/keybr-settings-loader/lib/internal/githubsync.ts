@@ -6,8 +6,8 @@ const SETTINGS_PATH = "keybr/data/settings.json";
 const API = "https://api.github.com";
 
 function getToken(): string | null {
-  const t = (globalThis as any).__GITHUB_TOKEN__;
-  return typeof t === "string" && t.length > 0 ? t : null;
+  const t = localStorage.getItem("keybr_github_token");
+  return t && t.length > 0 ? t : null;
 }
 
 type FileInfo = { content: string; sha: string };
