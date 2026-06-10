@@ -189,6 +189,6 @@ function PageRoutes() {
           }
         />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
