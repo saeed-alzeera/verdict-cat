@@ -41,23 +41,6 @@
     z-index: 100;
   }
 
-  #back-btn {
-    background: none;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--muted);
-    font-size: 12px;
-    padding: 5px 10px;
-    cursor: pointer;
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    transition: border-color 0.15s, color 0.15s;
-    flex-shrink: 0;
-  }
-  #back-btn:hover { border-color: var(--accent); color: var(--accent); }
-
   #book-title {
     flex: 1;
     font-size: 14px;
@@ -238,11 +221,9 @@
 
 <div id="error-msg">
   <p id="error-detail">Could not load the book.</p>
-  <a href="library.html">← Back to Library</a>
 </div>
 
 <div id="topbar">
-  <a id="back-btn" href="library.html">← Library</a>
   <span id="book-title">—</span>
   <div id="progress-wrap">
     <div id="progress-bar"><div id="progress-fill"></div></div>
