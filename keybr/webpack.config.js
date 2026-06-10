@@ -166,9 +166,9 @@ export default [
       ads: "./packages/thirdparties-ads/lib/entry.ts",
     },
     output: {
-      path: join(import.meta.dirname, "root", "public", "assets"),
+      path: join(import.meta.dirname, "static"),
       clean: true,
-      publicPath: "/assets/",
+      publicPath: "./static/",
       filename: `${filename}.js`,
       chunkFilename: `${chunkFilename}.js`,
       assetModuleFilename: `${assetModuleFilename}[ext]`,

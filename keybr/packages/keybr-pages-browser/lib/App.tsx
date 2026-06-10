@@ -11,7 +11,7 @@ import { querySelector } from "@keybr/widget";
 import { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { useIntl } from "react-intl";
-import { BrowserRouter, Route, Routes } from "react-router";
+import { HashRouter, Route, Routes } from "react-router";
 import { IntlLoader } from "./loader/IntlLoader.tsx";
 import { Template } from "./Template.tsx";
 import { ThemeProvider } from "./themes/ThemeProvider.tsx";
@@ -51,7 +51,7 @@ export function App() {
 function PageRoutes() {
   const { locale } = useIntl();
   return (
-    <BrowserRouter basename={Pages.intlBase(locale)}>
+    <HashRouter>
       <Routes>
         <Route
           index={true}

@@ -1,12 +1,13 @@
 import { type ReactNode } from "react";
-import * as styles from "./Root.module.less";
+
+const ROOT_ID = "keybr-root";
 
 export function Root({
   children,
 }: {
   readonly children?: ReactNode;
 }): ReactNode {
-  return <div id={styles.root}>{children}</div>;
+  return <div id={ROOT_ID}>{children}</div>;
 }
 
-Root.selector = `#${styles.root}`;
+Root.selector = `#${ROOT_ID}`;
