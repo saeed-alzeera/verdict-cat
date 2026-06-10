@@ -24,9 +24,7 @@ export const VirtualKeyboard = memo(function VirtualKeyboard({
       {...props}
       className={styles.keyboard}
       viewBox={`0 0 ${size.width} ${size.height}`}
-      style={{ aspectRatio: `${size.width}/${size.height}` }}
-      width={width}
-      height={height}
+      style={{ aspectRatio: `${size.width}/${size.height}`, width, height }}
     >
       <rect
         className={styles.frame}

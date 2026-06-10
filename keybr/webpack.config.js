@@ -78,6 +78,7 @@ const rule_less = (emit) => ({
       loader: MiniCssExtractPlugin.loader,
       options: {
         emit,
+        publicPath: "./",
       },
     },
     {
