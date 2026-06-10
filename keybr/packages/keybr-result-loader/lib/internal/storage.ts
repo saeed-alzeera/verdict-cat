@@ -1,5 +1,6 @@
 import { recoverResults, Result } from "@keybr/result";
 import { DatabaseError } from "../errors.ts";
+import { GitHubBackedResultStorage } from "./githubsync.ts";
 import { PersistentResultStorage } from "./local.ts";
 import { ResultSyncNamedUser, ResultSyncPublicUser } from "./remotesync.ts";
 import {
@@ -41,8 +42,7 @@ function openRawResultStorage(
     case "private": {
       const { userId } = request;
       if (userId == null) {
-        const local = new PersistentResultStorage();
-        return new ResultStorageOfAnonymousUser(local);
+        return new GitHubBackedResultStorage();
       } else {
         const local = new PersistentResultStorage();
         const remote = new ResultSyncNamedUser();

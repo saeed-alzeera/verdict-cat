@@ -1,5 +1,6 @@
 import { request } from "@keybr/request";
 import { Settings, type SettingsStorage } from "@keybr/settings";
+import { GitHubBackedSettingsStorage } from "./githubsync.ts";
 import { ObjectStorage } from "./objectstore.ts";
 
 export const STORAGE_KEY = "settings";
@@ -40,22 +41,6 @@ export function openSettingsStorage(
       }
     })();
   } else {
-    return new (class implements SettingsStorage {
-      async load(): Promise<Settings> {
-        const value = storage.get(STORAGE_KEY);
-        if (value != null) {
-          return new Settings(value as any);
-        } else {
-          const settings = new Settings(undefined, true);
-          storage.set(STORAGE_KEY, settings.toJSON());
-          return settings;
-        }
-      }
-
-      async store(settings: Settings): Promise<Settings> {
-        storage.set(STORAGE_KEY, settings.toJSON());
-        return settings;
-      }
-    })();
+    return new GitHubBackedSettingsStorage(STORAGE_KEY);
   }
 }
