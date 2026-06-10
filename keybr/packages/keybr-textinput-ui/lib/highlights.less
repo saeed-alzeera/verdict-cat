@@ -1,0 +1,35 @@
+/*
+ * CSS Custom Highlight rules for the connected-script text input path.
+ *
+ * Names here must match HIGHLIGHT_NAMES in HighlightLayer.tsx.
+ *
+ * Only non-layout properties are honored on `::highlight()` — `color`,
+ * `background-color`, `text-decoration*`, `text-shadow`, and the
+ * `-webkit-text-stroke-*` family. That restriction is what guarantees
+ * the browser will not reshape text under a highlight, which is the
+ * whole reason we use this API on Arabic / Persian runs.
+ *
+ * This file is intentionally a global stylesheet (no `.module.less`
+ * suffix) so the highlight names survive the CSS-modules name-mangling
+ * pass in webpack.config.js.
+ */
+
+::highlight(keybr-textinput-hit) {
+  color: var(--textinput--hit__color);
+}
+
+::highlight(keybr-textinput-miss) {
+  color: var(--textinput--miss__color);
+}
+
+::highlight(keybr-textinput-garbage) {
+  color: var(--textinput__color);
+  background-color: var(--textinput--miss__color);
+}
+
+/*
+ * Cursor rendering stays with Cursor.tsx's absolute overlay so the
+ * caret shape — including Line and Box, which the Highlight API has
+ * no primitive for — remains pixel-identical to Latin layouts and
+ * survives even if this stylesheet fails to load.
+ */
