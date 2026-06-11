@@ -1,6 +1,6 @@
 import { usePageData } from "@keybr/pages-shared";
 import { Article, Button, Icon, TextField } from "@keybr/widget";
-import { mdiContentCopy, mdiDelete, mdiSend } from "@mdi/js";
+import { mdiContentCopy, mdiDelete, mdiDownload, mdiSend } from "@mdi/js";
 import { useCallback, useEffect, useState } from "react";
 import { useIntl } from "react-intl";
 import * as styles from "./TextTransportPage.module.less";
@@ -120,6 +120,19 @@ export function TextTransportPage() {
     setTimeout(() => setCopied((prev) => (prev === id ? null : prev)), 2000);
   }, []);
 
+  const handleExport = useCallback(() => {
+    const blob = new Blob([JSON.stringify(snippets, null, 2)], {
+      type: "application/json",
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "text-snippets.json";
+    a.hidden = true;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, [snippets]);
+
   return (
     <Article>
       <h1>
@@ -173,12 +186,26 @@ export function TextTransportPage() {
 
       {snippets.length > 0 && (
         <section className={styles.snippetList}>
-          <h2>
-            {formatMessage({
-              id: "page.textTransport.savedSnippets",
-              defaultMessage: "Saved Snippets",
-            })}
-          </h2>
+          <div className={styles.snippetListHeader}>
+            <h2>
+              {formatMessage({
+                id: "page.textTransport.savedSnippets",
+                defaultMessage: "Saved Snippets",
+              })}
+            </h2>
+            <Button
+              onClick={handleExport}
+              icon={<Icon shape={mdiDownload} />}
+              label={formatMessage({
+                id: "page.textTransport.exportJson",
+                defaultMessage: "Export JSON",
+              })}
+              title={formatMessage({
+                id: "page.textTransport.exportJsonTitle",
+                defaultMessage: "Download all snippets as JSON",
+              })}
+            />
+          </div>
           {snippets.map((snippet) => (
             <div key={snippet.id} className={styles.snippetCard}>
               <pre className={styles.snippetText}>{snippet.text}</pre>
