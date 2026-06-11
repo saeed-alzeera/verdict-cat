@@ -153,13 +153,20 @@
   .btn-danger:hover { border-color: var(--danger); color: var(--danger); }
 
   /* ── Snippets ── */
+  #snippets-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
   #snippets-section h2 {
     font-size: 13px;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--muted);
-    margin-bottom: 14px;
+    margin-bottom: 0;
   }
 
   #snippet-list { display: flex; flex-direction: column; gap: 12px; }
@@ -290,7 +297,10 @@
 
   <!-- Snippets -->
   <div id="snippets-section" style="display:none">
-    <h2>Saved Snippets</h2>
+    <div id="snippets-header">
+      <h2>Saved Snippets</h2>
+      <button class="btn" id="export-btn" onclick="handleExport()">&#11015; Export JSON</button>
+    </div>
     <div id="snippet-list"></div>
   </div>
 
@@ -467,6 +477,17 @@
       render();
       setTimeout(function() { if (copiedId === id) { copiedId = null; render(); } }, 2000);
     });
+  }
+
+  function handleExport() {
+    var blob = new Blob([JSON.stringify(snippets, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'text-snippets.json';
+    a.hidden = true;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
   async function handleDelete(id) {
