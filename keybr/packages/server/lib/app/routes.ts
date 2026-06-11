@@ -10,8 +10,6 @@ import { Controller as ProfileController } from "./profile/index.ts";
 import { Controller as SettingsController } from "./settings/index.ts";
 import { Controller as SitemapController } from "./sitemap/index.ts";
 import { Controller as SyncController } from "./sync/index.ts";
-import { Controller as TextTransportController } from "./text-transport/index.ts";
-
 export function mainRoutes(): Middleware<any> {
   return new Router()
     .registerAll(
@@ -24,7 +22,6 @@ export function mainRoutes(): Middleware<any> {
         SettingsController,
         SitemapController,
         SyncController,
-        TextTransportController,
       ),
     )
     .middleware();

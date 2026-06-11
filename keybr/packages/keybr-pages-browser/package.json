@@ -15,7 +15,6 @@
     "@keybr/page-practice": "*",
     "@keybr/page-profile": "*",
     "@keybr/page-static": "*",
-    "@keybr/page-text-transport": "*",
     "@keybr/page-typing-test": "*",
     "@keybr/pages-shared": "*",
     "@keybr/request": "*",
