@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Text Transporter</title>
+<script src="gist.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d23;
+    --border: #2e3238;
+    --text: #e8eaed;
+    --muted: #8b9099;
+    --accent: #5b9bd5;
+    --warn: #e8a730;
+    --danger: #d94f4f;
+    --bar-h: 52px;
+  }
+
+  html, body {
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  /* ── Top bar ── */
+  #topbar {
+    position: sticky;
+    top: 0;
+    height: var(--bar-h);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 16px;
+    z-index: 100;
+  }
+  #topbar a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 0.15s;
+  }
+  #topbar a:hover { color: var(--accent); }
+  #topbar h1 {
+    font-size: 15px;
+    font-weight: 600;
+    flex: 1;
+  }
+  #sync-status {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #sync-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+  #sync-dot.connected { background: #4caf50; }
+  #sync-dot.syncing {
+    background: var(--accent);
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* ── Main layout ── */
+  #main {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 32px 20px 60px;
+  }
+
+  /* ── Input area ── */
+  #input-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 32px;
+  }
+  #input-area p {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  #text-input {
+    width: 100%;
+    min-height: 120px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    padding: 12px 14px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.15s;
+    line-height: 1.5;
+  }
+  #text-input:focus { border-color: var(--accent); }
+  #text-input::placeholder { color: var(--muted); }
+
+  #save-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+  }
+
+  .btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    padding: 7px 16px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn:disabled:hover { border-color: var(--border); color: var(--text); }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 500;
+  }
+  .btn-primary:hover { opacity: 0.88; color: #fff; border-color: var(--accent); }
+  .btn-primary:disabled:hover { opacity: 0.4; }
+
+  .btn-danger:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* ── Snippets ── */
+  #snippets-section h2 {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  #snippet-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .snippet-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .snippet-card:hover { border-color: #3e4248; }
+
+  .snippet-text {
+    padding: 14px 16px;
+    font-family: inherit;
+    font-size: 14px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.55;
+    max-height: 200px;
+    overflow-y: auto;
+    color: var(--text);
+  }
+
+  .snippet-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.15);
+    gap: 12px;
+  }
+
+  .snippet-date {
+    font-size: 11px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .snippet-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .snippet-actions .btn {
+    font-size: 12px;
+    padding: 5px 12px;
+  }
+
+  #empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  #empty-state .icon { font-size: 36px; margin-bottom: 10px; }
+
+  /* ── Sync panel ── */
+  #sync-panel {
+    margin-bottom: 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: none;
+  }
+  #sync-panel.open { display: block; }
+  #sync-panel h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  #sync-panel p { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  #sync-panel .row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  #sync-panel input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    padding: 7px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  #sync-panel input:focus { border-color: var(--accent); }
+  #sync-error { font-size: 12px; color: var(--warn); min-height: 16px; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <a href="index.html">&#8592; Hub</a>
+  <h1>Text Transporter</h1>
+  <div id="sync-status">
+    <div id="sync-dot"></div>
+    <span id="sync-label">Local only</span>
+    <button class="btn" id="sync-toggle-btn" style="font-size:11px;padding:4px 10px;">Sync</button>
+  </div>
+</div>
+
+<div id="main">
+
+  <!-- Gist sync panel (hidden by default) -->
+  <div id="sync-panel">
+    <h3>Cross-device sync via GitHub Gist</h3>
+    <p>Paste a GitHub personal access token (with gist scope) to sync snippets across devices.</p>
+    <div id="sync-connected" style="display:none">
+      <p style="color:#4caf50;margin-bottom:8px;">&#10003; Connected to Gist</p>
+      <button class="btn btn-danger" id="sync-disconnect-btn">Disconnect</button>
+    </div>
+    <div id="sync-form">
+      <div class="row">
+        <input type="password" id="pat-input" placeholder="ghp_..." autocomplete="off" />
+        <button class="btn btn-primary" id="sync-connect-btn">Connect</button>
+      </div>
+      <div id="sync-error"></div>
+    </div>
+  </div>
+
+  <!-- Input area -->
+  <div id="input-area">
+    <p>Paste text on one device — pick it up on another.</p>
+    <textarea id="text-input" placeholder="Paste or type your text here…"></textarea>
+    <div id="save-row">
+      <button class="btn btn-primary" id="save-btn" disabled>&#10132; Save</button>
+    </div>
+  </div>
+
+  <!-- Snippets -->
+  <div id="snippets-section" style="display:none">
+    <h2>Saved Snippets</h2>
+    <div id="snippet-list"></div>
+  </div>
+
+  <div id="empty-state">
+    <div class="icon">&#128203;</div>
+    <div>No snippets yet. Paste some text above to get started.</div>
+  </div>
+
+</div>
+
+<script>
+  var STORAGE_KEY = 'text-transport-snippets';
+  var GIST_FILE   = 'verdict-cat-text-transport.json';
+
+  var snippets = [];
+  var copiedId = null;
+
+  // ── Storage helpers ────────────────────────────────────────────────────────
+
+  function loadLocal() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch(e) {}
+    return [];
+  }
+
+  function saveLocal(list) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch(e) {}
+  }
+
+  // ── Gist sync ──────────────────────────────────────────────────────────────
+
+  var API = 'https://api.github.com';
+
+  function gistHeaders(pat) {
+    return { 'Authorization': 'token ' + pat, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' };
+  }
+
+  async function gistPull() {
+    if (!Gist.isConnected()) return null;
+    var c = Gist.credentials();
+    try {
+      var resp = await fetch(API + '/gists/' + c.gistId, { headers: gistHeaders(c.pat) });
+      if (!resp.ok) return null;
+      var data = await resp.json();
+      var file = data.files[GIST_FILE];
+      if (!file) return null;
+      var parsed = JSON.parse(file.content || '[]');
+      return Array.isArray(parsed) ? parsed : null;
+    } catch(e) { return null; }
+  }
+
+  async function gistPush(list) {
+    if (!Gist.isConnected()) return;
+    var c = Gist.credentials();
+    try {
+      await fetch(API + '/gists/' + c.gistId, {
+        method: 'PATCH',
+        headers: gistHeaders(c.pat),
+        body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(list, null, 2) } } })
+      });
+    } catch(e) {}
+  }
+
+  // ── Sync status UI ─────────────────────────────────────────────────────────
+
+  function updateSyncUI() {
+    var dot   = document.getElementById('sync-dot');
+    var label = document.getElementById('sync-label');
+    var connDiv  = document.getElementById('sync-connected');
+    var formDiv  = document.getElementById('sync-form');
+
+    if (Gist.isConnected()) {
+      dot.className = 'connected';
+      label.textContent = 'Gist sync';
+      connDiv.style.display = 'block';
+      formDiv.style.display = 'none';
+    } else {
+      dot.className = '';
+      label.textContent = 'Local only';
+      connDiv.style.display = 'none';
+      formDiv.style.display = 'block';
+    }
+  }
+
+  function setSyncing(on) {
+    var dot = document.getElementById('sync-dot');
+    if (on) {
+      dot.className = 'syncing';
+    } else {
+      updateSyncUI();
+    }
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
+  function render() {
+    var list    = document.getElementById('snippet-list');
+    var section = document.getElementById('snippets-section');
+    var empty   = document.getElementById('empty-state');
+
+    list.innerHTML = '';
+
+    if (snippets.length === 0) {
+      section.style.display = 'none';
+      empty.style.display   = 'block';
+      return;
+    }
+
+    section.style.display = 'block';
+    empty.style.display   = 'none';
+
+    snippets.forEach(function(s) {
+      var card = document.createElement('div');
+      card.className = 'snippet-card';
+
+      var pre = document.createElement('pre');
+      pre.className = 'snippet-text';
+      pre.textContent = s.text;
+
+      var footer = document.createElement('div');
+      footer.className = 'snippet-footer';
+
+      var date = document.createElement('span');
+      date.className = 'snippet-date';
+      date.textContent = new Date(s.createdAt).toLocaleString();
+
+      var actions = document.createElement('div');
+      actions.className = 'snippet-actions';
+
+      var copyBtn = document.createElement('button');
+      copyBtn.className = 'btn';
+      copyBtn.innerHTML = '&#128203; ' + (copiedId === s.id ? 'Copied!' : 'Copy');
+      copyBtn.onclick = function() { handleCopy(s.id, s.text); };
+
+      var delBtn = document.createElement('button');
+      delBtn.className = 'btn btn-danger';
+      delBtn.innerHTML = '&#128465; Delete';
+      delBtn.onclick = function() { handleDelete(s.id); };
+
+      actions.appendChild(copyBtn);
+      actions.appendChild(delBtn);
+
+      footer.appendChild(date);
+      footer.appendChild(actions);
+      card.appendChild(pre);
+      card.appendChild(footer);
+      list.appendChild(card);
+    });
+  }
+
+  // ── Actions ────────────────────────────────────────────────────────────────
+
+  function handleCopy(id, text) {
+    navigator.clipboard.writeText(text).then(function() {
+      copiedId = id;
+      render();
+      setTimeout(function() {
+        if (copiedId === id) { copiedId = null; render(); }
+      }, 2000);
+    }).catch(function() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      copiedId = id;
+      render();
+      setTimeout(function() { if (copiedId === id) { copiedId = null; render(); } }, 2000);
+    });
+  }
+
+  async function handleDelete(id) {
+    snippets = snippets.filter(function(s) { return s.id !== id; });
+    saveLocal(snippets);
+    render();
+    setSyncing(true);
+    await gistPush(snippets);
+    setSyncing(false);
+  }
+
+  async function handleSave() {
+    var input = document.getElementById('text-input');
+    var trimmed = input.value.trim();
+    if (!trimmed) return;
+
+    var snippet = {
+      id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2),
+      text: trimmed,
+      createdAt: new Date().toISOString()
+    };
+
+    snippets = [snippet].concat(snippets);
+    saveLocal(snippets);
+    input.value = '';
+    document.getElementById('save-btn').disabled = true;
+    render();
+
+    setSyncing(true);
+    await gistPush(snippets);
+    setSyncing(false);
+  }
+
+  // ── Sync connect / disconnect ──────────────────────────────────────────────
+
+  document.getElementById('sync-toggle-btn').addEventListener('click', function() {
+    var panel = document.getElementById('sync-panel');
+    panel.classList.toggle('open');
+  });
+
+  document.getElementById('sync-connect-btn').addEventListener('click', async function() {
+    var patInput = document.getElementById('pat-input');
+    var errDiv   = document.getElementById('sync-error');
+    var pat = patInput.value.trim();
+    if (!pat) { errDiv.textContent = 'Please enter a token.'; return; }
+    errDiv.textContent = '';
+    document.getElementById('sync-connect-btn').disabled = true;
+    document.getElementById('sync-connect-btn').textContent = 'Connecting…';
+
+    try {
+      var gistId = await Gist.connect(pat);
+      Gist.save(pat, gistId);
+      updateSyncUI();
+
+      setSyncing(true);
+      var remote = await gistPull();
+      if (remote) {
+        snippets = remote;
+        saveLocal(snippets);
+        render();
+      } else {
+        await gistPush(snippets);
+      }
+      setSyncing(false);
+    } catch(e) {
+      errDiv.textContent = e.message || 'Connection failed.';
+    }
+
+    document.getElementById('sync-connect-btn').disabled = false;
+    document.getElementById('sync-connect-btn').textContent = 'Connect';
+  });
+
+  document.getElementById('sync-disconnect-btn').addEventListener('click', function() {
+    Gist.clear();
+    updateSyncUI();
+  });
+
+  // ── Input listeners ────────────────────────────────────────────────────────
+
+  document.getElementById('text-input').addEventListener('input', function() {
+    document.getElementById('save-btn').disabled = !this.value.trim();
+  });
+
+  document.getElementById('text-input').addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (!document.getElementById('save-btn').disabled) handleSave();
+    }
+  });
+
+  document.getElementById('save-btn').addEventListener('click', handleSave);
+
+  // ── Init ───────────────────────────────────────────────────────────────────
+
+  (async function init() {
+    updateSyncUI();
+    snippets = loadLocal();
+    render();
+
+    if (Gist.isConnected()) {
+      setSyncing(true);
+      var remote = await gistPull();
+      if (remote) {
+        snippets = remote;
+        saveLocal(snippets);
+        render();
+      }
+      setSyncing(false);
+    }
+  })();
+</script>
+</body>
+</html>
