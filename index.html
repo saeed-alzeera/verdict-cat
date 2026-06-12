@@ -145,6 +145,7 @@
   function checkAuth() {
     var val = document.getElementById('auth-input').value;
     if (val === '67DRA67') {
+      sessionStorage.setItem('hub_auth', '1');
       document.getElementById('auth-overlay').style.display = 'none';
       document.getElementById('hub').style.display = 'flex';
     } else if (val === 'GR-Reso') {
@@ -159,6 +160,13 @@
   function go(page) {
     window.location.replace(page);
   }
+
+  (function () {
+    if (sessionStorage.getItem('hub_auth') === '1') {
+      document.getElementById('auth-overlay').style.display = 'none';
+      document.getElementById('hub').style.display = 'flex';
+    }
+  })();
 </script>
 </body>
 </html>
