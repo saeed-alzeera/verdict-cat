@@ -33,7 +33,17 @@
   html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     font-size: 15px; line-height: 1.45; -webkit-text-size-adjust: 100%; }
-  header { padding: 16px 16px 8px; display: flex; justify-content: space-between; align-items: flex-start; }
+  header { padding: 16px 16px 8px; display: flex; gap: 12px; align-items: center; }
+  header > div { flex: 1; }
+  #hub-back {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 13px; color: var(--muted);
+    text-decoration: none; padding: 6px 10px;
+    border: 1px solid var(--line); border-radius: 8px;
+    white-space: nowrap; flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  #hub-back:hover { color: var(--ink); border-color: var(--muted); }
   #theme-toggle { background: transparent; color: var(--muted); border: 1px solid var(--line);
     border-radius: 8px; padding: 6px 10px; font-size: 18px; cursor: pointer; min-height: unset;
     flex-shrink: 0; line-height: 1; }
@@ -94,6 +104,7 @@
 
 
 <header>
+  <a id="hub-back" href="#" onclick="sessionStorage.removeItem('hub_auth'); window.location.replace('index.html'); return false;">&#8592; Hub</a>
   <div>
     <h1>Saeed Alzeera's Numbers</h1>
     <div class="sub">Live data: World Bank &amp; IMF · time range 2020–latest</div>
