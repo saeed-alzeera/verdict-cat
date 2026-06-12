@@ -275,7 +275,7 @@
 <div id="bottombar">
   <button class="bar-btn" id="toc-toggle">Contents</button>
   <button class="bar-btn" id="font-dec">A−</button>
-  <span id="font-size-label">100%</span>
+  <span id="font-size-label">160%</span>
   <button class="bar-btn" id="font-inc">A+</button>
   <button class="bar-btn" id="theme-toggle">Light / Dark</button>
   <span id="saved-badge">Saved</span>
@@ -363,6 +363,7 @@
 
     displayPromise.then(function() {
       document.getElementById('loading').style.display = 'none';
+      rendition.themes.fontSize(fontSize + '%');
       applyTheme();
     }).catch(function() {
       // Saved CFI might be stale; fall back to beginning
