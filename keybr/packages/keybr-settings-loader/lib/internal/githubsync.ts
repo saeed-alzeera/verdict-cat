@@ -6,7 +6,7 @@ const SETTINGS_PATH = "keybr/data/settings.json";
 const API = "https://api.github.com";
 
 function getToken(): string | null {
-  const t = localStorage.getItem("keybr_github_token");
+  const t = localStorage.getItem("verdict-cat-pat");
   return t && t.length > 0 ? t : null;
 }
 
