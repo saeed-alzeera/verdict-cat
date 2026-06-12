@@ -255,7 +255,7 @@
 </div>
 
 <div id="topbar">
-  <a id="back-btn" href="index.html">&#8592; Hub</a>
+  <a id="back-btn" href="library.html">&#8592; Library</a>
   <span id="book-title">—</span>
   <div id="progress-wrap">
     <div id="progress-bar"><div id="progress-fill"></div></div>
@@ -275,7 +275,7 @@
 <div id="bottombar">
   <button class="bar-btn" id="toc-toggle">Contents</button>
   <button class="bar-btn" id="font-dec">A−</button>
-  <span id="font-size-label">100%</span>
+  <span id="font-size-label">160%</span>
   <button class="bar-btn" id="font-inc">A+</button>
   <button class="bar-btn" id="theme-toggle">Light / Dark</button>
   <span id="saved-badge">Saved</span>
@@ -358,10 +358,12 @@
     }
 
     var savedCfi = loadProgress();
+    var lastKnownCfi = savedCfi || null;
     var displayPromise = savedCfi ? rendition.display(savedCfi) : rendition.display();
 
     displayPromise.then(function() {
       document.getElementById('loading').style.display = 'none';
+      rendition.themes.fontSize(fontSize + '%');
       applyTheme();
     }).catch(function() {
       // Saved CFI might be stale; fall back to beginning
@@ -373,20 +375,26 @@
       });
     });
 
+    function updateProgressBar(cfi) {
+      var pct = book.locations.percentageFromCfi(cfi);
+      if (pct !== undefined && !isNaN(pct) && pct > 0) {
+        document.getElementById('progress-fill').style.width = (pct * 100).toFixed(1) + '%';
+        document.getElementById('progress-label').textContent = Math.round(pct * 100) + '%';
+      }
+    }
+
     // Save progress on every page turn; push to Gist on chapter change or after 30s idle
     rendition.on('relocated', function(loc) {
       if (!loc || !loc.start) return;
+      lastKnownCfi = loc.start.cfi;
       saveProgress(loc.start.cfi);
       var chapterChanged = loc.start.href !== lastGistChapter;
       if (chapterChanged) lastGistChapter = loc.start.href;
       scheduleGistPush(chapterChanged);
 
-      // Update progress bar
-      var pct = book.locations.percentageFromCfi(loc.start.cfi);
-      if (pct !== undefined && !isNaN(pct)) {
-        document.getElementById('progress-fill').style.width = (pct * 100).toFixed(1) + '%';
-        document.getElementById('progress-label').textContent = Math.round(pct * 100) + '%';
-      }
+      // Update progress bar (may be a no-op if locations aren't generated yet;
+      // book.ready.then handles the re-apply after generation)
+      updateProgressBar(loc.start.cfi);
 
       // Minutes left in chapter
       var chapterHref = loc.start.href ? loc.start.href.split('#')[0] : '';
@@ -417,6 +425,10 @@
 
     book.ready.then(function() {
       return book.locations.generate(1000);
+    }).then(function() {
+      // Locations are now available; re-apply progress in case the initial
+      // relocated event fired before generation completed (showing 0%)
+      if (lastKnownCfi) updateProgressBar(lastKnownCfi);
     }).catch(function() {});
 
     book.loaded.navigation.then(function(nav) {
