@@ -91,7 +91,7 @@
     background: linear-gradient(135deg, rgba(91,155,213,0.08) 0%, transparent 60%);
   }
   .book-cover-img { width: 100%; height: 100%; object-fit: cover; border-radius: 2px; }
-  .book-cover-placeholder { font-size: 13px; font-weight: 500; color: var(--text); text-align: center; line-height: 1.45; z-index: 1; }
+  .book-cover-placeholder { font-size: 13px; font-weight: 500; color: var(--text); text-align: center; line-height: 1.45; z-index: 1; position: relative; }
   .book-cover-icon { font-size: 36px; display: block; margin-bottom: 12px; opacity: 0.5; }
 
   .book-info { padding: 12px 14px 14px; }
@@ -339,7 +339,7 @@
       } else {
         var ph = document.createElement('div');
         ph.className = 'book-cover-placeholder';
-        ph.innerHTML = '<span class="book-cover-icon">ð</span>' + book.title;
+        ph.innerHTML = '<span class="book-cover-icon">&#128218;</span>' + book.title;
         coverDiv.appendChild(ph);
       }
       var info = document.createElement('div');
@@ -413,12 +413,25 @@
   if (Gist.isConnected()) {
     syncFromGist();
   } else {
-    var skippedBefore = sessionStorage.getItem('setup-skipped');
-    if (skippedBefore) {
+    var existingPat = localStorage.getItem('verdict-cat-pat');
+    if (existingPat) {
+      // PAT set from hub — auto-connect to Gist silently
       renderCards();
+      (async function() {
+        try {
+          var gistId = await Gist.connect(existingPat);
+          Gist.save(existingPat, gistId);
+          await syncFromGist();
+        } catch(e) { /* silent — wrong scopes or network issue */ }
+      })();
     } else {
-      renderCards(); // render immediately, then show modal
-      showSetup();
+      var skippedBefore = sessionStorage.getItem('setup-skipped');
+      if (skippedBefore) {
+        renderCards();
+      } else {
+        renderCards();
+        showSetup();
+      }
     }
   }
 
