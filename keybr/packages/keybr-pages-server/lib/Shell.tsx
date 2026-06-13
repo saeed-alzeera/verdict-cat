@@ -78,6 +78,8 @@ function Head({
       <title>{formatMessage(page.title)}</title>
       <StylesheetAssets entrypoint="browser" />
       <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+      <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+      <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
       <FavIconAssets links={favIcons} />
       <AltLangLinks page={page} />
       <Metas page={page} />
