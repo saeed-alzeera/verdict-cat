@@ -247,7 +247,7 @@
 
 <div id="loading">
   <div class="spinner"></div>
-  <div id="loading-text">Loading book…</div>
+  <div id="loading-text">Loading bookâ¦</div>
 </div>
 
 <div id="error-msg">
@@ -256,10 +256,10 @@
 
 <div id="topbar">
   <a id="back-btn" href="library.html">&#8592; Library</a>
-  <span id="book-title">—</span>
+  <span id="book-title">â</span>
   <div id="progress-wrap">
     <div id="progress-bar"><div id="progress-fill"></div></div>
-    <span id="progress-label">—</span>
+    <span id="progress-label">â</span>
     <span id="chapter-time"></span>
   </div>
 </div>
@@ -274,7 +274,7 @@
 
 <div id="bottombar">
   <button class="bar-btn" id="toc-toggle">Contents</button>
-  <button class="bar-btn" id="font-dec">A−</button>
+  <button class="bar-btn" id="font-dec">Aâ</button>
   <span id="font-size-label">160%</span>
   <button class="bar-btn" id="font-inc">A+</button>
   <button class="bar-btn" id="theme-toggle">Light / Dark</button>
@@ -287,15 +287,20 @@
 </div>
 
 <script>
-  // ── Book catalogue (slug → raw GitHub URL) ────────────────────────────────
+  // ââ Book catalogue (slug â raw GitHub URL) ââââââââââââââââââââââââââââââââ
   var BOOKS = {
     'the-architects-apprentice': {
       url: 'https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/the-architects-apprentice.epub',
       title: 'The Architect\'s Apprentice',
       author: 'Elif Shafak'
+    },
+    "empire-of-the-vampire-empire-of-the-z-library-sk-1lib-sk": {
+      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/empire-of-the-vampire-empire-of-the-z-library-sk-1lib-sk.epub",
+      title: "Empire of the Vampire",
+      author: "Jay Kristoff"
     }
   };
-  // ─────────────────────────────────────────────────────────────────────────
+  // âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
   var params = new URLSearchParams(location.search);
   var slug = params.get('book');
