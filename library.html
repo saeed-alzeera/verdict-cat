@@ -21,7 +21,7 @@
 
   html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
-  /* ── Header ── */
+  /* ââ Header ââ */
   header {
     padding: 28px 40px 22px;
     border-bottom: 1px solid var(--border);
@@ -61,7 +61,7 @@
   }
   .hdr-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-  /* ── Book grid ── */
+  /* ââ Book grid ââ */
   #grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -99,7 +99,7 @@
   .progress-dot { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 5px; vertical-align: middle; }
   .resume-label { font-size: 10px; color: var(--accent); margin-top: 6px; display: flex; align-items: center; }
 
-  /* ── Setup modal ── */
+  /* ââ Setup modal ââ */
   #setup-modal {
     position: fixed; inset: 0; z-index: 9999;
     background: rgba(0,0,0,0.7);
@@ -147,7 +147,7 @@
   }
   #setup-skip:hover { border-color: var(--muted); color: var(--text); }
 
-  /* ── Toast ── */
+  /* ââ Toast ââ */
   #toast {
     position: fixed; bottom: 24px; left: 50%;
     transform: translateX(-50%) translateY(12px);
@@ -166,16 +166,16 @@
 <div id="setup-modal" style="display:none;">
   <div id="setup-box">
     <h2>Sync reading progress</h2>
-    <p class="setup-sub">Progress is saved to a private GitHub Gist — invisible to others, works on every device, survives browser resets.</p>
+    <p class="setup-sub">Progress is saved to a private GitHub Gist â invisible to others, works on every device, survives browser resets.</p>
     <ol class="setup-steps">
       <li>Open <a href="https://github.com/settings/tokens/new?scopes=repo,gist&description=verdict-cat" target="_blank">github.com/settings/tokens</a></li>
       <li>Generate a token with the <strong>repo</strong> and <strong>gist</strong> scopes</li>
       <li>Paste it below</li>
     </ol>
-    <input id="setup-pat" type="password" placeholder="ghp_…" autocomplete="off" />
+    <input id="setup-pat" type="password" placeholder="ghp_â¦" autocomplete="off" />
     <div id="setup-error"></div>
     <button id="setup-connect">Connect</button>
-    <button id="setup-skip">Skip — use this device only</button>
+    <button id="setup-skip">Skip â use this device only</button>
   </div>
 </div>
 
@@ -194,7 +194,7 @@
 <div id="toast"></div>
 
 <script>
-  // ── Book catalogue ────────────────────────────────────────────────────────
+  // ââ Book catalogue ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   // Add new books here as they are uploaded.
   var BOOKS = [
     {
@@ -202,9 +202,15 @@
       title: "The Architect's Apprentice",
       author: 'Elif Shafak',
       cover: null
+    },
+    {
+      slug: 'empire-of-the-vampire-empire-of-the-z-library-sk-1lib-sk',
+      title: "Empire of the Vampire",
+      author: "Jay Kristoff",
+      cover: null
     }
   ];
-  // ─────────────────────────────────────────────────────────────────────────
+  // âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
   function toast(msg) {
     var t = document.getElementById('toast');
@@ -217,7 +223,7 @@
     var dot   = document.getElementById('status-dot');
     var label = document.getElementById('status-label');
     dot.className = 'status-dot ' + (state === 'connected' ? 'connected' : state === 'syncing' ? 'syncing' : '');
-    label.textContent = state === 'connected' ? 'Synced' : state === 'syncing' ? 'Syncing…' : 'Not synced';
+    label.textContent = state === 'connected' ? 'Synced' : state === 'syncing' ? 'Syncingâ¦' : 'Not synced';
     document.getElementById('disconnect-btn').style.display = state === 'connected' ? '' : 'none';
   }
 
@@ -238,7 +244,7 @@
       } else {
         var ph = document.createElement('div');
         ph.className = 'book-cover-placeholder';
-        ph.innerHTML = '<span class="book-cover-icon">📖</span>' + book.title;
+        ph.innerHTML = '<span class="book-cover-icon">ð</span>' + book.title;
         coverDiv.appendChild(ph);
       }
       var info = document.createElement('div');
@@ -252,7 +258,7 @@
     });
   }
 
-  // ── Setup modal ───────────────────────────────────────────────────────────
+  // ââ Setup modal âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   function showSetup() {
     document.getElementById('setup-modal').style.display = 'flex';
     document.getElementById('setup-pat').focus();
@@ -269,7 +275,7 @@
     if (!pat) { errEl.textContent = 'Paste your token first.'; return; }
     errEl.textContent = '';
     btn.disabled = true;
-    btn.textContent = 'Connecting…';
+    btn.textContent = 'Connectingâ¦';
     try {
       var gistId = await Gist.connect(pat);
       Gist.save(pat, gistId);
@@ -287,7 +293,7 @@
     renderCards();
   });
 
-  // ── Disconnect ────────────────────────────────────────────────────────────
+  // ââ Disconnect ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   document.getElementById('disconnect-btn').addEventListener('click', function() {
     if (!confirm('Disconnect GitHub sync? Your local progress stays on this device.')) return;
     Gist.clear();
@@ -295,7 +301,7 @@
     renderCards();
   });
 
-  // ── Sync on load ──────────────────────────────────────────────────────────
+  // ââ Sync on load ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   async function syncFromGist() {
     setSyncStatus('syncing');
     await Gist.pull();
@@ -303,7 +309,7 @@
     renderCards();
   }
 
-  // ── Init ──────────────────────────────────────────────────────────────────
+  // ââ Init ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   if (Gist.isConnected()) {
     syncFromGist();
   } else {
