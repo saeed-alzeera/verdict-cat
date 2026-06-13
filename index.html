@@ -92,9 +92,109 @@
   .hub-card .icon { font-size: 32px; line-height: 1; }
   .hub-card .label { font-size: 15px; font-weight: 600; }
   .hub-card .desc  { font-size: 12px; color: var(--muted); }
+
+  /* ── Hub topbar ── */
+  #hub-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 48px;
+    display: none;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 20px;
+    z-index: 500;
+  }
+  #pat-btn {
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  #pat-btn:hover { border-color: var(--accent); color: var(--accent); }
+  #pat-btn.active { border-color: var(--accent); color: var(--accent); }
+
+  /* ── PAT modal ── */
+  #pat-modal {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #pat-box {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 32px 36px;
+    width: 420px;
+    max-width: calc(100vw - 32px);
+  }
+  #pat-box h2 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+  #pat-box .pat-sub { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 20px; }
+  #pat-box .pat-steps { margin: 0 0 18px 18px; }
+  #pat-box .pat-steps li { font-size: 13px; color: var(--ink); line-height: 1.7; }
+  #pat-box .pat-steps a { color: var(--accent); text-decoration: none; }
+  #pat-box .pat-steps a:hover { text-decoration: underline; }
+  #pat-input {
+    width: 100%; padding: 10px 12px;
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; color: var(--ink);
+    font-size: 14px; font-family: monospace; outline: none;
+    margin-bottom: 8px; transition: border-color 0.15s;
+  }
+  #pat-input:focus { border-color: var(--accent); }
+  #pat-save {
+    width: 100%; padding: 10px;
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    margin-bottom: 8px; transition: opacity 0.15s;
+  }
+  #pat-save:hover { opacity: 0.88; }
+  #pat-remove {
+    width: 100%; padding: 8px;
+    background: none; border: 1px solid var(--line);
+    border-radius: 8px; color: #e05c5c;
+    font-size: 13px; cursor: pointer;
+    margin-bottom: 6px;
+    transition: border-color 0.15s;
+  }
+  #pat-remove:hover { border-color: #e05c5c; }
+  #pat-cancel {
+    width: 100%; padding: 8px;
+    background: none; border: 1px solid var(--line);
+    border-radius: 8px; color: var(--muted);
+    font-size: 13px; cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  #pat-cancel:hover { border-color: var(--muted); color: var(--ink); }
 </style>
 </head>
 <body>
+
+<!-- Hub topbar (shown after auth) -->
+<div id="hub-bar">
+  <button id="pat-btn" onclick="openPATModal()">GitHub Token</button>
+</div>
+
+<!-- PAT modal -->
+<div id="pat-modal" style="display:none;">
+  <div id="pat-box">
+    <h2>GitHub Token</h2>
+    <p class="pat-sub">A Personal Access Token with <strong>repo</strong> and <strong>gist</strong> scopes. Used for uploading books and syncing reading progress across all sections.</p>
+    <ol class="pat-steps">
+      <li>Open <a href="https://github.com/settings/tokens/new?scopes=repo,gist&description=verdict-cat" target="_blank">github.com/settings/tokens</a></li>
+      <li>Generate a token with <strong>repo</strong> and <strong>gist</strong> scopes</li>
+      <li>Paste it below</li>
+    </ol>
+    <input id="pat-input" type="password" placeholder="ghp_..." autocomplete="off" />
+    <button id="pat-save" onclick="savePAT()">Save Token</button>
+    <button id="pat-remove" style="display:none;" onclick="removePAT()">Remove Token</button>
+    <button id="pat-cancel" onclick="closePATModal()">Cancel</button>
+  </div>
+</div>
 
 <!-- Password overlay -->
 <div id="auth-overlay">
@@ -120,15 +220,10 @@
     </div>
     <div class="hub-card" onclick="go('library.html')">
       <div class="icon">📚</div>
-      <div class="label">Ebook Reader</div>
+      <div class="label">Library</div>
       <div class="desc">Browse &amp; read books</div>
     </div>
-    <div class="hub-card" onclick="go('admin.html')">
-      <div class="icon">📤</div>
-      <div class="label">EPUB Upload</div>
-      <div class="desc">Manage your library</div>
-    </div>
-    <div class="hub-card" onclick="go('keybr/index.html')">
+<div class="hub-card" onclick="go('keybr/index.html')">
       <div class="icon">⌨️</div>
       <div class="label">Keybr</div>
       <div class="desc">Typing speed trainer</div>
@@ -142,12 +237,67 @@
 </div>
 
 <script>
+  function showHub() {
+    document.getElementById('auth-overlay').style.display = 'none';
+    document.getElementById('hub').style.display = 'flex';
+    document.getElementById('hub-bar').style.display = 'flex';
+    updatePATBtn();
+  }
+
+  function updatePATBtn() {
+    var btn = document.getElementById('pat-btn');
+    if (localStorage.getItem('verdict-cat-pat')) {
+      btn.classList.add('active');
+      btn.textContent = 'Token: set';
+    } else {
+      btn.classList.remove('active');
+      btn.textContent = 'GitHub Token';
+    }
+  }
+
+  function openPATModal() {
+    var hasPAT = !!localStorage.getItem('verdict-cat-pat');
+    document.getElementById('pat-input').value = '';
+    document.getElementById('pat-input').placeholder = hasPAT ? 'Paste new token to replace' : 'ghp_...';
+    document.getElementById('pat-remove').style.display = hasPAT ? '' : 'none';
+    document.getElementById('pat-modal').style.display = 'flex';
+    document.getElementById('pat-input').focus();
+  }
+
+  function closePATModal() {
+    document.getElementById('pat-modal').style.display = 'none';
+  }
+
+  function savePAT() {
+    var val = document.getElementById('pat-input').value.trim();
+    if (!val) { closePATModal(); return; }
+    localStorage.setItem('verdict-cat-pat', val);
+    closePATModal();
+    updatePATBtn();
+  }
+
+  function removePAT() {
+    if (!confirm('Remove GitHub Token? Uploads and sync will stop working.')) return;
+    localStorage.removeItem('verdict-cat-pat');
+    localStorage.removeItem('verdict-cat-gist-id');
+    closePATModal();
+    updatePATBtn();
+  }
+
+  document.getElementById('pat-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') savePAT();
+    if (e.key === 'Escape') closePATModal();
+  });
+
+  document.getElementById('pat-modal').addEventListener('click', function(e) {
+    if (e.target === this) closePATModal();
+  });
+
   function checkAuth() {
     var val = document.getElementById('auth-input').value;
     if (val === '67DRA67') {
       sessionStorage.setItem('hub_auth', '1');
-      document.getElementById('auth-overlay').style.display = 'none';
-      document.getElementById('hub').style.display = 'flex';
+      showHub();
     } else if (val === 'GR-Reso') {
       window.location.replace('numbers.html');
     } else {
@@ -163,8 +313,7 @@
 
   (function () {
     if (sessionStorage.getItem('hub_auth') === '1') {
-      document.getElementById('auth-overlay').style.display = 'none';
-      document.getElementById('hub').style.display = 'flex';
+      showHub();
     }
   })();
 </script>
