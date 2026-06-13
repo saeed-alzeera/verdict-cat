@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Library</title>
 <script src="gist.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -147,6 +148,81 @@
   }
   #setup-skip:hover { border-color: var(--muted); color: var(--text); }
 
+  /* -- Upload card -- */
+  .upload-card {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.15s, background 0.15s, transform 0.15s;
+  }
+  .upload-card:hover { border-color: var(--accent); background: rgba(91,155,213,0.04); transform: translateY(-2px); }
+  .upload-cover-area {
+    width: 100%; aspect-ratio: 2/3;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); transition: color 0.15s;
+  }
+  .upload-card:hover .upload-cover-area { color: var(--accent); }
+  .upload-plus { font-size: 44px; font-weight: 200; line-height: 1; }
+  .upload-label { padding: 12px 14px 14px; font-size: 13px; font-weight: 500; color: var(--muted); transition: color 0.15s; }
+  .upload-card:hover .upload-label { color: var(--accent); }
+
+  /* -- Upload modal -- */
+  #upload-modal {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #upload-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 32px 36px;
+    width: 400px;
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+  }
+  #upload-box h2 { font-size: 17px; font-weight: 600; margin-bottom: 16px; }
+  #ul-cover-preview {
+    width: 72px; height: 108px;
+    border-radius: 4px; overflow: hidden; margin: 0 auto 18px;
+    background: linear-gradient(145deg, #1e2330, #252c3a);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+  }
+  #ul-cover-preview img { width: 100%; height: 100%; object-fit: cover; }
+  #upload-box label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 5px; }
+  #upload-box input[type="text"] {
+    width: 100%; padding: 9px 12px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 14px;
+    outline: none; transition: border-color 0.15s;
+  }
+  #upload-box input[type="text"]:focus { border-color: var(--accent); }
+  #ul-status { font-size: 12px; min-height: 18px; margin: 10px 0 2px; color: var(--muted); }
+  #ul-status.ok { color: var(--green); }
+  #ul-status.err { color: #e05c5c; }
+  #ul-status.working { color: var(--accent); }
+  #ul-submit-btn {
+    width: 100%; padding: 10px; margin-top: 12px;
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  #ul-submit-btn:hover { opacity: 0.88; }
+  #ul-submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  #ul-cancel-btn {
+    width: 100%; padding: 8px; margin-top: 8px;
+    background: none; border: 1px solid var(--border);
+    border-radius: 8px; color: var(--muted);
+    font-size: 13px; cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  #ul-cancel-btn:hover { border-color: var(--muted); color: var(--text); }
+
+
   /* ââ Toast ââ */
   #toast {
     position: fixed; bottom: 24px; left: 50%;
@@ -192,6 +268,25 @@
 
 <div id="grid"></div>
 <div id="toast"></div>
+
+<input type="file" id="ul-epub-input" accept=".epub" style="display:none;" />
+
+<div id="upload-modal" style="display:none;">
+  <div id="upload-box">
+    <div id="ul-cover-preview">&#128218;</div>
+    <h2>Upload Book</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:4px;">Metadata pulled from the epub — edit if needed.</p>
+    <label for="ul-title">Title</label>
+    <input type="text" id="ul-title" placeholder="Book Title" />
+    <label for="ul-author">Author</label>
+    <input type="text" id="ul-author" placeholder="Author Name" />
+    <label for="ul-slug">Slug</label>
+    <input type="text" id="ul-slug" placeholder="book-slug" />
+    <div id="ul-status"></div>
+    <button id="ul-submit-btn" disabled>Upload</button>
+    <button id="ul-cancel-btn">Cancel</button>
+  </div>
+</div>
 
 <script>
   // ââ Book catalogue ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
@@ -256,6 +351,11 @@
       a.appendChild(coverDiv); a.appendChild(info);
       grid.appendChild(a);
     });
+    var uc = document.createElement('div');
+    uc.className = 'upload-card';
+    uc.innerHTML = '<div class="upload-cover-area"><span class="upload-plus">+</span></div><div class="upload-label">Upload Book</div>';
+    uc.addEventListener('click', openUploadModal);
+    grid.appendChild(uc);
   }
 
   // ââ Setup modal âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
@@ -325,6 +425,181 @@
   document.getElementById('setup-skip').addEventListener('click', function() {
     sessionStorage.setItem('setup-skipped', '1');
   }, { once: true });
+
+  // -- Upload ------------------------------------------------------------------
+  var REPO   = 'saeed-alzeera/verdict-cat';
+  var BRANCH = 'main';
+  var ulFile = null;
+
+  function getUploadPat() { return localStorage.getItem('verdict-cat-pat') || ''; }
+
+  async function ghGet(path) {
+    var r = await fetch('https://api.github.com/repos/' + REPO + path, {
+      headers: { Authorization: 'Bearer ' + getUploadPat(), Accept: 'application/vnd.github+json' }
+    });
+    if (!r.ok) throw new Error('GitHub ' + r.status + ': ' + (await r.text()));
+    return r.json();
+  }
+
+  async function ghPut(path, body) {
+    var r = await fetch('https://api.github.com/repos/' + REPO + path, {
+      method: 'PUT',
+      headers: {
+        Authorization: 'Bearer ' + getUploadPat(),
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error('GitHub ' + r.status + ': ' + (await r.text()));
+    return r.json();
+  }
+
+  async function patchFile(filename, patchFn, commitMsg) {
+    var data = await ghGet('/contents/' + filename + '?ref=' + BRANCH);
+    var src = atob(data.content.replace(/\n/g, ''));
+    var patched = patchFn(src);
+    if (patched === src) throw new Error('Could not patch ' + filename + ' — pattern not found.');
+    await ghPut('/contents/' + filename, {
+      message: commitMsg,
+      content: btoa(unescape(encodeURIComponent(patched))),
+      sha: data.sha,
+      branch: BRANCH
+    });
+  }
+
+  function toBase64(file) {
+    return new Promise(function(resolve, reject) {
+      var fr = new FileReader();
+      fr.onload = function() { resolve(fr.result.split(',')[1]); };
+      fr.onerror = reject;
+      fr.readAsDataURL(file);
+    });
+  }
+
+  async function readEpubMeta(file) {
+    var zip = await JSZip.loadAsync(file);
+    var containerXml = await zip.file('META-INF/container.xml').async('text');
+    var m = containerXml.match(/full-path="([^"]+\.opf)"/i);
+    if (!m) throw new Error('No OPF found in epub');
+    var opfPath = m[1];
+    var opfText = await zip.file(opfPath).async('text');
+    var parser = new DOMParser();
+    var opf = parser.parseFromString(opfText, 'application/xml');
+    var NS = 'http://purl.org/dc/elements/1.1/';
+    var titleEls  = opf.getElementsByTagNameNS(NS, 'title');
+    var authorEls = opf.getElementsByTagNameNS(NS, 'creator');
+    var title  = titleEls.length  ? titleEls[0].textContent.trim()  : '';
+    var author = authorEls.length ? authorEls[0].textContent.trim() : '';
+    var cover = null;
+    try {
+      var metaCover = opf.querySelector('meta[name="cover"]');
+      var coverId = metaCover ? metaCover.getAttribute('content') : null;
+      var coverItem = coverId
+        ? opf.querySelector('item[id="' + coverId + '"]')
+        : opf.querySelector('item[id="cover-image"],item[id="cover"],item[properties="cover-image"]');
+      if (coverItem) {
+        var href = coverItem.getAttribute('href');
+        var opfDir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
+        var coverEntry = zip.file(opfDir + href);
+        if (coverEntry) {
+          var b64c = await coverEntry.async('base64');
+          var mime = href.match(/\.png$/i) ? 'image/png' : 'image/jpeg';
+          cover = 'data:' + mime + ';base64,' + b64c;
+        }
+      }
+    } catch(e) { cover = null; }
+    return { title: title, author: author, cover: cover };
+  }
+
+  function setUlStatus(cls, msg) {
+    var el = document.getElementById('ul-status');
+    el.className = cls || '';
+    el.textContent = msg;
+  }
+
+  function openUploadModal() {
+    if (!getUploadPat()) { showSetup(); return; }
+    document.getElementById('ul-epub-input').value = '';
+    document.getElementById('ul-epub-input').click();
+  }
+
+  function closeUploadModal() {
+    document.getElementById('upload-modal').style.display = 'none';
+    document.getElementById('ul-epub-input').value = '';
+    ulFile = null;
+  }
+
+  document.getElementById('ul-epub-input').addEventListener('change', async function() {
+    var file = this.files[0];
+    if (!file) return;
+    ulFile = file;
+    var slug = file.name.replace(/\.epub$/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/, '');
+    document.getElementById('ul-title').value = '';
+    document.getElementById('ul-author').value = '';
+    document.getElementById('ul-slug').value = slug;
+    document.getElementById('ul-cover-preview').innerHTML = '&#128218;';
+    document.getElementById('ul-submit-btn').disabled = true;
+    setUlStatus('working', 'Reading metadata…');
+    document.getElementById('upload-modal').style.display = 'flex';
+    try {
+      var meta = await readEpubMeta(file);
+      if (meta.title)  document.getElementById('ul-title').value  = meta.title;
+      if (meta.author) document.getElementById('ul-author').value = meta.author;
+      if (meta.cover)  document.getElementById('ul-cover-preview').innerHTML = '<img src="' + meta.cover + '" alt="cover" />';
+      setUlStatus('', '');
+    } catch(e) {
+      setUlStatus('err', 'Could not read metadata — fill in manually.');
+    }
+    document.getElementById('ul-submit-btn').disabled = false;
+  });
+
+  document.getElementById('ul-cancel-btn').addEventListener('click', closeUploadModal);
+
+  document.getElementById('ul-submit-btn').addEventListener('click', async function() {
+    var title  = document.getElementById('ul-title').value.trim();
+    var author = document.getElementById('ul-author').value.trim();
+    var slug   = document.getElementById('ul-slug').value.trim();
+    if (!title || !author || !slug) { setUlStatus('err', 'Title, author and slug are required.'); return; }
+    if (!ulFile) { setUlStatus('err', 'No file selected.'); return; }
+    var btn = this;
+    btn.disabled = true;
+    try {
+      setUlStatus('working', '1/3  Uploading epub…');
+      var b64 = await toBase64(ulFile);
+      var epubPath = 'books/' + slug + '.epub';
+      var existingSha = null;
+      try { existingSha = (await ghGet('/contents/' + epubPath + '?ref=' + BRANCH)).sha; } catch(e) {}
+      var epubBody = { message: 'Add book: ' + title, content: b64, branch: BRANCH };
+      if (existingSha) epubBody.sha = existingSha;
+      await ghPut('/contents/' + epubPath, epubBody);
+
+      setUlStatus('working', '2/3  Updating library…');
+      await patchFile('library.html', function(src) {
+        var entry = "    {\n      slug: '" + slug + "',\n      title: " + JSON.stringify(title) + ",\n      author: " + JSON.stringify(author) + ",\n      cover: null\n    }";
+        return src.replace(/(var BOOKS = \[)([\s\S]*?)(\];)/, function(_, open, body, close) {
+          return open + body.trimEnd() + ',\n' + entry + '\n  ' + close;
+        });
+      }, 'Register book in library: ' + title);
+
+      setUlStatus('working', '3/3  Updating reader…');
+      var rawUrl = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/' + epubPath;
+      await patchFile('reader.html', function(src) {
+        var entry = "    " + JSON.stringify(slug) + ": {\n      url: " + JSON.stringify(rawUrl) + ",\n      title: " + JSON.stringify(title) + ",\n      author: " + JSON.stringify(author) + "\n    }";
+        return src.replace(/(var BOOKS = \{)([\s\S]*?)(\};)/, function(_, open, body, close) {
+          return open + body.trimEnd() + ',\n' + entry + '\n  ' + close;
+        });
+      }, 'Register book in reader: ' + title);
+
+      BOOKS.push({ slug: slug, title: title, author: author, cover: null });
+      renderCards();
+      setUlStatus('ok', 'Done! "' + title + '" added to the library.');
+      setTimeout(closeUploadModal, 1600);
+    } catch(err) {
+      setUlStatus('err', err.message || 'Upload failed.');
+      btn.disabled = false;
+    }
+  });
 </script>
 </body>
 </html>
