@@ -242,9 +242,18 @@
   #error-msg p { font-size: 14px; color: var(--muted); text-align: center; padding: 0 24px; }
   #error-msg a { color: var(--accent); text-decoration: none; font-size: 13px; }
 
+  #tap-zone { display: none; }
+
   /* ── Mobile reader mode ──────────────────────────────────────────────────── */
   @media (max-width: 768px) {
     html, body { background: #000 !important; }
+
+    #tap-zone {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+    }
 
     #prev-btn, #next-btn { display: none !important; }
 
@@ -308,6 +317,8 @@
 <div id="viewer-wrap">
   <div id="viewer"></div>
 </div>
+
+<div id="tap-zone"></div>
 
 <button id="next-btn" class="nav-btn" title="Next page">&#8594;</button>
 
@@ -518,52 +529,27 @@
       if (e.key === 'ArrowLeft')  rendition.prev();
       if (e.key === 'ArrowRight') rendition.next();
     });
-    // ── Mobile tap navigation (injected into EPUB.js iframe) ──────
+    // ── Mobile tap navigation ─────────────────────────────────────────────────
     if (isMobile) {
-      rendition.hooks.content.register(function(contents) {
-        var doc = contents.document;
-        var startTime, startX, startY;
-
-        doc.addEventListener('touchstart', function(e) {
-          startTime = Date.now();
-          startX = e.touches[0].clientX;
-          startY = e.touches[0].clientY;
-        }, { passive: true });
-
-        doc.addEventListener('touchend', function(e) {
-          var duration = Date.now() - startTime;
-          var endX = e.changedTouches[0].clientX;
-          var endY = e.changedTouches[0].clientY;
-          if (Math.abs(endX - startX) > 20 || Math.abs(endY - startY) > 20) return;
-
-          if (duration >= 500) {
-            var el = doc.elementFromPoint(startX, startY);
-            var link = el && el.closest('a[href]');
-            if (link) {
-              var href = link.getAttribute('href');
-              if (href && /^https?:\/\//.test(href)) {
-                window.open(href, '_blank');
-              } else if (href) {
-                rendition.display(href);
-              }
-            }
-            return;
-          }
-
-          var winH = window.parent.innerHeight;
-          var winW = window.parent.innerWidth;
-
-          if (startY < winH * 0.15) {
-            window.parent.toggleMobileControls();
-            return;
-          }
-
-          if (startX < winW / 2) {
-            rendition.prev();
-          } else {
-            rendition.next();
-          }
-        });
+      var tapZone = document.getElementById('tap-zone');
+      var tzStart = {};
+      tapZone.addEventListener('touchstart', function(e) {
+        tzStart.t = Date.now();
+        tzStart.x = e.touches[0].clientX;
+        tzStart.y = e.touches[0].clientY;
+      }, { passive: true });
+      tapZone.addEventListener('touchend', function(e) {
+        var dx = e.changedTouches[0].clientX - tzStart.x;
+        var dy = e.changedTouches[0].clientY - tzStart.y;
+        if (Math.abs(dx) > 20 || Math.abs(dy) > 20) return;
+        if (Date.now() - tzStart.t >= 500) return;
+        if (tzStart.y < window.innerHeight * 0.15) {
+          toggleMobileControls();
+        } else if (tzStart.x < window.innerWidth / 2) {
+          rendition.prev();
+        } else {
+          rendition.next();
+        }
       });
     }
 
