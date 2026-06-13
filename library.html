@@ -246,16 +246,16 @@
 <div id="setup-modal" style="display:none;">
   <div id="setup-box">
     <h2>Sync reading progress</h2>
-    <p class="setup-sub">Progress is saved to a private GitHub Gist â invisible to others, works on every device, survives browser resets.</p>
+    <p class="setup-sub">Progress is saved to a private GitHub Gist — invisible to others, works on every device, survives browser resets.</p>
     <ol class="setup-steps">
       <li>Open <a href="https://github.com/settings/tokens/new?scopes=repo,gist&description=verdict-cat" target="_blank">github.com/settings/tokens</a></li>
       <li>Generate a token with the <strong>repo</strong> and <strong>gist</strong> scopes</li>
       <li>Paste it below</li>
     </ol>
-    <input id="setup-pat" type="password" placeholder="ghp_â¦" autocomplete="off" />
+    <input id="setup-pat" type="password" placeholder="ghp_…" autocomplete="off" />
     <div id="setup-error"></div>
     <button id="setup-connect">Connect</button>
-    <button id="setup-skip">Skip â use this device only</button>
+    <button id="setup-skip">Skip — use this device only</button>
   </div>
 </div>
 
@@ -322,7 +322,7 @@
     var dot   = document.getElementById('status-dot');
     var label = document.getElementById('status-label');
     dot.className = 'status-dot ' + (state === 'connected' ? 'connected' : state === 'syncing' ? 'syncing' : '');
-    label.textContent = state === 'connected' ? 'Synced' : state === 'syncing' ? 'Syncingâ¦' : 'Not synced';
+    label.textContent = state === 'connected' ? 'Synced' : state === 'syncing' ? 'Syncing…' : 'Not synced';
     document.getElementById('disconnect-btn').style.display = state === 'connected' ? '' : 'none';
   }
 
@@ -379,7 +379,7 @@
     if (!pat) { errEl.textContent = 'Paste your token first.'; return; }
     errEl.textContent = '';
     btn.disabled = true;
-    btn.textContent = 'Connectingâ¦';
+    btn.textContent = 'Connecting…';
     try {
       var gistId = await Gist.connect(pat);
       Gist.save(pat, gistId);
