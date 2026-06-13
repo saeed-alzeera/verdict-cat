@@ -77,6 +77,7 @@ function Head({
       <meta charSet="UTF-8" />
       <title>{formatMessage(page.title)}</title>
       <StylesheetAssets entrypoint="browser" />
+      <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       <FavIconAssets links={favIcons} />
       <AltLangLinks page={page} />
       <Metas page={page} />
