@@ -1,7 +1,7 @@
 import { usePageData } from "@keybr/pages-shared";
 import { Article, Button, Icon, TextField } from "@keybr/widget";
 import { mdiContentCopy, mdiDelete, mdiDownload, mdiSend } from "@mdi/js";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useIntl } from "react-intl";
 import * as styles from "./TextTransportPage.module.less";
 
@@ -40,6 +40,8 @@ export function TextTransportPage() {
   const [text, setText] = useState("");
   const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   const isAuthenticated = user != null;
 
@@ -110,6 +112,11 @@ export function TextTransportPage() {
         }
       }
       updateSnippets(snippets.filter((s) => s.id !== id));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     },
     [snippets, isAuthenticated, updateSnippets],
   );
@@ -119,6 +126,51 @@ export function TextTransportPage() {
     setCopied(id);
     setTimeout(() => setCopied((prev) => (prev === id ? null : prev)), 2000);
   }, []);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) =>
+      prev.size === snippets.length && snippets.length > 0
+        ? new Set()
+        : new Set(snippets.map((s) => s.id)),
+    );
+  }, [snippets]);
+
+  const handleDeleteSelected = useCallback(async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    if (isAuthenticated) {
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/_/text-transport/${id}`, { method: "DELETE" }).catch(
+            () => {},
+          ),
+        ),
+      );
+    }
+    updateSnippets(snippets.filter((s) => !selectedIds.has(s.id)));
+    setSelectedIds(new Set());
+  }, [selectedIds, snippets, isAuthenticated, updateSnippets]);
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      const allSelected =
+        selectedIds.size === snippets.length && snippets.length > 0;
+      selectAllRef.current.indeterminate =
+        selectedIds.size > 0 && !allSelected;
+    }
+  }, [selectedIds, snippets.length]);
 
   const handleExport = useCallback(() => {
     const blob = new Blob([JSON.stringify(snippets, null, 2)], {
@@ -193,23 +245,63 @@ export function TextTransportPage() {
                 defaultMessage: "Saved Snippets",
               })}
             </h2>
-            <Button
-              onClick={handleExport}
-              icon={<Icon shape={mdiDownload} />}
-              label={formatMessage({
-                id: "page.textTransport.exportJson",
-                defaultMessage: "Export JSON",
-              })}
-              title={formatMessage({
-                id: "page.textTransport.exportJsonTitle",
-                defaultMessage: "Download all snippets as JSON",
-              })}
-            />
+            <div className={styles.headerActions}>
+              <label className={styles.selectAllLabel}>
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={
+                    selectedIds.size === snippets.length && snippets.length > 0
+                  }
+                  onChange={toggleSelectAll}
+                />
+                {formatMessage({
+                  id: "page.textTransport.selectAll",
+                  defaultMessage: "Select all",
+                })}
+              </label>
+              {selectedIds.size > 0 && (
+                <Button
+                  onClick={handleDeleteSelected}
+                  icon={<Icon shape={mdiDelete} />}
+                  label={formatMessage(
+                    {
+                      id: "page.textTransport.deleteSelected",
+                      defaultMessage: "Delete selected ({count})",
+                    },
+                    { count: selectedIds.size },
+                  )}
+                  title={formatMessage({
+                    id: "page.textTransport.deleteSelectedTitle",
+                    defaultMessage: "Delete all selected snippets",
+                  })}
+                />
+              )}
+              <Button
+                onClick={handleExport}
+                icon={<Icon shape={mdiDownload} />}
+                label={formatMessage({
+                  id: "page.textTransport.exportJson",
+                  defaultMessage: "Export JSON",
+                })}
+                title={formatMessage({
+                  id: "page.textTransport.exportJsonTitle",
+                  defaultMessage: "Download all snippets as JSON",
+                })}
+              />
+            </div>
           </div>
           {snippets.map((snippet) => (
             <div key={snippet.id} className={styles.snippetCard}>
               <pre className={styles.snippetText}>{snippet.text}</pre>
               <div className={styles.snippetFooter}>
+                <label className={styles.snippetCheckbox}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(snippet.id)}
+                    onChange={() => toggleSelect(snippet.id)}
+                  />
+                </label>
                 <span className={styles.snippetDate}>
                   {new Date(snippet.createdAt).toLocaleString()}
                 </span>
