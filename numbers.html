@@ -222,7 +222,8 @@ const fmtPct = (n) => `${fmt1(n)}%`;
 const fmtUSD = (n) => `$${fmt1(n)} Bn`;
 const fmtMn  = (n) => `${fmt1(n)} Mn`;
 
-const wbUrl = (code, iso3) => `https://data.worldbank.org/indicator/${code}?locations=${iso3}`;
+const iso3ToIso2 = {};
+const wbUrl = (code, iso3) => `https://data.worldbank.org/indicator/${code}?locations=${iso3ToIso2[iso3] || iso3}`;
 const imfUrl = (code, iso3) => `https://www.imf.org/external/datamapper/${code}@WEO/${iso3}`;
 
 const INDICATORS = [
@@ -299,6 +300,7 @@ async function loadCountries() {
     .filter((c) => c.region && c.region.id !== "NA")
     .map((c) => {
       const { name, flagged } = displayNameFor(c.name);
+      iso3ToIso2[c.id] = c.iso2Code;
       return { iso3: c.id, wbName: c.name, displayName: name, flagged };
     })
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
