@@ -164,6 +164,30 @@
     margin-bottom: 14px;
   }
 
+  #header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .select-all-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--muted);
+  }
+
+  .snippet-checkbox {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+
   #snippets-section h2 {
     font-size: 13px;
     font-weight: 600;
@@ -303,7 +327,14 @@
   <div id="snippets-section" style="display:none">
     <div id="snippets-header">
       <h2>Saved Snippets</h2>
-      <button class="btn" id="export-btn" onclick="handleExport()">&#11015; Export JSON</button>
+      <div id="header-actions">
+        <label class="select-all-label">
+          <input type="checkbox" id="select-all-cb" onchange="toggleSelectAll()" />
+          Select all
+        </label>
+        <button class="btn btn-danger" id="delete-selected-btn" onclick="handleDeleteSelected()" style="display:none">&#128465; Delete selected (0)</button>
+        <button class="btn" id="export-btn" onclick="handleExport()">&#11015; Export JSON</button>
+      </div>
     </div>
     <div id="snippet-list"></div>
   </div>
@@ -321,6 +352,7 @@
 
   var snippets = [];
   var copiedId = null;
+  var selectedIds = new Set();
 
   // ── Storage helpers ────────────────────────────────────────────────────────
 
@@ -405,6 +437,25 @@
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
+  function updateBatchUI() {
+    var cb  = document.getElementById('select-all-cb');
+    var btn = document.getElementById('delete-selected-btn');
+    var count = selectedIds.size;
+    var total = snippets.length;
+    if (cb) {
+      cb.checked       = total > 0 && count === total;
+      cb.indeterminate = count > 0 && count < total;
+    }
+    if (btn) {
+      if (count > 0) {
+        btn.style.display = '';
+        btn.innerHTML = '&#128465; Delete selected (' + count + ')';
+      } else {
+        btn.style.display = 'none';
+      }
+    }
+  }
+
   function render() {
     var list    = document.getElementById('snippet-list');
     var section = document.getElementById('snippets-section');
@@ -415,6 +466,7 @@
     if (snippets.length === 0) {
       section.style.display = 'none';
       empty.style.display   = 'block';
+      updateBatchUI();
       return;
     }
 
@@ -431,6 +483,14 @@
 
       var footer = document.createElement('div');
       footer.className = 'snippet-footer';
+
+      var cbLabel = document.createElement('label');
+      cbLabel.className = 'snippet-checkbox';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = selectedIds.has(s.id);
+      cb.onchange = (function(id) { return function() { toggleSelect(id); }; })(s.id);
+      cbLabel.appendChild(cb);
 
       var date = document.createElement('span');
       date.className = 'snippet-date';
@@ -452,12 +512,15 @@
       actions.appendChild(copyBtn);
       actions.appendChild(delBtn);
 
+      footer.appendChild(cbLabel);
       footer.appendChild(date);
       footer.appendChild(actions);
       card.appendChild(pre);
       card.appendChild(footer);
       list.appendChild(card);
     });
+
+    updateBatchUI();
   }
 
   // ── Actions ────────────────────────────────────────────────────────────────
@@ -494,8 +557,33 @@
     document.body.removeChild(a);
   }
 
+  function toggleSelect(id) {
+    if (selectedIds.has(id)) { selectedIds.delete(id); } else { selectedIds.add(id); }
+    render();
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === snippets.length && snippets.length > 0) {
+      selectedIds.clear();
+    } else {
+      snippets.forEach(function(s) { selectedIds.add(s.id); });
+    }
+    render();
+  }
+
+  async function handleDeleteSelected() {
+    snippets = snippets.filter(function(s) { return !selectedIds.has(s.id); });
+    selectedIds.clear();
+    saveLocal(snippets);
+    render();
+    setSyncing(true);
+    await gistPush(snippets);
+    setSyncing(false);
+  }
+
   async function handleDelete(id) {
     snippets = snippets.filter(function(s) { return s.id !== id; });
+    selectedIds.delete(id);
     saveLocal(snippets);
     render();
     setSyncing(true);
