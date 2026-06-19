@@ -23,7 +23,6 @@ export function main() {
 
 const AccountPage = lazy(() => import("./pages/account.tsx"));
 const HelpPage = lazy(() => import("./pages/help.tsx"));
-const TextTransportPage = lazy(() => import("./pages/text-transport.tsx"));
 const HighScorePage = lazy(() => import("./pages/high-scores.tsx"));
 const LayoutsPage = lazy(() => import("./pages/layouts.tsx"));
 const MultiplayerPage = lazy(() => import("./pages/multiplayer.tsx"));
@@ -150,17 +149,6 @@ function PageRoutes() {
               <Title page={Pages.typingTest} />
               <Suspense fallback={<LoadingProgress />}>
                 <TypingTestPage />
-              </Suspense>
-            </Template>
-          }
-        />
-        <Route
-          path={Pages.textTransport.path}
-          element={
-            <Template path={Pages.textTransport.path}>
-              <Title page={Pages.textTransport} />
-              <Suspense fallback={<LoadingProgress />}>
-                <TextTransportPage />
               </Suspense>
             </Template>
           }
