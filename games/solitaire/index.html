@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Solitaire</title>
+<style>
+:root {
+  --bg: #0f1117; --panel: #1a1d23; --line: #2e3238;
+  --ink: #e8eaed; --muted: #8b9099; --accent: #5b9bd5;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  min-height: 100vh;
+  background: var(--bg); color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+}
+
+/* top bar */
+#bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; background: var(--panel);
+  border-bottom: 1px solid var(--line); gap: 12px; flex-shrink: 0;
+}
+#bar a { color: var(--muted); text-decoration: none; font-size: 13px; white-space: nowrap; }
+#bar a:hover { color: var(--ink); }
+#bar h1 { font-size: 15px; font-weight: 600; flex: 1; text-align: center; }
+#bar .right { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+#bar button {
+  background: none; border: 1px solid var(--line); border-radius: 6px;
+  color: var(--muted); font-size: 12px; padding: 5px 12px;
+  cursor: pointer; white-space: nowrap;
+  transition: border-color .15s, color .15s;
+}
+#bar button:hover { border-color: var(--accent); color: var(--accent); }
+
+/* game area */
+#game-container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+/* top area */
+#top-area {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 8px;
+}
+
+.pile-container {
+  border: 2px solid var(--line);
+  background: var(--panel);
+  padding: 8px;
+  border-radius: 8px;
+  width: 100px;
+  height: 140px;
+  position: relative;
+}
+.pile-title {
+  font-size: 0.7rem;
+  position: absolute;
+  top: 4px; left: 4px;
+  color: var(--muted);
+}
+#stock { cursor: pointer; }
+
+#foundations {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* tableau */
+#tableau {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tableau-pile {
+  border: 2px solid var(--line);
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 4px 2px;
+  width: 120px;
+  min-height: 300px;
+  position: relative;
+  overflow: visible;
+}
+
+/* cards */
+.card {
+  width: 100px;
+  height: 140px;
+  border-radius: 8px;
+  border: 1px solid #555;
+  background: #f7f4ef;
+  color: #111;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 6px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  user-select: none;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.card.back {
+  background: #1e3a8a;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.05) 0, rgba(255,255,255,0.05) 1px, transparent 1px, transparent 8px),
+    repeating-linear-gradient(-45deg, rgba(255,255,255,0.05) 0, rgba(255,255,255,0.05) 1px, transparent 1px, transparent 8px);
+  border: 1px solid #2a4a9a;
+  cursor: pointer;
+}
+.card.red { color: #c0392b; }
+.dragging { opacity: 0.5; }
+.drag-over { border: 2px dashed #FFD700; }
+
+/* message */
+#message {
+  margin-top: 16px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  min-height: 20px;
+}
+
+/* win banner */
+#win-banner {
+  display: none;
+  margin-top: 20px;
+  padding: 20px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+#win-banner.on { display: block; }
+
+/* help modal */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  padding: 20px;
+  align-items: center;
+  justify-content: center;
+}
+.modal.open { display: flex; }
+.modal-content {
+  background: var(--panel);
+  padding: 24px;
+  border: 1px solid var(--line);
+  width: 90%; max-width: 480px;
+  border-radius: 12px;
+  text-align: left;
+  color: var(--ink);
+  line-height: 1.6;
+}
+.modal-content h2 { margin-bottom: 12px; font-size: 16px; }
+.modal-content p { font-size: 13px; color: var(--muted); }
+.modal-content strong { color: var(--ink); }
+.modal-close {
+  float: right; font-size: 22px; cursor: pointer; color: var(--muted); line-height: 1;
+}
+.modal-close:hover { color: var(--ink); }
+
+/* responsive */
+@media (max-width: 640px) {
+  .card { width: 72px; height: 100px; font-size: 0.75rem; }
+  .pile-container { width: 72px; height: 100px; }
+  .tableau-pile { width: 86px; min-height: 220px; }
+  #foundations { gap: 4px; }
+}
+@media (max-width: 480px) {
+  .card { width: 56px; height: 80px; font-size: 0.65rem; padding: 3px; }
+  .pile-container { width: 56px; height: 80px; }
+  .tableau-pile { width: 68px; min-height: 180px; }
+}
+</style>
+</head>
+<body>
+
+<div id="bar">
+  <a href="../../games.html">← Games</a>
+  <h1>Solitaire</h1>
+  <div class="right">
+    <button onclick="document.getElementById('helpModal').classList.add('open')">Help</button>
+    <button onclick="initGame()">New Game</button>
+  </div>
+</div>
+
+<div id="game-container">
+  <div id="top-area">
+    <div id="stock" class="pile-container">
+      <div class="pile-title">Stock</div>
+    </div>
+    <div id="waste" class="pile-container">
+      <div class="pile-title">Waste</div>
+    </div>
+    <div id="foundations">
+      <div id="foundation-hearts"   class="pile-container" data-suit="hearts">  <div class="pile-title">♥</div></div>
+      <div id="foundation-diamonds" class="pile-container" data-suit="diamonds"><div class="pile-title">♦</div></div>
+      <div id="foundation-clubs"    class="pile-container" data-suit="clubs">   <div class="pile-title">♣</div></div>
+      <div id="foundation-spades"   class="pile-container" data-suit="spades">  <div class="pile-title">♠</div></div>
+    </div>
+  </div>
+
+  <div id="tableau"></div>
+  <div id="message"></div>
+  <div id="win-banner">🎉 Congratulations — You Win!</div>
+</div>
+
+<div id="helpModal" class="modal">
+  <div class="modal-content">
+    <span class="modal-close" onclick="document.getElementById('helpModal').classList.remove('open')">&times;</span>
+    <h2>How to Play</h2>
+    <p>
+      <strong>Goal:</strong> Build all four Foundation piles from Ace to King by suit.<br><br>
+      <strong>Stock &amp; Waste:</strong> Click the Stock to deal one card to the Waste. Drag the top Waste card to the Tableau or Foundations.<br><br>
+      <strong>Tableau:</strong> Build in descending order with alternating colors. Only a King (or sequence starting with a King) can fill an empty column.<br><br>
+      <strong>Foundations:</strong> Build each suit Ace → King. Drag any eligible card there to win!
+    </p>
+  </div>
+</div>
+
+<script>
+(function() {
+  if (localStorage.getItem('hub_auth') !== '1') window.location.replace('/');
+})();
+
+const SUITS = ["hearts","diamonds","clubs","spades"];
+const RANKS = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+
+let stock = [], waste = [], tableau = [], foundations = {};
+
+function initGame() {
+  let deck = [];
+  stock = []; waste = [];
+  tableau = [[],[],[],[],[],[],[]];
+  foundations = {hearts:[],diamonds:[],clubs:[],spades:[]};
+  document.getElementById("message").textContent = "";
+  document.getElementById("win-banner").classList.remove("on");
+
+  for (let suit of SUITS)
+    for (let rank of RANKS)
+      deck.push({ suit, rank, color: (suit==="hearts"||suit==="diamonds") ? "red" : "black", faceUp: false });
+
+  for (let i = deck.length - 1; i > 0; i--) {
+    let j = Math.floor(Math.random() * (i+1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+
+  for (let i = 0; i < 7; i++) {
+    for (let j = 0; j <= i; j++) {
+      let card = deck.pop();
+      card.faceUp = (j === i);
+      tableau[i].push(card);
+    }
+  }
+  stock = deck.slice();
+  deck = [];
+  renderGame();
+}
+
+function renderGame() {
+  renderStock();
+  renderWaste();
+  renderFoundations();
+  renderTableau();
+}
+
+function renderStock() {
+  let div = document.getElementById("stock");
+  div.innerHTML = '<div class="pile-title">Stock</div>';
+  if (stock.length > 0) {
+    let el = document.createElement("div");
+    el.className = "card back";
+    el.onclick = () => {
+      let card = stock.pop();
+      card.faceUp = true;
+      waste.push(card);
+      renderGame();
+    };
+    div.appendChild(el);
+  } else if (waste.length > 0) {
+    let el = document.createElement("div");
+    el.className = "card back";
+    el.style.opacity = "0.4";
+    el.title = "Click to reset";
+    el.onclick = () => {
+      stock = waste.slice().reverse().map(c => ({...c, faceUp: false}));
+      waste = [];
+      renderGame();
+    };
+    div.appendChild(el);
+  }
+}
+
+function renderWaste() {
+  let div = document.getElementById("waste");
+  div.innerHTML = '<div class="pile-title">Waste</div>';
+  if (waste.length > 0) {
+    let card = waste[waste.length - 1];
+    let el = createCardEl(card, "waste", waste.length - 1);
+    enableDrop(div, "waste", null);
+    div.appendChild(el);
+  }
+}
+
+function renderFoundations() {
+  for (let suit of SUITS) {
+    let div = document.getElementById("foundation-" + suit);
+    div.innerHTML = `<div class="pile-title">${suitSymbol(suit)}</div>`;
+    let pile = foundations[suit];
+    if (pile.length > 0) {
+      let el = createCardEl(pile[pile.length-1], "foundation", pile.length-1);
+      div.appendChild(el);
+    }
+    enableDrop(div, "foundation", suit);
+  }
+}
+
+function renderTableau() {
+  let container = document.getElementById("tableau");
+  container.innerHTML = "";
+  for (let i = 0; i < 7; i++) {
+    let pileDiv = document.createElement("div");
+    pileDiv.className = "tableau-pile";
+    pileDiv.dataset.index = i;
+    enableDrop(pileDiv, "tableau", i);
+    tableau[i].forEach((card, idx) => {
+      let el = createCardEl(card, "tableau-"+i, idx);
+      el.style.top = (idx * (card.faceUp ? 28 : 14)) + "px";
+      pileDiv.appendChild(el);
+    });
+    container.appendChild(pileDiv);
+  }
+}
+
+function createCardEl(card, sourceType, cardIndex) {
+  let el = document.createElement("div");
+  el.className = "card";
+  if (!card.faceUp) {
+    el.classList.add("back");
+  } else {
+    let sym = suitSymbol(card.suit);
+    el.innerHTML = `<span>${card.rank}${sym}</span><span style="transform:rotate(180deg)">${card.rank}${sym}</span>`;
+    if (card.color === "red") el.classList.add("red");
+  }
+  if (card.faceUp && (sourceType.startsWith("waste") || sourceType.startsWith("tableau"))) {
+    el.draggable = true;
+    el.addEventListener("dragstart", e => {
+      e.dataTransfer.setData("text/plain", JSON.stringify({source: sourceType, index: cardIndex}));
+      el.classList.add("dragging");
+    });
+    el.addEventListener("dragend", () => el.classList.remove("dragging"));
+  }
+  return el;
+}
+
+function suitSymbol(suit) {
+  return {hearts:"♥", diamonds:"♦", clubs:"♣", spades:"♠"}[suit] || "";
+}
+
+function enableDrop(element, destType, destId) {
+  element.addEventListener("dragover", e => { e.preventDefault(); element.classList.add("drag-over"); });
+  element.addEventListener("dragleave", () => element.classList.remove("drag-over"));
+  element.addEventListener("drop", e => {
+    e.preventDefault();
+    element.classList.remove("drag-over");
+    let data = JSON.parse(e.dataTransfer.getData("text/plain"));
+    if (destType === "foundation") moveToFoundation(data, destId);
+    else if (destType === "tableau") moveToTableau(data, destId);
+  });
+}
+
+function cardValue(rank) {
+  if (rank==="A") return 1;
+  if (rank==="J") return 11;
+  if (rank==="Q") return 12;
+  if (rank==="K") return 13;
+  return parseInt(rank);
+}
+
+function moveToFoundation(data, suit) {
+  let card;
+  if (data.source === "waste") {
+    if (!waste.length) return;
+    card = waste[waste.length-1];
+  } else if (data.source.startsWith("tableau-")) {
+    let pi = parseInt(data.source.split("-")[1]);
+    if (!tableau[pi].length) return;
+    card = tableau[pi][tableau[pi].length-1];
+    if (data.index !== tableau[pi].length-1) { msg("Can only move one card to Foundation."); return; }
+  }
+  if (card.suit !== suit) { msg("Wrong suit."); return; }
+  let pile = foundations[suit];
+  let val = cardValue(card.rank);
+  if (pile.length === 0 && val !== 1) { msg("Foundation starts with Ace."); return; }
+  if (pile.length > 0 && cardValue(pile[pile.length-1].rank) + 1 !== val) { msg("Illegal move."); return; }
+
+  if (data.source === "waste") waste.pop();
+  else { let pi = parseInt(data.source.split("-")[1]); tableau[pi].pop(); flipTop(pi); }
+  pile.push(card);
+  msg("");
+  renderGame();
+  checkWin();
+}
+
+function moveToTableau(data, destIdx) {
+  let moving = [];
+  if (data.source === "waste") {
+    if (!waste.length) return;
+    moving = [waste[waste.length-1]];
+  } else if (data.source.startsWith("tableau-")) {
+    let si = parseInt(data.source.split("-")[1]);
+    moving = tableau[si].slice(data.index);
+  }
+  if (!moving.length) return;
+  let dest = tableau[destIdx];
+  let head = moving[0];
+  if (dest.length === 0) {
+    if (cardValue(head.rank) !== 13) { msg("Only a King can go on an empty column."); return; }
+  } else {
+    let top = dest[dest.length-1];
+    if (!top.faceUp || top.color === head.color || cardValue(top.rank) !== cardValue(head.rank)+1) { msg("Illegal move."); return; }
+  }
+  if (data.source === "waste") waste.pop();
+  else { let si = parseInt(data.source.split("-")[1]); tableau[si] = tableau[si].slice(0, data.index); flipTop(si); }
+  tableau[destIdx] = dest.concat(moving);
+  msg("");
+  renderGame();
+}
+
+function flipTop(pileIdx) {
+  let pile = tableau[pileIdx];
+  if (pile.length > 0 && !pile[pile.length-1].faceUp)
+    pile[pile.length-1].faceUp = true;
+}
+
+function checkWin() {
+  let total = SUITS.reduce((s, suit) => s + foundations[suit].length, 0);
+  if (total === 52) document.getElementById("win-banner").classList.add("on");
+}
+
+function msg(text) {
+  document.getElementById("message").textContent = text;
+}
+
+window.onclick = e => {
+  if (e.target === document.getElementById("helpModal"))
+    document.getElementById("helpModal").classList.remove("open");
+};
+
+initGame();
+</script>
+</body>
+</html>
