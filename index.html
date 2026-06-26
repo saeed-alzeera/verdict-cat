@@ -315,6 +315,10 @@
     window.location.replace(page);
   }
 
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js');
+  }
+
   (function () {
     if (localStorage.getItem('hub_auth') === '1') {
       showHub();
