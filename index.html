@@ -300,7 +300,7 @@
   function checkAuth() {
     var val = document.getElementById('auth-input').value;
     if (val === '67DRA67') {
-      sessionStorage.setItem('hub_auth', '1');
+      localStorage.setItem('hub_auth', '1');
       showHub();
     } else if (val === 'GR-Reso') {
       window.location.replace('numbers.html');
@@ -315,8 +315,12 @@
     window.location.replace(page);
   }
 
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js');
+  }
+
   (function () {
-    if (sessionStorage.getItem('hub_auth') === '1') {
+    if (localStorage.getItem('hub_auth') === '1') {
       showHub();
     }
   })();
