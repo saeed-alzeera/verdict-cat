@@ -46,8 +46,9 @@ html, body {
 /* top area */
 #top-area {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: space-between;
+  align-items: flex-start;
   margin-bottom: 20px;
   gap: 8px;
 }
@@ -80,7 +81,9 @@ html, body {
   display: flex;
   justify-content: space-between;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 4px;
 }
 .tableau-pile {
   border: 2px solid var(--line);
@@ -186,6 +189,14 @@ html, body {
   .card { width: 56px; height: 80px; font-size: 0.65rem; padding: 3px; }
   .pile-container { width: 56px; height: 80px; }
   .tableau-pile { width: 68px; min-height: 180px; }
+}
+@media (max-width: 400px) {
+  .card { width: 44px; height: 62px; font-size: 0.55rem; padding: 2px; }
+  .pile-container { width: 44px; height: 62px; }
+  .tableau-pile { width: 52px; min-height: 150px; }
+  #top-area { gap: 4px; }
+  #foundations { gap: 2px; }
+  #game-container { padding: 12px 8px; }
 }
 </style>
 </head>
