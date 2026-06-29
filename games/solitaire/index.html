@@ -46,8 +46,9 @@ html, body {
 /* top area */
 #top-area {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: space-between;
+  align-items: flex-start;
   margin-bottom: 20px;
   gap: 8px;
 }
@@ -80,7 +81,9 @@ html, body {
   display: flex;
   justify-content: space-between;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 4px;
 }
 .tableau-pile {
   border: 2px solid var(--line);
@@ -187,6 +190,14 @@ html, body {
   .pile-container { width: 56px; height: 80px; }
   .tableau-pile { width: 68px; min-height: 180px; }
 }
+@media (max-width: 400px) {
+  .card { width: 44px; height: 62px; font-size: 0.55rem; padding: 2px; }
+  .pile-container { width: 44px; height: 62px; }
+  .tableau-pile { width: 52px; min-height: 150px; }
+  #top-area { gap: 4px; }
+  #foundations { gap: 2px; }
+  #game-container { padding: 12px 8px; }
+}
 </style>
 </head>
 <body>
@@ -205,14 +216,14 @@ html, body {
     <div id="stock" class="pile-container">
       <div class="pile-title">Stock</div>
     </div>
-    <div id="waste" class="pile-container">
-      <div class="pile-title">Waste</div>
-    </div>
     <div id="foundations">
       <div id="foundation-hearts"   class="pile-container" data-suit="hearts">  <div class="pile-title">♥</div></div>
       <div id="foundation-diamonds" class="pile-container" data-suit="diamonds"><div class="pile-title">♦</div></div>
       <div id="foundation-clubs"    class="pile-container" data-suit="clubs">   <div class="pile-title">♣</div></div>
       <div id="foundation-spades"   class="pile-container" data-suit="spades">  <div class="pile-title">♠</div></div>
+    </div>
+    <div id="waste" class="pile-container">
+      <div class="pile-title">Waste</div>
     </div>
   </div>
 
