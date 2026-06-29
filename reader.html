@@ -487,10 +487,16 @@
     });
 
     book.ready.then(function() {
-      return book.locations.generate(1000);
+      var locKey = 'epub-locations:' + slug;
+      var cached = localStorage.getItem(locKey);
+      if (cached) {
+        book.locations.load(cached);
+        return Promise.resolve();
+      }
+      return book.locations.generate(1000).then(function() {
+        try { localStorage.setItem(locKey, book.locations.save()); } catch(e) {}
+      });
     }).then(function() {
-      // Locations are now available; re-apply progress in case the initial
-      // relocated event fired before generation completed (showing 0%)
       if (lastKnownCfi) updateProgressBar(lastKnownCfi);
     }).catch(function() {});
 
