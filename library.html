@@ -289,7 +289,7 @@
 <div id="setup-modal" style="display:none;">
   <div id="setup-box">
     <h2>Sync reading progress</h2>
-    <p class="setup-sub">Progress is saved to a private GitHub Gist — invisible to others, works on every device, survives browser resets.</p>
+    <p class="setup-sub">Progress is saved to a private GitHub Gist — invisible to others, works on every device, survives browser resets. The <strong>repo</strong> scope is also required to upload new books.</p>
     <ol class="setup-steps">
       <li>Open <a href="https://github.com/settings/tokens/new?scopes=repo,gist&description=verdict-cat" target="_blank">github.com/settings/tokens</a></li>
       <li>Generate a token with the <strong>repo</strong> and <strong>gist</strong> scopes</li>
@@ -649,6 +649,20 @@
     var btn = this;
     btn.disabled = true;
     try {
+      // Verify the token has repo write access before uploading anything.
+      setUlStatus('working', 'Checking token permissions…');
+      try {
+        var repoData = await (await fetch('https://api.github.com/repos/' + REPO, {
+          headers: { Authorization: 'Bearer ' + getUploadPat(), Accept: 'application/vnd.github+json' }
+        })).json();
+        if (!repoData.permissions || !repoData.permissions.push) {
+          throw new Error('Token lacks repo write access. Reconnect with a token that has the full "repo" scope.');
+        }
+      } catch(permErr) {
+        if (permErr.message && permErr.message.includes('repo')) throw permErr;
+        throw new Error('Token lacks repo write access. Reconnect with a token that has the full "repo" scope.');
+      }
+
       var totalSteps = ulCoverB64 ? 4 : 3;
       setUlStatus('working', '1/' + totalSteps + '  Uploading epub…');
       var b64 = await toBase64(ulFile);
@@ -693,7 +707,9 @@
       setUlStatus('ok', 'Done! "' + title + '" added to the library.');
       setTimeout(closeUploadModal, 1600);
     } catch(err) {
-      setUlStatus('err', err.message || 'Upload failed.');
+      var msg = err.message || 'Upload failed.';
+      if (msg.includes('404')) msg = 'Upload failed — token lacks repo write access. Reconnect with a token that has the full "repo" scope.';
+      setUlStatus('err', msg);
       btn.disabled = false;
     }
   });
