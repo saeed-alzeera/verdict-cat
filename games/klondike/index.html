@@ -6,9 +6,9 @@
 <title>Klondike Solitaire</title>
 <style>
 :root {
-  --bg: #0f1117; --panel: #1a1d23; --line: #2e3238;
+  --bg: #111418; --panel: #0f1115; --line: #252830;
   --ink: #e8eaed; --muted: #8b9099; --accent: #5b9bd5;
-  --cw: 72px; --ch: 100px; --cr: 7px;
+  --cw: 72px; --ch: 100px; --cr: 6px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -22,7 +22,7 @@ body {
 /* top bar */
 #bar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px; background: var(--panel);
+  padding: 0 14px; height: 52px; background: var(--panel);
   border-bottom: 1px solid var(--line); gap: 12px; flex-shrink: 0;
 }
 #bar a {
@@ -30,22 +30,27 @@ body {
   font-size: 13px; white-space: nowrap; flex-shrink: 0;
 }
 #bar a:hover { color: var(--ink); }
-#bar h1 { font-size: 15px; font-weight: 600; flex: 1; text-align: center; }
-#bar .right { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+#bar h1 {
+  font-size: 13px; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase; flex: 1; text-align: center;
+  color: var(--ink);
+}
+#bar .right { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
 #moves-stat { font-size: 12px; color: var(--muted); white-space: nowrap; }
 #new-btn {
   background: none; border: 1px solid var(--line); border-radius: 6px;
-  color: var(--muted); font-size: 12px; padding: 5px 12px;
+  color: var(--muted); font-size: 12px; padding: 6px 14px;
   cursor: pointer; white-space: nowrap; transition: border-color .15s, color .15s;
 }
 #new-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 /* felt */
 #game {
-  background: #1b4d30;
-  min-height: calc(100vh - 49px);
-  padding: 16px 12px;
+  background: #2d6a4f;
+  min-height: calc(100vh - 52px);
+  padding: 20px 12px;
   overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; align-items: center;
 }
 
 /* layout */
@@ -63,37 +68,46 @@ body {
 /* slots */
 .slot {
   width: var(--cw); height: var(--ch);
-  border: 2px dashed rgba(255,255,255,0.2);
+  border: 2px solid rgba(255,255,255,0.28);
   border-radius: var(--cr); position: relative;
 }
 .slot-hint {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 20px; color: rgba(255,255,255,0.3);
+  font-size: 22px; color: rgba(255,255,255,0.38);
   pointer-events: none;
 }
 
 /* tableau columns */
 .tcol { position: relative; min-height: var(--ch); width: var(--cw); }
+.tcol-empty-hint {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; font-weight: 900; color: rgba(255,255,255,0.18);
+  pointer-events: none; border: 2px solid rgba(255,255,255,0.28);
+  border-radius: var(--cr);
+}
 
 /* cards */
 .card {
   position: absolute;
   width: var(--cw); height: var(--ch);
   border-radius: var(--cr);
-  border: 1px solid rgba(0,0,0,0.2);
+  border: 1px solid rgba(0,0,0,0.18);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.45);
 }
-.card.up { background: #f7f4ef; cursor: grab; }
+.card.up { background: #ffffff; cursor: grab; }
 .card.up:active { cursor: grabbing; }
 .card.down {
-  background: #1e3a8a;
+  background: #1a5bbf;
   background-image:
-    repeating-linear-gradient(45deg, rgba(255,255,255,0.05) 0, rgba(255,255,255,0.05) 1px, transparent 1px, transparent 8px),
-    repeating-linear-gradient(-45deg, rgba(255,255,255,0.05) 0, rgba(255,255,255,0.05) 1px, transparent 1px, transparent 8px);
+    repeating-linear-gradient(45deg, rgba(0,0,0,0.09) 0, rgba(0,0,0,0.09) 1px, transparent 1px, transparent 9px),
+    repeating-linear-gradient(-45deg, rgba(0,0,0,0.09) 0, rgba(0,0,0,0.09) 1px, transparent 1px, transparent 9px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.45), inset 0 0 0 4px rgba(255,255,255,0.22);
   cursor: default;
 }
 .card.down.flip-hint { cursor: pointer; }
-.card.dragging { opacity: 0.3; pointer-events: none; }
+.card.dragging { opacity: 0.25; pointer-events: none; }
 
 /* card face */
 .ct, .cb {
@@ -103,15 +117,15 @@ body {
 }
 .ct { top: 4px; left: 5px; }
 .cb { bottom: 4px; right: 5px; transform: rotate(180deg); align-items: center; }
-.ct .rk, .cb .rk { font-size: 14px; font-weight: 800; display: block; }
-.ct .st, .cb .st { font-size: 11px; font-weight: 700; display: block; }
+.ct .rk, .cb .rk { font-size: 15px; font-weight: 800; display: block; letter-spacing: -0.5px; }
+.ct .st, .cb .st { font-size: 12px; font-weight: 700; display: block; }
 .cc {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 28px; opacity: 0.09; pointer-events: none;
+  font-size: 38px; opacity: 0.14; pointer-events: none;
 }
-.r { color: #c0392b; }
-.k { color: #111; }
+.r { color: #d40000; }
+.k { color: #0d0d0d; }
 
 /* ghost */
 #ghost { position: fixed; z-index: 9999; pointer-events: none; display: none; }
@@ -120,23 +134,24 @@ body {
 /* win */
 #win {
   display: none; position: fixed; inset: 0; z-index: 999;
-  background: rgba(0,0,0,0.75);
+  background: rgba(0,0,0,0.7);
   align-items: center; justify-content: center;
 }
 #win.on { display: flex; }
 #win-box {
-  background: var(--panel); border: 1px solid var(--line);
-  border-radius: 16px; padding: 36px 40px; text-align: center;
+  background: #1a1e26; border: 1px solid #2e3340;
+  border-radius: 14px; padding: 40px 48px; text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
 }
-#win-box h2 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
-#win-box p { color: var(--muted); margin-bottom: 24px; font-size: 14px; }
+#win-box h2 { font-size: 30px; font-weight: 700; margin-bottom: 10px; }
+#win-box p { color: var(--muted); margin-bottom: 28px; font-size: 14px; }
 #win-box button {
-  background: var(--accent); color: #fff;
+  background: #2a6fdb; color: #fff;
   border: none; border-radius: 8px;
-  padding: 12px 32px; font-size: 15px;
-  cursor: pointer; font-weight: 500;
+  padding: 13px 36px; font-size: 15px;
+  cursor: pointer; font-weight: 600; letter-spacing: 0.3px;
 }
-#win-box button:hover { opacity: 0.88; }
+#win-box button:hover { background: #3580ef; }
 
 /* responsive */
 @media (max-width: 580px) {
@@ -145,11 +160,12 @@ body {
   #game { padding: 10px 6px; }
   .ct .rk, .cb .rk { font-size: 10px; }
   .ct .st, .cb .st { font-size: 8px; }
-  .cc { font-size: 18px; }
+  .cc { font-size: 24px; }
 }
 @media (max-width: 380px) {
   :root { --cw: 36px; --ch: 52px; --cr: 4px; }
   #top-row, #tab-row { gap: 4px; }
+  .cc { font-size: 20px; }
 }
 </style>
 </head>
@@ -277,7 +293,8 @@ function renderStock() {
     slot.appendChild(el);
   } else {
     hint.style.display = '';
-    hint.textContent = G.waste.length ? '↺' : '∅';
+    hint.style.fontSize = G.waste.length ? '28px' : '22px';
+    hint.textContent = G.waste.length ? '↺' : '✕';
   }
 }
 
@@ -321,6 +338,10 @@ function renderTab() {
     let cards = G.tab[c];
     if (cards.length === 0) {
       col.style.minHeight = 'var(--ch)';
+      let kh = document.createElement('div');
+      kh.className = 'tcol-empty-hint';
+      kh.textContent = 'K';
+      col.appendChild(kh);
     } else {
       let h = ch;
       for (let i=0; i<cards.length-1; i++) h += cards[i].f ? ofu : ofd;
