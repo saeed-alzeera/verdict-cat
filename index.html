@@ -304,8 +304,7 @@
 
   function checkAuth() {
     var val = document.getElementById('auth-input').value;
-    if (val === '67DRA67') {
-      localStorage.setItem('hub_auth', '1');
+    if (val === '6FLIF7') {
       showHub();
     } else if (val === 'GR-Reso') {
       window.location.replace('numbers.html');
@@ -324,11 +323,7 @@
     navigator.serviceWorker.register('/sw.js');
   }
 
-  (function () {
-    if (localStorage.getItem('hub_auth') === '1') {
-      showHub();
-    }
-  })();
+  localStorage.removeItem('hub_auth');
 </script>
 </body>
 </html>
