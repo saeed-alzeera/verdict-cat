@@ -95,6 +95,7 @@ body {
   border-radius: var(--cr);
   border: 1px solid rgba(0,0,0,0.18);
   box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+  overflow: hidden;
 }
 .card.up { background: #ffffff; cursor: grab; }
 .card.up:active { cursor: grabbing; }
@@ -109,7 +110,21 @@ body {
 .card.down.flip-hint { cursor: pointer; }
 .card.dragging { opacity: 0.25; pointer-events: none; }
 
-/* card face */
+/* card image */
+.card-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: fill;
+  display: block; pointer-events: none;
+}
+.card-back-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: fill;
+  display: block; pointer-events: none;
+}
+
+/* card face (text fallback) */
 .ct, .cb {
   position: absolute;
   display: flex; flex-direction: column; align-items: center;
@@ -220,6 +235,7 @@ body {
 const SUITS  = ['♠','♥','♦','♣']; // 0=♠ 1=♥ 2=♦ 3=♣
 const RANKS  = ['','A','2','3','4','5','6','7','8','9','10','J','Q','K'];
 const COLOR  = [0,1,1,0]; // 0=black 1=red
+const SUIT_CHAR = ['s','h','d','c'];
 
 // ── State ─────────────────────────────────────────────────────
 let G = {};
@@ -255,19 +271,39 @@ function deal() {
 // ── Dimensions ────────────────────────────────────────────────
 function CW()  { return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cw')); }
 function CH()  { return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ch')); }
-function OFD() { return CW() < 50 ? 12 : 18; } // face-down offset
-function OFU() { return CW() < 50 ? 18 : 26; } // face-up offset
+function OFD() { return CW() < 50 ? 12 : 18; }
+function OFU() { return CW() < 50 ? 18 : 26; }
+
+// ── Card image path ───────────────────────────────────────────
+function cardImgSrc(card) {
+  return 'cards/' + RANKS[card.r] + SUIT_CHAR[card.s] + '.png';
+}
 
 // ── Card element ──────────────────────────────────────────────
 function makeCard(card) {
   let el = document.createElement('div');
   el.className = 'card ' + (card.f ? 'up' : 'down');
   if (card.f) {
-    let c = COLOR[card.s] ? 'r' : 'k';
-    el.innerHTML =
-      `<div class="ct ${c}"><span class="rk">${RANKS[card.r]}</span><span class="st">${SUITS[card.s]}</span></div>` +
-      `<div class="cc ${c}">${SUITS[card.s]}</div>` +
-      `<div class="cb ${c}"><span class="rk">${RANKS[card.r]}</span><span class="st">${SUITS[card.s]}</span></div>`;
+    let img = document.createElement('img');
+    img.className = 'card-img';
+    img.src = cardImgSrc(card);
+    img.onerror = function() {
+      // text fallback when image is missing
+      this.remove();
+      let c = COLOR[card.s] ? 'r' : 'k';
+      el.insertAdjacentHTML('beforeend',
+        `<div class="ct ${c}"><span class="rk">${RANKS[card.r]}</span><span class="st">${SUITS[card.s]}</span></div>` +
+        `<div class="cc ${c}">${SUITS[card.s]}</div>` +
+        `<div class="cb ${c}"><span class="rk">${RANKS[card.r]}</span><span class="st">${SUITS[card.s]}</span></div>`
+      );
+    };
+    el.appendChild(img);
+  } else {
+    let img = document.createElement('img');
+    img.className = 'card-back-img';
+    img.src = 'cards/back.png';
+    img.onerror = function() { this.remove(); };
+    el.appendChild(img);
   }
   return el;
 }
@@ -308,7 +344,6 @@ function renderWaste() {
     el.dataset.src = 'w';
     el.addEventListener('mousedown', startDrag);
     el.addEventListener('touchstart', startDrag, {passive:false});
-    el.ondblclick = () => autoMoveToFound('w', -1);
     slot.appendChild(el);
   }
 }
@@ -360,8 +395,6 @@ function renderTab() {
       if (card.f) {
         el.addEventListener('mousedown', startDrag);
         el.addEventListener('touchstart', startDrag, {passive:false});
-        if (i === cards.length-1)
-          el.ondblclick = () => autoMoveToFound('t', c);
       } else if (i === cards.length-1) {
         el.classList.add('flip-hint');
         el.onclick = () => flipTop(c);
@@ -408,24 +441,62 @@ function canGoFound(card) {
   return f.length === 0 ? card.r === 1 : f[f.length-1].r === card.r - 1;
 }
 
-function autoMoveToFound(src, col) {
-  if (G.won) return false;
-  let card;
+// ── Auto-move on click ────────────────────────────────────────
+function autoMove(src, col, idx) {
+  if (G.won) return;
+
+  let card, stack;
   if (src === 'w') {
-    if (!G.waste.length) return false;
+    if (!G.waste.length) return;
     card = G.waste[G.waste.length-1];
+    stack = [card];
   } else {
     let t = G.tab[col];
-    if (!t.length || !t[t.length-1].f) return false;
-    card = t[t.length-1];
+    if (idx >= t.length || !t[idx].f) return;
+    card = t[idx];
+    stack = t.slice(idx);
   }
-  if (!canGoFound(card)) return false;
-  if (src === 'w') G.waste.pop(); else G.tab[col].pop();
-  G.found[card.s].push(card);
-  G.moves++;
-  render();
-  checkWin();
-  return true;
+
+  // Try foundation (single top card only)
+  let isTop = src === 'w' || idx === G.tab[col].length - 1;
+  if (isTop && canGoFound(card)) {
+    if (src === 'w') G.waste.pop(); else G.tab[col].splice(idx);
+    G.found[card.s].push(card);
+    G.moves++;
+    maybeFlipTop(src, col);
+    render(); checkWin();
+    return;
+  }
+
+  // Try tableau columns
+  for (let tc = 0; tc < 7; tc++) {
+    if (src === 't' && tc === col) continue;
+    let tCol = G.tab[tc];
+    let ok = false;
+    if (tCol.length === 0 && card.r === 13) {
+      ok = true;
+    } else if (tCol.length > 0) {
+      let top = tCol[tCol.length-1];
+      if (top.f && COLOR[card.s] !== COLOR[top.s] && card.r === top.r - 1) ok = true;
+    }
+    if (ok) {
+      if (src === 'w') G.waste.pop(); else G.tab[col].splice(idx);
+      tCol.push(...stack);
+      G.moves++;
+      maybeFlipTop(src, col);
+      render(); checkWin();
+      return;
+    }
+  }
+}
+
+function maybeFlipTop(src, col) {
+  if (src === 't') {
+    let t = G.tab[col];
+    if (t.length > 0 && !t[t.length-1].f) {
+      t[t.length-1].f = true;
+    }
+  }
 }
 
 function checkWin() {
@@ -438,7 +509,10 @@ function checkWin() {
 }
 
 // ── Drag & Drop ───────────────────────────────────────────────
-let DR = null;
+let DR = null;      // active drag state
+let PEND = null;    // mousedown recorded, waiting to see if it's a drag or click
+
+const DRAG_THRESHOLD = 5;
 
 function startDrag(e) {
   if (G.won) return;
@@ -458,16 +532,27 @@ function startDrag(e) {
   let py = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
   let rc = el.getBoundingClientRect();
 
-  // dim originals
+  PEND = { src, col, idx, cards, el, px, py, ox: px - rc.left, oy: py - rc.top };
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup',   onUp);
+  document.addEventListener('touchmove', onMove, {passive:false});
+  document.addEventListener('touchend',  onUp);
+}
+
+function activateDrag() {
+  if (!PEND) return;
+  let { src, col, idx, cards, el, ox, oy } = PEND;
+
   if (src === 'w') {
     el.classList.add('dragging');
   } else {
     let colEl = document.getElementById('t' + col);
-    let all = colEl.querySelectorAll('.card');
-    all.forEach((c, i) => { if (i >= idx) c.classList.add('dragging'); });
+    colEl.querySelectorAll('.card').forEach((c, i) => {
+      if (i >= idx) c.classList.add('dragging');
+    });
   }
 
-  // build ghost
   let ghost = document.getElementById('ghost');
   ghost.innerHTML = '';
   ghost.style.display = 'block';
@@ -480,13 +565,8 @@ function startDrag(e) {
     ghost.appendChild(cel);
   });
 
-  DR = {src, col, idx, cards, ox: px - rc.left, oy: py - rc.top};
-  placeGhost(px, py);
-
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup',   onUp);
-  document.addEventListener('touchmove', onMove, {passive:false});
-  document.addEventListener('touchend',  onUp);
+  DR = { src, col, idx, cards, ox, oy };
+  PEND = null;
 }
 
 function placeGhost(x, y) {
@@ -496,30 +576,46 @@ function placeGhost(x, y) {
 }
 
 function onMove(e) {
-  if (!DR) return;
   if (e.type === 'touchmove') e.preventDefault();
   let x = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
   let y = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
-  placeGhost(x, y);
+
+  if (PEND && !DR) {
+    let dx = x - PEND.px, dy = y - PEND.py;
+    if (Math.sqrt(dx*dx + dy*dy) > DRAG_THRESHOLD) activateDrag();
+    else return;
+  }
+
+  if (DR) placeGhost(x, y);
 }
 
 function onUp(e) {
-  if (!DR) return;
-  let x = e.type === 'touchend' ? e.changedTouches[0].clientX : e.clientX;
-  let y = e.type === 'touchend' ? e.changedTouches[0].clientY : e.clientY;
-  document.getElementById('ghost').style.display = 'none';
   document.removeEventListener('mousemove', onMove);
   document.removeEventListener('mouseup',   onUp);
   document.removeEventListener('touchmove', onMove);
   document.removeEventListener('touchend',  onUp);
-  if (!drop(x, y)) render();
-  DR = null;
+
+  if (PEND) {
+    // No movement: treat as click → auto-move
+    let { src, col, idx } = PEND;
+    PEND = null;
+    autoMove(src, col, idx);
+    return;
+  }
+
+  if (DR) {
+    let x = e.type === 'touchend' ? e.changedTouches[0].clientX : e.clientX;
+    let y = e.type === 'touchend' ? e.changedTouches[0].clientY : e.clientY;
+    document.getElementById('ghost').style.display = 'none';
+    if (!drop(x, y)) render();
+    DR = null;
+  }
 }
 
 function drop(x, y) {
   let c0 = DR.cards[0];
 
-  // Foundations (single card only)
+  // Foundation (single card only)
   if (DR.cards.length === 1) {
     for (let s=0; s<4; s++) {
       let slot = document.getElementById('f' + s);
@@ -528,6 +624,7 @@ function drop(x, y) {
         if (canGoFound(c0)) {
           removeFromSrc();
           G.found[c0.s].push(c0);
+          maybeFlipTop(DR.src, DR.col);
           G.moves++; render(); checkWin();
           return true;
         }
@@ -554,6 +651,7 @@ function drop(x, y) {
       if (ok) {
         removeFromSrc();
         tCol.push(...DR.cards);
+        maybeFlipTop(DR.src, DR.col);
         G.moves++; render(); checkWin();
         return true;
       }
