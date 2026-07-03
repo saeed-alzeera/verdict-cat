@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Sudoku</title>
+<style>
+/* ── tokens ── */
+:root[data-theme="dark"] {
+  --bg: #111418; --surface: #1a1d23; --surface2: #22262e;
+  --border: #2e3340; --border2: #3d4455;
+  --ink: #e8eaed; --muted: #8b9099; --faint: #4a5060;
+  --accent: #5b9bd5; --accent-dim: #2a4a6e;
+  --given: #c5cad4; --user: #5b9bd5; --note: #6b8fa8;
+  --err: #e05555; --err-bg: #3a1a1a;
+  --hi-cell: #1e2535; --hi-num: #2a3a52;
+  --win-bg: #0f1820;
+  --shadow: 0 4px 24px rgba(0,0,0,.5);
+}
+:root[data-theme="light"] {
+  --bg: #f0f2f5; --surface: #ffffff; --surface2: #e8eaed;
+  --border: #d0d5de; --border2: #b0b8c8;
+  --ink: #1a1d23; --muted: #5a6070; --faint: #a0a8b8;
+  --accent: #2563eb; --accent-dim: #dbeafe;
+  --given: #1a1d23; --user: #2563eb; --note: #4a7ab5;
+  --err: #dc2626; --err-bg: #fee2e2;
+  --hi-cell: #e8f0fb; --hi-num: #dbeafe;
+  --win-bg: #f0f8ff;
+  --shadow: 0 4px 24px rgba(0,0,0,.12);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  display: flex; flex-direction: column; align-items: center;
+  min-height: 100vh; padding: 16px 12px 32px;
+  transition: background .2s, color .2s;
+}
+
+/* ── header ── */
+header {
+  width: 100%; max-width: 520px;
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.5px; }
+.header-right { display: flex; gap: 8px; align-items: center; }
+.icon-btn {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--ink); border-radius: 8px; padding: 6px 10px;
+  cursor: pointer; font-size: .8rem; display: flex; align-items: center; gap: 5px;
+  transition: background .15s, border-color .15s;
+}
+.icon-btn:hover { background: var(--border); }
+.icon-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* ── difficulty bar ── */
+.diff-bar {
+  width: 100%; max-width: 520px;
+  display: flex; gap: 6px; margin-bottom: 14px;
+}
+.diff-btn {
+  flex: 1; padding: 7px 0; border-radius: 8px; font-size: .78rem;
+  font-weight: 600; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--muted); cursor: pointer;
+  transition: all .15s;
+}
+.diff-btn:hover { border-color: var(--accent); color: var(--ink); }
+.diff-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ── status row ── */
+.status-row {
+  width: 100%; max-width: 520px;
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px; font-size: .82rem; color: var(--muted);
+}
+.timer { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); font-size: .9rem; }
+.mistake-count { color: var(--err); font-weight: 600; }
+.status-tools { display: flex; gap: 6px; }
+.tool-btn {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--muted); border-radius: 7px; padding: 5px 9px;
+  cursor: pointer; font-size: .75rem; font-weight: 600;
+  transition: all .15s; display: flex; align-items: center; gap: 4px;
+}
+.tool-btn:hover { border-color: var(--accent); color: var(--ink); }
+.tool-btn.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+.tool-btn svg { width: 13px; height: 13px; }
+
+/* ── grid ── */
+.board-wrap {
+  width: 100%; max-width: 468px;
+  margin-bottom: 14px; position: relative;
+}
+#board {
+  display: grid; grid-template-columns: repeat(9, 1fr);
+  border: 2px solid var(--border2);
+  border-radius: 10px; overflow: hidden;
+  box-shadow: var(--shadow);
+  background: var(--border2); gap: 1px;
+}
+.cell {
+  aspect-ratio: 1; background: var(--surface);
+  display: flex; align-items: center; justify-content: center;
+  font-size: clamp(14px, 3.5vw, 22px); font-weight: 600;
+  cursor: pointer; position: relative; transition: background .1s;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+/* thick box borders */
+.cell:nth-child(3n)  { border-right: 2px solid var(--border2); }
+.cell:nth-child(9n)  { border-right: none; }
+.cell:nth-child(n+19):nth-child(-n+27) { border-bottom: 2px solid var(--border2); }
+.cell:nth-child(n+46):nth-child(-n+54) { border-bottom: 2px solid var(--border2); }
+.cell:nth-child(n+73) { border-bottom: none; }
+/* last col fix */
+.cell:nth-child(9n+1):not(:nth-child(1)) { }
+
+.cell.given { color: var(--given); }
+.cell.user-set { color: var(--user); }
+.cell.error { background: var(--err-bg) !important; color: var(--err) !important; }
+.cell.selected { background: var(--accent-dim) !important; }
+.cell.highlight { background: var(--hi-cell); }
+.cell.highlight-num { background: var(--hi-num); }
+
+/* notes grid inside cell */
+.notes-grid {
+  display: grid; grid-template-columns: repeat(3,1fr);
+  grid-template-rows: repeat(3,1fr);
+  width: 92%; height: 92%; gap: 0;
+}
+.note-digit {
+  font-size: clamp(7px, 1.4vw, 10px); font-weight: 500;
+  color: var(--note); display: flex; align-items: center; justify-content: center;
+  line-height: 1;
+}
+
+/* ── numpad ── */
+.numpad {
+  display: grid; grid-template-columns: repeat(9,1fr);
+  width: 100%; max-width: 468px; gap: 5px; margin-bottom: 14px;
+}
+.num-btn {
+  aspect-ratio: 1; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; font-size: clamp(14px,3.5vw,20px); font-weight: 700;
+  color: var(--ink); cursor: pointer; transition: all .12s;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+.num-btn:hover { background: var(--hi-cell); border-color: var(--accent); }
+.num-btn.exhausted { opacity: .28; pointer-events: none; }
+.num-count {
+  position: absolute; bottom: 2px; right: 4px;
+  font-size: clamp(7px,1.2vw,9px); color: var(--muted); font-weight: 400;
+}
+
+/* ── action row ── */
+.action-row {
+  display: flex; gap: 8px; width: 100%; max-width: 468px;
+  margin-bottom: 20px;
+}
+.action-btn {
+  flex: 1; padding: 9px 0; border-radius: 8px;
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--ink); font-size: .8rem; font-weight: 600;
+  cursor: pointer; transition: all .15s;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+}
+.action-btn:hover { border-color: var(--accent); }
+.action-btn svg { width: 15px; height: 15px; }
+
+/* ── stats panel ── */
+.stats-panel {
+  width: 100%; max-width: 468px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden;
+}
+.stats-header {
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  font-weight: 700; font-size: .9rem; display: flex; align-items: center; gap: 8px;
+}
+.stats-tabs {
+  display: flex; border-bottom: 1px solid var(--border);
+}
+.stats-tab {
+  flex: 1; padding: 8px 0; font-size: .75rem; font-weight: 600;
+  color: var(--muted); cursor: pointer; text-align: center;
+  border-bottom: 2px solid transparent; transition: all .15s;
+}
+.stats-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.stats-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px; background: var(--border);
+}
+.stat-cell {
+  background: var(--surface); padding: 14px 10px; text-align: center;
+}
+.stat-val { font-size: 1.5rem; font-weight: 700; color: var(--ink); line-height: 1; }
+.stat-lbl { font-size: .7rem; color: var(--muted); margin-top: 4px; }
+.streak-row {
+  padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
+  border-top: 1px solid var(--border);
+}
+.streak-val { font-size: 1.1rem; font-weight: 700; color: var(--accent); }
+
+/* ── win overlay ── */
+#win-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.7); z-index: 100;
+  align-items: center; justify-content: center;
+}
+#win-overlay.show { display: flex; }
+.win-card {
+  background: var(--win-bg); border: 1px solid var(--border2);
+  border-radius: 16px; padding: 32px 28px; text-align: center;
+  max-width: 320px; width: 90%; box-shadow: var(--shadow);
+  animation: popIn .3s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes popIn { from { transform: scale(.7); opacity: 0; } }
+.win-emoji { font-size: 2.8rem; margin-bottom: 12px; }
+.win-title { font-size: 1.4rem; font-weight: 800; margin-bottom: 6px; }
+.win-sub { color: var(--muted); font-size: .9rem; margin-bottom: 20px; }
+.win-stats { display: flex; justify-content: center; gap: 28px; margin-bottom: 24px; }
+.win-stat { text-align: center; }
+.win-stat-val { font-size: 1.3rem; font-weight: 700; color: var(--accent); }
+.win-stat-lbl { font-size: .72rem; color: var(--muted); }
+.win-btns { display: flex; gap: 10px; }
+.win-btn {
+  flex: 1; padding: 10px 0; border-radius: 9px; font-weight: 700;
+  font-size: .85rem; cursor: pointer; border: none; transition: opacity .15s;
+}
+.win-btn:hover { opacity: .85; }
+.win-btn.primary { background: var(--accent); color: #fff; }
+.win-btn.secondary { background: var(--surface2); color: var(--ink); border: 1px solid var(--border); }
+
+/* ── responsive ── */
+@media (max-width: 400px) {
+  .diff-bar { gap: 4px; }
+  .diff-btn { font-size: .72rem; padding: 6px 0; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Sudoku</h1>
+  <div class="header-right">
+    <button class="icon-btn" id="btn-stats" title="Statistics">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="6" width="4" height="15"/><rect x="17" y="3" width="4" height="18"/></svg>
+      Stats
+    </button>
+    <button class="icon-btn" id="btn-theme" title="Toggle theme">
+      <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="diff-bar">
+  <button class="diff-btn active" data-diff="easy">Easy</button>
+  <button class="diff-btn" data-diff="medium">Medium</button>
+  <button class="diff-btn" data-diff="hard">Hard</button>
+  <button class="diff-btn" data-diff="expert">Expert</button>
+</div>
+
+<div class="status-row">
+  <span class="timer" id="timer">0:00</span>
+  <div class="status-tools">
+    <button class="tool-btn" id="btn-notes" title="Toggle note mode">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      Notes
+    </button>
+    <button class="tool-btn" id="btn-autocheck" title="Toggle auto-check">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      Check
+    </button>
+  </div>
+  <span id="mistake-display"></span>
+</div>
+
+<div class="board-wrap">
+  <div id="board"></div>
+</div>
+
+<div class="numpad" id="numpad"></div>
+
+<div class="action-row">
+  <button class="action-btn" id="btn-undo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
+    Undo
+  </button>
+  <button class="action-btn" id="btn-erase">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+    Erase
+  </button>
+  <button class="action-btn" id="btn-hint">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    Hint
+  </button>
+  <button class="action-btn" id="btn-new">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-5.06"/></svg>
+    New
+  </button>
+</div>
+
+<div class="stats-panel" id="stats-panel">
+  <div class="stats-header">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="6" width="4" height="15"/><rect x="17" y="3" width="4" height="18"/></svg>
+    Statistics
+  </div>
+  <div class="stats-tabs">
+    <div class="stats-tab active" data-diff="easy">Easy</div>
+    <div class="stats-tab" data-diff="medium">Medium</div>
+    <div class="stats-tab" data-diff="hard">Hard</div>
+    <div class="stats-tab" data-diff="expert">Expert</div>
+  </div>
+  <div class="stats-grid" id="stats-grid"></div>
+  <div class="streak-row">
+    <span style="font-size:.82rem;color:var(--muted)">🔥 Current streak</span>
+    <span class="streak-val" id="streak-val">0</span>
+    <span style="font-size:.82rem;color:var(--muted)">Best streak</span>
+    <span class="streak-val" id="best-streak-val">0</span>
+  </div>
+</div>
+
+<div id="win-overlay">
+  <div class="win-card">
+    <div class="win-emoji">🎉</div>
+    <div class="win-title">Puzzle Solved!</div>
+    <div class="win-sub" id="win-sub"></div>
+    <div class="win-stats">
+      <div class="win-stat">
+        <div class="win-stat-val" id="win-time">—</div>
+        <div class="win-stat-lbl">Time</div>
+      </div>
+      <div class="win-stat">
+        <div class="win-stat-val" id="win-mistakes">—</div>
+        <div class="win-stat-lbl">Mistakes</div>
+      </div>
+      <div class="win-stat">
+        <div class="win-stat-val" id="win-streak">—</div>
+        <div class="win-stat-lbl">Streak</div>
+      </div>
+    </div>
+    <div class="win-btns">
+      <button class="win-btn secondary" id="win-close">Close</button>
+      <button class="win-btn primary" id="win-new">Play Again</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Sudoku Generator ──────────────────────────────────────────────
+function generateSolution() {
+  const grid = Array.from({length:9},()=>Array(9).fill(0));
+  fillGrid(grid);
+  return grid;
+}
+
+function fillGrid(grid) {
+  const nums = shuffle([1,2,3,4,5,6,7,8,9]);
+  for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+    if (grid[r][c] === 0) {
+      for (const n of nums) {
+        if (isValid(grid,r,c,n)) {
+          grid[r][c] = n;
+          if (fillGrid(grid)) return true;
+          grid[r][c] = 0;
+        }
+      }
+      return false;
+    }
+  }
+  return true;
+}
+
+function isValid(grid,r,c,n) {
+  for (let i=0;i<9;i++) {
+    if (grid[r][i]===n || grid[i][c]===n) return false;
+  }
+  const br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
+  for (let i=0;i<3;i++) for (let j=0;j<3;j++) {
+    if (grid[br+i][bc+j]===n) return false;
+  }
+  return true;
+}
+
+function shuffle(a) {
+  for (let i=a.length-1;i>0;i--) {
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+// Count solutions (stop at 2 to check uniqueness)
+function countSolutions(grid, limit=2) {
+  const g = grid.map(r=>[...r]);
+  let count = 0;
+  function solve() {
+    for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+      if (g[r][c]===0) {
+        for (let n=1;n<=9;n++) {
+          if (isValid(g,r,c,n)) {
+            g[r][c]=n;
+            solve();
+            g[r][c]=0;
+            if (count>=limit) return;
+          }
+        }
+        return;
+      }
+    }
+    count++;
+  }
+  solve();
+  return count;
+}
+
+const CLUES = { easy:38, medium:30, hard:26, expert:22 };
+
+function makePuzzle(diff) {
+  const solution = generateSolution();
+  const puzzle = solution.map(r=>[...r]);
+  const cells = shuffle([...Array(81).keys()]);
+  let removed = 0;
+  const target = 81 - CLUES[diff];
+  for (const idx of cells) {
+    if (removed >= target) break;
+    const r=Math.floor(idx/9), c=idx%9;
+    const val = puzzle[r][c];
+    puzzle[r][c] = 0;
+    if (countSolutions(puzzle) === 1) {
+      removed++;
+    } else {
+      puzzle[r][c] = val;
+    }
+  }
+  return { puzzle, solution };
+}
+
+// ── Stats Storage ─────────────────────────────────────────────────
+const DIFFS = ['easy','medium','hard','expert'];
+
+function loadStats() {
+  try { return JSON.parse(localStorage.getItem('sudoku_stats') || 'null') || makeDefaultStats(); }
+  catch { return makeDefaultStats(); }
+}
+
+function makeDefaultStats() {
+  const s = { streak: 0, bestStreak: 0 };
+  for (const d of DIFFS) s[d] = { played:0, won:0, bestTime:null, totalTime:0 };
+  return s;
+}
+
+function saveStats(s) {
+  localStorage.setItem('sudoku_stats', JSON.stringify(s));
+}
+
+function recordWin(diff, timeSeconds) {
+  const s = loadStats();
+  s[diff].played++;
+  s[diff].won++;
+  s[diff].totalTime += timeSeconds;
+  if (s[diff].bestTime === null || timeSeconds < s[diff].bestTime) s[diff].bestTime = timeSeconds;
+  s.streak++;
+  if (s.streak > s.bestStreak) s.bestStreak = s.streak;
+  saveStats(s);
+  return s;
+}
+
+function recordLoss(diff) {
+  const s = loadStats();
+  s[diff].played++;
+  s.streak = 0;
+  saveStats(s);
+}
+
+function fmtTime(s) {
+  if (s === null) return '—';
+  const m = Math.floor(s/60), sec = s%60;
+  return `${m}:${String(sec).padStart(2,'0')}`;
+}
+
+// ── Theme ─────────────────────────────────────────────────────────
+function loadTheme() { return localStorage.getItem('sudoku_theme') || 'dark'; }
+function saveTheme(t) { localStorage.setItem('sudoku_theme', t); }
+
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  const icon = document.getElementById('theme-icon');
+  if (t === 'dark') {
+    icon.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+  } else {
+    icon.innerHTML = '<path d="M21 12.79A9 9 0 1111.21 3a7 7 0 109.79 9.79z"/>';
+  }
+}
+
+// ── Game State ────────────────────────────────────────────────────
+let puzzle, solution, userGrid, notesGrid;
+let selected = null;
+let notesMode = false;
+let autoCheck = false;
+let diff = 'easy';
+let mistakes = 0;
+let hintsUsed = 0;
+let elapsed = 0;
+let timerInterval = null;
+let gameOver = false;
+let history = [];
+
+function startNewGame(d) {
+  diff = d;
+  stopTimer();
+  elapsed = 0; mistakes = 0; hintsUsed = 0; selected = null;
+  notesMode = false; autoCheck = false; gameOver = false; history = [];
+  document.getElementById('btn-notes').classList.remove('on');
+  document.getElementById('btn-autocheck').classList.remove('on');
+  updateMistakeDisplay();
+  updateTimer();
+
+  const { puzzle: p, solution: s } = makePuzzle(diff);
+  puzzle = p; solution = s;
+  userGrid = p.map(r=>[...r]);
+  notesGrid = Array.from({length:9},()=>Array.from({length:9},()=>new Set()));
+
+  renderBoard();
+  renderNumpad();
+  startTimer();
+}
+
+// ── Timer ─────────────────────────────────────────────────────────
+function startTimer() {
+  timerInterval = setInterval(()=>{ elapsed++; updateTimer(); }, 1000);
+}
+function stopTimer() { clearInterval(timerInterval); timerInterval = null; }
+function updateTimer() {
+  document.getElementById('timer').textContent = fmtTime(elapsed);
+}
+function updateMistakeDisplay() {
+  const el = document.getElementById('mistake-display');
+  el.textContent = mistakes > 0 ? `✗ ${mistakes}` : '';
+  el.className = mistakes > 0 ? 'mistake-count' : '';
+}
+
+// ── Board Render ──────────────────────────────────────────────────
+function renderBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+    const el = document.createElement('div');
+    el.className = 'cell';
+    el.dataset.r = r; el.dataset.c = c;
+    el.addEventListener('click', ()=>selectCell(r,c));
+    board.appendChild(el);
+  }
+  updateAllCells();
+}
+
+function cellEl(r,c) {
+  return document.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+}
+
+function updateAllCells() {
+  for (let r=0;r<9;r++) for (let c=0;c<9;c++) updateCell(r,c);
+  updateHighlights();
+  updateNumpad();
+}
+
+function updateCell(r,c) {
+  const el = cellEl(r,c);
+  if (!el) return;
+  el.innerHTML = '';
+  const val = userGrid[r][c];
+  const isGiven = puzzle[r][c] !== 0;
+
+  if (val !== 0) {
+    el.textContent = val;
+    el.classList.toggle('given', isGiven);
+    el.classList.toggle('user-set', !isGiven);
+    el.classList.toggle('error', autoCheck && !isGiven && val !== solution[r][c]);
+  } else {
+    const notes = notesGrid[r][c];
+    if (notes.size > 0) {
+      const ng = document.createElement('div');
+      ng.className = 'notes-grid';
+      for (let n=1;n<=9;n++) {
+        const nd = document.createElement('div');
+        nd.className = 'note-digit';
+        nd.textContent = notes.has(n) ? n : '';
+        ng.appendChild(nd);
+      }
+      el.appendChild(ng);
+    }
+  }
+}
+
+function updateHighlights() {
+  const cells = document.querySelectorAll('.cell');
+  cells.forEach(el=>{
+    el.classList.remove('selected','highlight','highlight-num');
+  });
+  if (selected === null) return;
+  const [sr,sc] = selected;
+  const selVal = userGrid[sr][sc];
+  const br = Math.floor(sr/3)*3, bc = Math.floor(sc/3)*3;
+
+  for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+    const el = cellEl(r,c);
+    if (r===sr && c===sc) { el.classList.add('selected'); continue; }
+    const same = selVal>0 && userGrid[r][c]===selVal;
+    const related = r===sr || c===sc || (Math.floor(r/3)*3===br && Math.floor(c/3)*3===bc);
+    if (same) el.classList.add('highlight-num');
+    else if (related) el.classList.add('highlight');
+  }
+}
+
+// ── Numpad ────────────────────────────────────────────────────────
+function renderNumpad() {
+  const pad = document.getElementById('numpad');
+  pad.innerHTML = '';
+  for (let n=1;n<=9;n++) {
+    const btn = document.createElement('button');
+    btn.className = 'num-btn';
+    btn.dataset.n = n;
+    btn.addEventListener('click', ()=>enterNumber(n));
+    const cnt = document.createElement('span');
+    cnt.className = 'num-count';
+    cnt.id = `nc-${n}`;
+    btn.appendChild(document.createTextNode(n));
+    btn.appendChild(cnt);
+    pad.appendChild(btn);
+  }
+  updateNumpad();
+}
+
+function updateNumpad() {
+  const counts = Array(10).fill(0);
+  for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+    if (userGrid[r][c]>0) counts[userGrid[r][c]]++;
+  }
+  for (let n=1;n<=9;n++) {
+    const btn = document.querySelector(`.num-btn[data-n="${n}"]`);
+    const cntEl = document.getElementById(`nc-${n}`);
+    if (!btn) continue;
+    const placed = counts[n];
+    btn.classList.toggle('exhausted', placed>=9);
+    if (cntEl) cntEl.textContent = placed < 9 ? `${placed}/9` : '';
+  }
+}
+
+// ── Input ─────────────────────────────────────────────────────────
+function selectCell(r,c) {
+  selected = [r,c];
+  updateHighlights();
+}
+
+function enterNumber(n) {
+  if (selected===null || gameOver) return;
+  const [r,c] = selected;
+  if (puzzle[r][c]!==0) return; // given cell
+
+  if (notesMode) {
+    const notes = notesGrid[r][c];
+    if (userGrid[r][c] !== 0) return; // can't note over a digit
+    history.push({type:'note',r,c,notes:new Set(notes)});
+    if (notes.has(n)) notes.delete(n); else notes.add(n);
+    updateCell(r,c);
+    return;
+  }
+
+  history.push({type:'digit',r,c,prev:userGrid[r][c], prevNotes: new Map()});
+  userGrid[r][c] = n;
+
+  // auto-clear notes in peers
+  if (n>0) {
+    for (let i=0;i<9;i++) {
+      clearNoteInCell(r,i,n); clearNoteInCell(i,c,n);
+    }
+    const br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
+    for (let i=0;i<3;i++) for (let j=0;j<3;j++) clearNoteInCell(br+i,bc+j,n);
+  }
+
+  if (autoCheck && n!==0 && n!==solution[r][c]) mistakes++;
+  updateMistakeDisplay();
+  updateAllCells();
+  checkWin();
+}
+
+function clearNoteInCell(r,c,n) {
+  notesGrid[r][c].delete(n);
+}
+
+function eraseCell() {
+  if (selected===null || gameOver) return;
+  const [r,c] = selected;
+  if (puzzle[r][c]!==0) return;
+  history.push({type:'digit',r,c,prev:userGrid[r][c]});
+  userGrid[r][c]=0;
+  notesGrid[r][c].clear();
+  updateAllCells();
+}
+
+function undo() {
+  if (!history.length || gameOver) return;
+  const h = history.pop();
+  if (h.type==='digit') {
+    userGrid[h.r][h.c]=h.prev;
+  } else {
+    notesGrid[h.r][h.c] = h.notes;
+  }
+  updateAllCells();
+}
+
+function giveHint() {
+  if (gameOver) return;
+  // pick an empty user cell, prefer selected
+  let r=-1,c=-1;
+  if (selected) {
+    const [sr,sc]=selected;
+    if (userGrid[sr][sc]===0 && puzzle[sr][sc]===0) { r=sr; c=sc; }
+  }
+  if (r===-1) {
+    const empties=[];
+    for (let i=0;i<9;i++) for (let j=0;j<9;j++) if(userGrid[i][j]===0) empties.push([i,j]);
+    if (!empties.length) return;
+    [r,c]=empties[Math.floor(Math.random()*empties.length)];
+  }
+  history.push({type:'digit',r,c,prev:userGrid[r][c]});
+  userGrid[r][c]=solution[r][c];
+  notesGrid[r][c].clear();
+  hintsUsed++;
+  selected=[r,c];
+  updateAllCells();
+  checkWin();
+}
+
+function checkWin() {
+  for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+    if (userGrid[r][c]!==solution[r][c]) return;
+  }
+  gameOver=true;
+  stopTimer();
+  const s = recordWin(diff, elapsed);
+  showWin(s);
+}
+
+function showWin(stats) {
+  document.getElementById('win-time').textContent = fmtTime(elapsed);
+  document.getElementById('win-mistakes').textContent = mistakes;
+  document.getElementById('win-streak').textContent = stats.streak;
+  document.getElementById('win-sub').textContent =
+    `${diff.charAt(0).toUpperCase()+diff.slice(1)} puzzle completed${hintsUsed ? ` · ${hintsUsed} hint${hintsUsed>1?'s':''}` : ''}`;
+  document.getElementById('win-overlay').classList.add('show');
+  renderStatsPanel('easy');
+}
+
+// ── Keyboard ──────────────────────────────────────────────────────
+document.addEventListener('keydown', e=>{
+  if (e.key>='1'&&e.key<='9') { enterNumber(parseInt(e.key)); return; }
+  if (e.key==='Backspace'||e.key==='Delete'||e.key==='0') { eraseCell(); return; }
+  if (e.key==='z'&&(e.ctrlKey||e.metaKey)) { undo(); e.preventDefault(); return; }
+  if (e.key==='n') { toggleNotes(); return; }
+  const moves={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]};
+  if (moves[e.key]) {
+    e.preventDefault();
+    const [dr,dc]=moves[e.key];
+    if (selected) {
+      let [r,c]=selected;
+      r=Math.max(0,Math.min(8,r+dr)); c=Math.max(0,Math.min(8,c+dc));
+      selectCell(r,c);
+    } else selectCell(0,0);
+  }
+});
+
+// ── Stats Panel ───────────────────────────────────────────────────
+let statsTab = 'easy';
+
+function renderStatsPanel(d) {
+  statsTab = d;
+  document.querySelectorAll('.stats-tab').forEach(t=>{
+    t.classList.toggle('active', t.dataset.diff===d);
+  });
+  const s = loadStats();
+  const ds = s[d];
+  const avg = ds.won>0 ? Math.round(ds.totalTime/ds.won) : null;
+  const pct = ds.played>0 ? Math.round(ds.won/ds.played*100) : 0;
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-cell"><div class="stat-val">${ds.played}</div><div class="stat-lbl">Played</div></div>
+    <div class="stat-cell"><div class="stat-val">${pct}%</div><div class="stat-lbl">Win Rate</div></div>
+    <div class="stat-cell"><div class="stat-val">${fmtTime(ds.bestTime)}</div><div class="stat-lbl">Best Time</div></div>
+    <div class="stat-cell"><div class="stat-val">${ds.won}</div><div class="stat-lbl">Won</div></div>
+    <div class="stat-cell"><div class="stat-val">${fmtTime(avg)}</div><div class="stat-lbl">Avg Time</div></div>
+    <div class="stat-cell"><div class="stat-val">${ds.played-ds.won}</div><div class="stat-lbl">Abandoned</div></div>
+  `;
+  document.getElementById('streak-val').textContent = s.streak;
+  document.getElementById('best-streak-val').textContent = s.bestStreak;
+}
+
+// ── Wiring ────────────────────────────────────────────────────────
+function toggleNotes() {
+  notesMode = !notesMode;
+  document.getElementById('btn-notes').classList.toggle('on', notesMode);
+}
+
+document.querySelectorAll('.diff-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.diff-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    startNewGame(btn.dataset.diff);
+  });
+});
+
+document.getElementById('btn-notes').addEventListener('click', toggleNotes);
+
+document.getElementById('btn-autocheck').addEventListener('click', ()=>{
+  autoCheck = !autoCheck;
+  document.getElementById('btn-autocheck').classList.toggle('on', autoCheck);
+  updateAllCells();
+});
+
+document.getElementById('btn-undo').addEventListener('click', undo);
+document.getElementById('btn-erase').addEventListener('click', eraseCell);
+document.getElementById('btn-hint').addEventListener('click', giveHint);
+document.getElementById('btn-new').addEventListener('click', ()=>startNewGame(diff));
+
+document.getElementById('btn-theme').addEventListener('click', ()=>{
+  const next = document.documentElement.dataset.theme==='dark' ? 'light' : 'dark';
+  applyTheme(next); saveTheme(next);
+});
+
+document.getElementById('btn-stats').addEventListener('click', ()=>{
+  renderStatsPanel(statsTab);
+  document.getElementById('stats-panel').scrollIntoView({behavior:'smooth'});
+});
+
+document.querySelectorAll('.stats-tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>renderStatsPanel(tab.dataset.diff));
+});
+
+document.getElementById('win-close').addEventListener('click', ()=>{
+  document.getElementById('win-overlay').classList.remove('show');
+});
+document.getElementById('win-new').addEventListener('click', ()=>{
+  document.getElementById('win-overlay').classList.remove('show');
+  startNewGame(diff);
+});
+document.getElementById('win-overlay').addEventListener('click', e=>{
+  if (e.target===document.getElementById('win-overlay'))
+    document.getElementById('win-overlay').classList.remove('show');
+});
+
+// ── Init ──────────────────────────────────────────────────────────
+applyTheme(loadTheme());
+renderStatsPanel('easy');
+startNewGame('easy');
+</script>
+</body>
+</html>
