@@ -703,7 +703,7 @@ function showWin(stats) {
 
 // ── Keyboard ──────────────────────────────────────────────────────
 document.addEventListener('keydown', e=>{
-  if (e.key==='Alt') { e.preventDefault(); if (!notesMode) { notesMode=true; altNotesActive=true; document.getElementById('btn-notes').classList.add('on'); } return; }
+  if (e.key==='Alt') { e.preventDefault(); if (!altNotesActive) { altNotesActive=true; notesMode=!notesMode; document.getElementById('btn-notes').classList.toggle('on', notesMode); } return; }
   if (e.key>='1'&&e.key<='9') { enterNumber(parseInt(e.key)); return; }
   if (e.key==='Backspace'||e.key==='Delete'||e.key==='0') { eraseCell(); return; }
   if (e.key==='z'&&(e.ctrlKey||e.metaKey)) { undo(); e.preventDefault(); return; }
@@ -721,7 +721,7 @@ document.addEventListener('keydown', e=>{
 });
 
 document.addEventListener('keyup', e=>{
-  if (e.key==='Alt' && altNotesActive) { notesMode=false; altNotesActive=false; document.getElementById('btn-notes').classList.remove('on'); }
+  if (e.key==='Alt' && altNotesActive) { altNotesActive=false; notesMode=!notesMode; document.getElementById('btn-notes').classList.toggle('on', notesMode); }
 });
 
 // ── Wiring ────────────────────────────────────────────────────────
