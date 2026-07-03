@@ -305,6 +305,7 @@
   function checkAuth() {
     var val = document.getElementById('auth-input').value;
     if (val === '6FLIF7') {
+      localStorage.setItem('hub_auth', '1');
       showHub();
     } else if (val === 'GR-Reso') {
       window.location.replace('numbers.html');
@@ -323,7 +324,11 @@
     navigator.serviceWorker.register('/sw.js');
   }
 
-  localStorage.removeItem('hub_auth');
+  (function () {
+    if (localStorage.getItem('hub_auth') === '1') {
+      showHub();
+    }
+  })();
 </script>
 </body>
 </html>
