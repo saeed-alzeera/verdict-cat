@@ -10,10 +10,10 @@
   --bg: #111418; --surface: #1a1d23; --surface2: #22262e;
   --border: #2e3340; --border2: #3d4455;
   --ink: #e8eaed; --muted: #8b9099; --faint: #4a5060;
-  --accent: #5b9bd5; --accent-dim: #2a4a6e;
+  --accent: #5b9bd5; --accent-dim: #1a5fa8;
   --given: #c5cad4; --user: #5b9bd5; --note: #6b8fa8;
   --err: #e05555; --err-bg: #3a1a1a;
-  --hi-cell: #1e2535; --hi-num: #2a3a52;
+  --hi-cell: #181d2a; --hi-num: #1e2e42;
   --win-bg: #0f1820;
   --shadow: 0 4px 24px rgba(0,0,0,.5);
 }
@@ -21,10 +21,10 @@
   --bg: #f0f2f5; --surface: #ffffff; --surface2: #e8eaed;
   --border: #d0d5de; --border2: #b0b8c8;
   --ink: #1a1d23; --muted: #5a6070; --faint: #a0a8b8;
-  --accent: #2563eb; --accent-dim: #dbeafe;
+  --accent: #2563eb; --accent-dim: #93c5fd;
   --given: #1a1d23; --user: #2563eb; --note: #4a7ab5;
   --err: #dc2626; --err-bg: #fee2e2;
-  --hi-cell: #e8f0fb; --hi-num: #dbeafe;
+  --hi-cell: #eff6ff; --hi-num: #dbeafe;
   --win-bg: #f0f8ff;
   --shadow: 0 4px 24px rgba(0,0,0,.12);
 }
@@ -172,39 +172,6 @@ header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.5px; }
 .action-btn:hover { border-color: var(--accent); }
 .action-btn svg { width: 15px; height: 15px; }
 
-/* ── stats panel ── */
-.stats-panel {
-  width: 100%; max-width: 468px; background: var(--surface);
-  border: 1px solid var(--border); border-radius: 12px;
-  overflow: hidden;
-}
-.stats-header {
-  padding: 12px 16px; border-bottom: 1px solid var(--border);
-  font-weight: 700; font-size: .9rem; display: flex; align-items: center; gap: 8px;
-}
-.stats-tabs {
-  display: flex; border-bottom: 1px solid var(--border);
-}
-.stats-tab {
-  flex: 1; padding: 8px 0; font-size: .75rem; font-weight: 600;
-  color: var(--muted); cursor: pointer; text-align: center;
-  border-bottom: 2px solid transparent; transition: all .15s;
-}
-.stats-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.stats-grid {
-  display: grid; grid-template-columns: 1fr 1fr 1fr;
-  gap: 1px; background: var(--border);
-}
-.stat-cell {
-  background: var(--surface); padding: 14px 10px; text-align: center;
-}
-.stat-val { font-size: 1.5rem; font-weight: 700; color: var(--ink); line-height: 1; }
-.stat-lbl { font-size: .7rem; color: var(--muted); margin-top: 4px; }
-.streak-row {
-  padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
-  border-top: 1px solid var(--border);
-}
-.streak-val { font-size: 1.1rem; font-weight: 700; color: var(--accent); }
 
 /* ── win overlay ── */
 #win-overlay {
@@ -248,11 +215,7 @@ header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.5px; }
 <header>
   <h1>Sudoku</h1>
   <div class="header-right">
-    <button class="icon-btn" id="btn-stats" title="Statistics">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="6" width="4" height="15"/><rect x="17" y="3" width="4" height="18"/></svg>
-      Stats
-    </button>
-    <button class="icon-btn" id="btn-theme" title="Toggle theme">
+<button class="icon-btn" id="btn-theme" title="Toggle theme">
       <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
     </button>
   </div>
@@ -305,25 +268,6 @@ header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.5px; }
   </button>
 </div>
 
-<div class="stats-panel" id="stats-panel">
-  <div class="stats-header">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="6" width="4" height="15"/><rect x="17" y="3" width="4" height="18"/></svg>
-    Statistics
-  </div>
-  <div class="stats-tabs">
-    <div class="stats-tab active" data-diff="easy">Easy</div>
-    <div class="stats-tab" data-diff="medium">Medium</div>
-    <div class="stats-tab" data-diff="hard">Hard</div>
-    <div class="stats-tab" data-diff="expert">Expert</div>
-  </div>
-  <div class="stats-grid" id="stats-grid"></div>
-  <div class="streak-row">
-    <span style="font-size:.82rem;color:var(--muted)">🔥 Current streak</span>
-    <span class="streak-val" id="streak-val">0</span>
-    <span style="font-size:.82rem;color:var(--muted)">Best streak</span>
-    <span class="streak-val" id="best-streak-val">0</span>
-  </div>
-</div>
 
 <div id="win-overlay">
   <div class="win-card">
@@ -754,7 +698,6 @@ function showWin(stats) {
   document.getElementById('win-sub').textContent =
     `${diff.charAt(0).toUpperCase()+diff.slice(1)} puzzle completed${hintsUsed ? ` · ${hintsUsed} hint${hintsUsed>1?'s':''}` : ''}`;
   document.getElementById('win-overlay').classList.add('show');
-  renderStatsPanel('easy');
 }
 
 // ── Keyboard ──────────────────────────────────────────────────────
@@ -774,30 +717,6 @@ document.addEventListener('keydown', e=>{
     } else selectCell(0,0);
   }
 });
-
-// ── Stats Panel ───────────────────────────────────────────────────
-let statsTab = 'easy';
-
-function renderStatsPanel(d) {
-  statsTab = d;
-  document.querySelectorAll('.stats-tab').forEach(t=>{
-    t.classList.toggle('active', t.dataset.diff===d);
-  });
-  const s = loadStats();
-  const ds = s[d];
-  const avg = ds.won>0 ? Math.round(ds.totalTime/ds.won) : null;
-  const pct = ds.played>0 ? Math.round(ds.won/ds.played*100) : 0;
-  document.getElementById('stats-grid').innerHTML = `
-    <div class="stat-cell"><div class="stat-val">${ds.played}</div><div class="stat-lbl">Played</div></div>
-    <div class="stat-cell"><div class="stat-val">${pct}%</div><div class="stat-lbl">Win Rate</div></div>
-    <div class="stat-cell"><div class="stat-val">${fmtTime(ds.bestTime)}</div><div class="stat-lbl">Best Time</div></div>
-    <div class="stat-cell"><div class="stat-val">${ds.won}</div><div class="stat-lbl">Won</div></div>
-    <div class="stat-cell"><div class="stat-val">${fmtTime(avg)}</div><div class="stat-lbl">Avg Time</div></div>
-    <div class="stat-cell"><div class="stat-val">${ds.played-ds.won}</div><div class="stat-lbl">Abandoned</div></div>
-  `;
-  document.getElementById('streak-val').textContent = s.streak;
-  document.getElementById('best-streak-val').textContent = s.bestStreak;
-}
 
 // ── Wiring ────────────────────────────────────────────────────────
 function toggleNotes() {
@@ -831,14 +750,6 @@ document.getElementById('btn-theme').addEventListener('click', ()=>{
   applyTheme(next); saveTheme(next);
 });
 
-document.getElementById('btn-stats').addEventListener('click', ()=>{
-  renderStatsPanel(statsTab);
-  document.getElementById('stats-panel').scrollIntoView({behavior:'smooth'});
-});
-
-document.querySelectorAll('.stats-tab').forEach(tab=>{
-  tab.addEventListener('click', ()=>renderStatsPanel(tab.dataset.diff));
-});
 
 document.getElementById('win-close').addEventListener('click', ()=>{
   document.getElementById('win-overlay').classList.remove('show');
@@ -854,7 +765,6 @@ document.getElementById('win-overlay').addEventListener('click', e=>{
 
 // ── Init ──────────────────────────────────────────────────────────
 applyTheme(loadTheme());
-renderStatsPanel('easy');
 startNewGame('easy');
 </script>
 </body>
