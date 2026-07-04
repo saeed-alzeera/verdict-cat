@@ -38,6 +38,30 @@ jobs:
         with:
           path: "."
 
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - name: Deploy to GitHub Pages (attempt 1)
+        id: deploy1
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Deploy to GitHub Pages (attempt 2)
+        id: deploy2
+        if: steps.deploy1.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Deploy to GitHub Pages (attempt 3)
+        id: deploy3
+        if: steps.deploy2.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+
+      - name: Set deployment output
+        id: deployment
+        if: always()
+        run: |
+          if [ "${{ steps.deploy1.outcome }}" = "success" ]; then
+            echo "page_url=${{ steps.deploy1.outputs.page_url }}" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.deploy2.outcome }}" = "success" ]; then
+            echo "page_url=${{ steps.deploy2.outputs.page_url }}" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.deploy3.outcome }}" = "success" ]; then
+            echo "page_url=${{ steps.deploy3.outputs.page_url }}" >> $GITHUB_OUTPUT
+          fi
