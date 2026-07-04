@@ -173,6 +173,32 @@ header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.5px; }
 .action-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 .action-btn svg { width: 15px; height: 15px; }
 
+/* ── option row ── */
+.option-row {
+  width: 100%; max-width: 468px;
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 20px; font-size: .82rem; color: var(--muted);
+}
+.option-row label {
+  display: flex; align-items: center; gap: 7px;
+  cursor: pointer; user-select: none;
+}
+.option-row input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  width: 16px; height: 16px; flex-shrink: 0;
+  border: 1.5px solid var(--border2); border-radius: 4px;
+  background: var(--surface2); cursor: pointer;
+  position: relative; transition: background .15s, border-color .15s;
+}
+.option-row input[type="checkbox"]:checked {
+  background: var(--accent); border-color: var(--accent);
+}
+.option-row input[type="checkbox"]:checked::after {
+  content: ''; position: absolute;
+  left: 3px; top: 1px; width: 8px; height: 5px;
+  border-left: 2px solid #fff; border-bottom: 2px solid #fff;
+  transform: rotate(-45deg);
+}
 
 /* ── win overlay ── */
 #win-overlay {
@@ -265,6 +291,12 @@ header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.5px; }
   </button>
 </div>
 
+<div class="option-row">
+  <label>
+    <input type="checkbox" id="chk-autocandidate">
+    Auto candidates
+  </label>
+</div>
 
 <div id="win-overlay">
   <div class="win-card">
@@ -445,6 +477,7 @@ let selected = null;
 let notesMode = false;
 let altNotesActive = false;
 let autoCheck = false;
+let autoCandidate = false;
 let diff = 'hard';
 let mistakes = 0;
 let elapsed = 0;
@@ -456,9 +489,10 @@ function startNewGame(d) {
   diff = d;
   stopTimer();
   elapsed = 0; mistakes = 0; selected = null;
-  notesMode = false; autoCheck = false; gameOver = false; history = [];
+  notesMode = false; autoCheck = false; autoCandidate = false; gameOver = false; history = [];
   document.getElementById('btn-notes').classList.remove('active');
   document.getElementById('btn-autocheck').classList.remove('on');
+  document.getElementById('chk-autocandidate').checked = false;
   updateMistakeDisplay();
   updateTimer();
 
@@ -504,7 +538,24 @@ function cellEl(r,c) {
   return document.querySelector(`[data-r="${r}"][data-c="${c}"]`);
 }
 
+function computeAllCandidates() {
+  for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+    if (userGrid[r][c] !== 0) { notesGrid[r][c].clear(); continue; }
+    const used = new Set();
+    for (let i=0;i<9;i++) {
+      if (userGrid[r][i]>0) used.add(userGrid[r][i]);
+      if (userGrid[i][c]>0) used.add(userGrid[i][c]);
+    }
+    const br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
+    for (let i=0;i<3;i++) for (let j=0;j<3;j++) {
+      if (userGrid[br+i][bc+j]>0) used.add(userGrid[br+i][bc+j]);
+    }
+    notesGrid[r][c] = new Set([1,2,3,4,5,6,7,8,9].filter(n=>!used.has(n)));
+  }
+}
+
 function updateAllCells() {
+  if (autoCandidate) computeAllCandidates();
   for (let r=0;r<9;r++) for (let c=0;c<9;c++) updateCell(r,c);
   updateHighlights();
   updateNumpad();
@@ -723,6 +774,14 @@ document.getElementById('btn-autocheck').addEventListener('click', ()=>{
 document.getElementById('btn-undo').addEventListener('click', undo);
 document.getElementById('btn-erase').addEventListener('click', eraseCell);
 document.getElementById('btn-new').addEventListener('click', ()=>startNewGame(diff));
+
+document.getElementById('chk-autocandidate').addEventListener('change', e=>{
+  autoCandidate = e.target.checked;
+  if (!autoCandidate) {
+    for (let r=0;r<9;r++) for (let c=0;c<9;c++) notesGrid[r][c].clear();
+  }
+  updateAllCells();
+});
 
 document.getElementById('btn-theme').addEventListener('click', ()=>{
   const next = document.documentElement.dataset.theme==='dark' ? 'light' : 'dark';
