@@ -307,8 +307,6 @@
     if (val === '6FLIF7') {
       localStorage.setItem('hub_auth', '1');
       showHub();
-    } else if (val === 'GR-Reso') {
-      window.location.replace('numbers.html');
     } else {
       document.getElementById('auth-error').textContent = 'Incorrect password.';
       document.getElementById('auth-input').value = '';

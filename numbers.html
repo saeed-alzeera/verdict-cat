@@ -102,10 +102,46 @@
     thead th:nth-child(3), tbody td:nth-child(3) { display: none; }
     .controls { position: static; }
   }
+  #num-auth-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #num-auth-box {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 36px 40px; width: 320px;
+    text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  }
+  #num-auth-box h2 { font-size: 22px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+  #num-auth-box p  { font-size: 13px; color: var(--muted); margin: 0 0 24px; }
+  #num-auth-input {
+    width: 100%; padding: 10px 14px;
+    border: 1px solid var(--line); border-radius: 8px;
+    font-size: 15px; outline: none; margin-bottom: 12px;
+    background: var(--bg); color: var(--ink);
+  }
+  #num-auth-error { color: var(--warn); font-size: 13px; min-height: 18px; margin-bottom: 10px; }
+  #num-auth-btn {
+    width: 100%; padding: 10px;
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 8px;
+    font-size: 15px; font-weight: 500; cursor: pointer;
+  }
+  #num-auth-btn:hover { opacity: 0.88; }
 </style>
 </head>
 <body>
 
+<div id="num-auth-overlay">
+  <div id="num-auth-box">
+    <h2>Access Required</h2>
+    <p>Enter password to view data</p>
+    <input id="num-auth-input" type="password" placeholder="Password"
+      onkeydown="if(event.key==='Enter')checkNumAuth()" autofocus />
+    <div id="num-auth-error"></div>
+    <button id="num-auth-btn" onclick="checkNumAuth()">Enter</button>
+  </div>
+</div>
 
 <header>
   <a id="hub-back" href="#" onclick="localStorage.removeItem('hub_auth'); window.location.replace('index.html'); return false;">&#8592; Hub</a>
@@ -155,6 +191,28 @@
 
 <script>
 "use strict";
+
+const NUMBERS_TOKEN = 'GR-Reso';
+
+function unlockNumbers() {
+  document.getElementById('num-auth-overlay').style.display = 'none';
+  if (localStorage.getItem('hub_auth') !== '1') {
+    document.getElementById('hub-back').style.display = 'none';
+  }
+  initNumbers();
+}
+
+function checkNumAuth() {
+  var val = document.getElementById('num-auth-input').value;
+  if (val === NUMBERS_TOKEN) {
+    localStorage.setItem('numbers_auth', '1');
+    unlockNumbers();
+  } else {
+    document.getElementById('num-auth-error').textContent = 'Incorrect password.';
+    document.getElementById('num-auth-input').value = '';
+    document.getElementById('num-auth-input').focus();
+  }
+}
 
 const START_YEAR = 2020;
 
@@ -481,7 +539,7 @@ async function loadCountryData(iso3) {
   setFetched();
 }
 
-(async function init() {
+async function initNumbers() {
   try {
     const countries = await loadCountries();
     populateCountrySelect(countries);
@@ -502,6 +560,17 @@ async function loadCountryData(iso3) {
     const iso3 = countryEl.value;
     if (iso3) loadCountryData(iso3);
   });
+}
+
+(function() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('key') === NUMBERS_TOKEN) {
+    localStorage.setItem('numbers_auth', '1');
+    history.replaceState(null, '', location.pathname);
+  }
+  if (localStorage.getItem('hub_auth') === '1' || localStorage.getItem('numbers_auth') === '1') {
+    unlockNumbers();
+  }
 })();
 </script>
 </body>
