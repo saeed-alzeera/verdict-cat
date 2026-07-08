@@ -331,8 +331,8 @@ const INDICATORS = [
     api: "static_eodb",
     format: (v) => `${v}/190` },
   { name: "Government debt", unit: "USD billions",
-    sourceLabel: "IMF GDD · General government gross debt (GG_DEBT_GDP@GDD)",
-    sourceUrl: (iso3) => `https://www.imf.org/external/datamapper/GG_DEBT_GDP@GDD/${iso3}`,
+    sourceLabel: "World Bank · Central government debt (GC.DOD.TOTL.GD.ZS) × IMF WEO GDP",
+    sourceUrl: (iso3) => wbUrl("GC.DOD.TOTL.GD.ZS", iso3),
     api: "computed_gov_debt",
     format: (v) => fmtUSD(v) }
 ];
@@ -420,20 +420,6 @@ async function fetchIMF(iso3, code) {
 
 function latestPoint(series) { return series && series.length ? series[0] : null; }
 
-const GDD_CACHE = {};
-async function fetchGovDebtPct(iso3) {
-  if (GDD_CACHE[iso3]) return GDD_CACHE[iso3];
-  const url = `https://www.imf.org/external/datamapper/api/v1/GG_DEBT_GDP@GDD/${iso3}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`IMF GDD HTTP ${res.status}`);
-  const json = await res.json();
-  const series = Object.entries(json?.values?.GG_DEBT_GDP?.[iso3] ?? {})
-    .map(([y, v]) => ({ year: Number(y), value: Number(v) }))
-    .filter((p) => Number.isFinite(p.value) && p.year <= IMF_LATEST_YEAR)
-    .sort((a, b) => b.year - a.year);
-  GDD_CACHE[iso3] = series;
-  return series;
-}
 
 const EXPORT_LINE_1 = [
   { idx: 0, label: "area" },
@@ -539,7 +525,7 @@ async function loadCountryData(iso3) {
           point = { year: 2020, value: EODB_2020[iso3] };
         }
       } else if (ind.api === "computed_gov_debt") {
-        const debtSeries = await fetchGovDebtPct(iso3);
+        const debtSeries = await fetchWB(iso3, "GC.DOD.TOTL.GD.ZS");
         const debtPoint = latestPoint(debtSeries);
         if (debtPoint) {
           const gdpSeries = await fetchIMF(iso3, "NGDPD");
