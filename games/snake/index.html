@@ -337,9 +337,9 @@ const CELL = 20; // logical cell size (canvas is 400×400)
 const SPEEDS = { slow: 200, normal: 130, fast: 80, ultra: 45 };
 
 // ── state ─────────────────────────────────────────────────────────
-let snake, dir, nextDir, food, score, highScore, speed, state, loopId, inputQueue;
+let snake, dir, nextDir, foods, score, highScore, speed, state, loopId, inputQueue;
 let fruitLimit = 20, fruitsEaten = 0;
-// state: 'idle' | 'playing' | 'paused' | 'dead' | 'won'
+// state: 'idle' | 'playing' | 'paused' | 'dead'
 
 const canvas = document.getElementById('game-canvas');
 const ctx    = canvas.getContext('2d');
@@ -379,22 +379,35 @@ function initGame() {
   ];
   dir        = { x: 1, y: 0 };
   nextDir    = { x: 1, y: 0 };
-  score      = 0;
+  score       = 0;
   fruitsEaten = 0;
-  inputQueue = [];
-  placeFood();
+  inputQueue  = [];
+  foods       = [];
+  placeFoods();
   updateScoreUI();
   updateFruitsUI();
 }
 
-function placeFood() {
-  const occupied = new Set(snake.map(s => `${s.x},${s.y}`));
+function occupiedSet(extraFoods) {
+  const s = new Set(snake.map(s => `${s.x},${s.y}`));
+  (extraFoods || foods).forEach(f => s.add(`${f.x},${f.y}`));
+  return s;
+}
+
+function placeOneFood() {
+  const occupied = occupiedSet();
+  const free = COLS * ROWS - occupied.size;
+  if (free === 0) return;
   let fx, fy;
   do {
     fx = Math.floor(Math.random() * COLS);
     fy = Math.floor(Math.random() * ROWS);
   } while (occupied.has(`${fx},${fy}`));
-  food = { x: fx, y: fy };
+  foods.push({ x: fx, y: fy });
+}
+
+function placeFoods() {
+  for (let i = foods.length; i < fruitLimit; i++) placeOneFood();
 }
 
 // ── game loop ─────────────────────────────────────────────────────
@@ -428,7 +441,9 @@ function tick() {
 
   snake.unshift(head);
 
-  if (head.x === food.x && head.y === food.y) {
+  const foodIdx = foods.findIndex(f => f.x === head.x && f.y === head.y);
+  if (foodIdx !== -1) {
+    foods.splice(foodIdx, 1);
     score += 10;
     fruitsEaten++;
     if (score > highScore) {
@@ -437,11 +452,7 @@ function tick() {
     }
     updateScoreUI();
     updateFruitsUI();
-    if (fruitsEaten >= fruitLimit) {
-      draw();
-      return winGame();
-    }
-    placeFood();
+    placeOneFood();
   } else {
     snake.pop();
   }
@@ -454,12 +465,6 @@ function endGame() {
   state = 'dead';
   draw();
   showOverlay('dead');
-}
-
-function winGame() {
-  stopLoop();
-  state = 'won';
-  showOverlay('won');
 }
 
 // ── draw ──────────────────────────────────────────────────────────
@@ -481,19 +486,20 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(0, r * ch); ctx.lineTo(W, r * ch); ctx.stroke();
   }
 
-  // food
-  const fx = food.x * cw + cw / 2;
-  const fy = food.y * ch + ch / 2;
+  // foods
   const fr = cw * 0.38;
-  ctx.fillStyle = css('--food');
-  ctx.beginPath();
-  ctx.arc(fx, fy, fr, 0, Math.PI * 2);
-  ctx.fill();
-  // food highlight
-  ctx.fillStyle = 'rgba(255,255,255,0.25)';
-  ctx.beginPath();
-  ctx.arc(fx - fr * 0.25, fy - fr * 0.28, fr * 0.35, 0, Math.PI * 2);
-  ctx.fill();
+  for (const f of foods) {
+    const fx = f.x * cw + cw / 2;
+    const fy = f.y * ch + ch / 2;
+    ctx.fillStyle = css('--food');
+    ctx.beginPath();
+    ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.beginPath();
+    ctx.arc(fx - fr * 0.25, fy - fr * 0.28, fr * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   // snake
   const r = cw * 0.18; // corner radius
@@ -600,15 +606,6 @@ function showOverlay(type) {
     document.getElementById('ov-length').textContent = snake.length;
     document.getElementById('ov-best').textContent   = highScore;
     btn.textContent = 'Play Again';
-  } else if (type === 'won') {
-    emoji.textContent = '🎉';
-    title.textContent = 'You Win!';
-    sub.textContent   = `Ate all ${fruitLimit} fruit${fruitLimit !== 1 ? 's' : ''}!`;
-    stats.style.display = 'flex';
-    document.getElementById('ov-score').textContent  = score;
-    document.getElementById('ov-length').textContent = snake.length;
-    document.getElementById('ov-best').textContent   = highScore;
-    btn.textContent = 'Play Again';
   }
 
   ov.classList.add('show');
@@ -639,10 +636,10 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     if (state === 'playing')      { pause(); }
     else if (state === 'paused')  { resume(); }
-    else if (state === 'idle' || state === 'dead' || state === 'won') { startGame(); }
+    else if (state === 'idle' || state === 'dead') { startGame(); }
     return;
   }
-  if (state === 'idle' || state === 'dead' || state === 'won') {
+  if (state === 'idle' || state === 'dead') {
     if (DIR_MAP[e.key]) { e.preventDefault(); startGame(); return; }
   }
   if (DIR_MAP[e.key]) { e.preventDefault(); queueDir(DIR_MAP[e.key]); }
@@ -652,7 +649,7 @@ document.querySelectorAll('.dpad-btn').forEach(btn => {
   const dirMap = { up: {x:0,y:-1}, down: {x:0,y:1}, left: {x:-1,y:0}, right: {x:1,y:0} };
   btn.addEventListener('pointerdown', e => {
     e.preventDefault();
-    if (state === 'idle' || state === 'dead' || state === 'won') { startGame(); return; }
+    if (state === 'idle' || state === 'dead') { startGame(); return; }
     queueDir(dirMap[btn.dataset.dir]);
   });
 });
@@ -732,10 +729,20 @@ function updateLimitUI() {
 }
 
 document.getElementById('limit-dec').addEventListener('click', () => {
-  if (fruitLimit > 1) { fruitLimit--; updateLimitUI(); }
+  if (fruitLimit > 1) {
+    fruitLimit--;
+    updateLimitUI();
+    if (foods.length > fruitLimit) foods.splice(fruitLimit);
+    if (state === 'idle' || state === 'paused') draw();
+  }
 });
 document.getElementById('limit-inc').addEventListener('click', () => {
-  if (fruitLimit < 20) { fruitLimit++; updateLimitUI(); }
+  if (fruitLimit < 20) {
+    fruitLimit++;
+    updateLimitUI();
+    placeFoods();
+    if (state === 'idle' || state === 'paused') draw();
+  }
 });
 
 // ── init ──────────────────────────────────────────────────────────
