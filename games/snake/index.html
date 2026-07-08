@@ -61,7 +61,7 @@ header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.5px; }
 
 .speed-bar {
   width: 100%; max-width: 520px;
-  display: flex; gap: 6px; margin-bottom: 14px;
+  display: flex; gap: 6px; margin-bottom: 10px;
 }
 .speed-btn {
   flex: 1; padding: 7px 0; border-radius: 8px; font-size: .78rem;
@@ -71,6 +71,37 @@ header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.5px; }
 }
 .speed-btn:hover { border-color: var(--accent); color: var(--ink); }
 .speed-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.limit-row {
+  width: 100%; max-width: 520px;
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px;
+}
+.limit-label { font-size: .78rem; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.limit-stepper {
+  display: flex; align-items: center; gap: 0;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden;
+}
+.limit-btn {
+  background: none; border: none; color: var(--ink);
+  font-size: 1rem; font-weight: 700; width: 30px; height: 30px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background .12s;
+}
+.limit-btn:hover:not(:disabled) { background: var(--border); }
+.limit-btn:disabled { color: var(--faint); cursor: default; }
+.limit-val {
+  min-width: 36px; text-align: center; font-size: .82rem;
+  font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink);
+  border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+  padding: 0 4px; line-height: 30px;
+}
+.limit-eaten {
+  font-size: .75rem; color: var(--muted);
+  margin-left: auto;
+}
+.limit-eaten span { font-weight: 700; color: var(--ink); }
 
 .status-row {
   width: 100%; max-width: 520px;
@@ -218,6 +249,16 @@ kbd {
   <button class="speed-btn" data-speed="ultra">Ultra</button>
 </div>
 
+<div class="limit-row">
+  <span class="limit-label">Fruit Limit</span>
+  <div class="limit-stepper">
+    <button class="limit-btn" id="limit-dec">−</button>
+    <span class="limit-val" id="limit-val">20</span>
+    <button class="limit-btn" id="limit-inc">+</button>
+  </div>
+  <span class="limit-eaten">Eaten: <span id="fruits-eaten">0</span></span>
+</div>
+
 <div class="status-row">
   <div>
     <span class="score-label">Score</span>
@@ -297,7 +338,8 @@ const SPEEDS = { slow: 200, normal: 130, fast: 80, ultra: 45 };
 
 // ── state ─────────────────────────────────────────────────────────
 let snake, dir, nextDir, food, score, highScore, speed, state, loopId, inputQueue;
-// state: 'idle' | 'playing' | 'paused' | 'dead'
+let fruitLimit = 20, fruitsEaten = 0;
+// state: 'idle' | 'playing' | 'paused' | 'dead' | 'won'
 
 const canvas = document.getElementById('game-canvas');
 const ctx    = canvas.getContext('2d');
@@ -335,12 +377,14 @@ function initGame() {
     { x: mid - 1, y: Math.floor(ROWS / 2) },
     { x: mid - 2, y: Math.floor(ROWS / 2) },
   ];
-  dir      = { x: 1, y: 0 };
-  nextDir  = { x: 1, y: 0 };
-  score    = 0;
+  dir        = { x: 1, y: 0 };
+  nextDir    = { x: 1, y: 0 };
+  score      = 0;
+  fruitsEaten = 0;
   inputQueue = [];
   placeFood();
   updateScoreUI();
+  updateFruitsUI();
 }
 
 function placeFood() {
@@ -372,12 +416,11 @@ function tick() {
     }
   }
 
-  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+  const head = {
+    x: (snake[0].x + dir.x + COLS) % COLS,
+    y: (snake[0].y + dir.y + ROWS) % ROWS,
+  };
 
-  // wall collision
-  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
-    return endGame();
-  }
   // self collision
   if (snake.some(s => s.x === head.x && s.y === head.y)) {
     return endGame();
@@ -387,11 +430,17 @@ function tick() {
 
   if (head.x === food.x && head.y === food.y) {
     score += 10;
+    fruitsEaten++;
     if (score > highScore) {
       highScore = score;
       saveHigh(highScore);
     }
     updateScoreUI();
+    updateFruitsUI();
+    if (fruitsEaten >= fruitLimit) {
+      draw();
+      return winGame();
+    }
     placeFood();
   } else {
     snake.pop();
@@ -405,6 +454,12 @@ function endGame() {
   state = 'dead';
   draw();
   showOverlay('dead');
+}
+
+function winGame() {
+  stopLoop();
+  state = 'won';
+  showOverlay('won');
 }
 
 // ── draw ──────────────────────────────────────────────────────────
@@ -517,6 +572,10 @@ function updateScoreUI() {
   document.getElementById('high-score').textContent = highScore;
 }
 
+function updateFruitsUI() {
+  document.getElementById('fruits-eaten').textContent = fruitsEaten;
+}
+
 function showOverlay(type) {
   const ov = document.getElementById('overlay');
   const emoji  = document.getElementById('ov-emoji');
@@ -535,7 +594,16 @@ function showOverlay(type) {
     const perfect = snake.length === COLS * ROWS;
     emoji.textContent = perfect ? '🏆' : '💀';
     title.textContent = perfect ? 'Perfect!' : 'Game Over';
-    sub.textContent   = perfect ? 'You filled the board!' : 'You hit a wall or yourself';
+    sub.textContent   = perfect ? 'You filled the board!' : 'You ran into yourself';
+    stats.style.display = 'flex';
+    document.getElementById('ov-score').textContent  = score;
+    document.getElementById('ov-length').textContent = snake.length;
+    document.getElementById('ov-best').textContent   = highScore;
+    btn.textContent = 'Play Again';
+  } else if (type === 'won') {
+    emoji.textContent = '🎉';
+    title.textContent = 'You Win!';
+    sub.textContent   = `Ate all ${fruitLimit} fruit${fruitLimit !== 1 ? 's' : ''}!`;
     stats.style.display = 'flex';
     document.getElementById('ov-score').textContent  = score;
     document.getElementById('ov-length').textContent = snake.length;
@@ -571,10 +639,10 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     if (state === 'playing')      { pause(); }
     else if (state === 'paused')  { resume(); }
-    else if (state === 'idle' || state === 'dead') { startGame(); }
+    else if (state === 'idle' || state === 'dead' || state === 'won') { startGame(); }
     return;
   }
-  if (state === 'idle' || state === 'dead') {
+  if (state === 'idle' || state === 'dead' || state === 'won') {
     if (DIR_MAP[e.key]) { e.preventDefault(); startGame(); return; }
   }
   if (DIR_MAP[e.key]) { e.preventDefault(); queueDir(DIR_MAP[e.key]); }
@@ -584,7 +652,7 @@ document.querySelectorAll('.dpad-btn').forEach(btn => {
   const dirMap = { up: {x:0,y:-1}, down: {x:0,y:1}, left: {x:-1,y:0}, right: {x:1,y:0} };
   btn.addEventListener('pointerdown', e => {
     e.preventDefault();
-    if (state === 'idle' || state === 'dead') { startGame(); return; }
+    if (state === 'idle' || state === 'dead' || state === 'won') { startGame(); return; }
     queueDir(dirMap[btn.dataset.dir]);
   });
 });
@@ -656,11 +724,26 @@ document.getElementById('btn-theme').addEventListener('click', () => {
   applyTheme(next); saveTheme(next);
 });
 
+// ── fruit limit stepper ───────────────────────────────────────────
+function updateLimitUI() {
+  document.getElementById('limit-val').textContent = fruitLimit;
+  document.getElementById('limit-dec').disabled = fruitLimit <= 1;
+  document.getElementById('limit-inc').disabled = fruitLimit >= 20;
+}
+
+document.getElementById('limit-dec').addEventListener('click', () => {
+  if (fruitLimit > 1) { fruitLimit--; updateLimitUI(); }
+});
+document.getElementById('limit-inc').addEventListener('click', () => {
+  if (fruitLimit < 20) { fruitLimit++; updateLimitUI(); }
+});
+
 // ── init ──────────────────────────────────────────────────────────
 speed     = 'normal';
 highScore = loadHigh();
 state     = 'idle';
 applyTheme(loadTheme());
+updateLimitUI();
 initGame();
 draw();
 showOverlay('idle');
