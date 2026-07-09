@@ -207,6 +207,7 @@
     color: var(--text);
     text-decoration: none;
     transition: background 0.12s;
+    cursor: pointer;
   }
   #toc-list li a:hover { background: rgba(91,155,213,0.12); color: var(--accent); }
   #toc-list li a.active { color: var(--accent); background: rgba(91,155,213,0.08); }
@@ -528,7 +529,17 @@
           }
           a.addEventListener('click', function(e) {
             e.preventDefault();
-            rendition.display(item.href);
+            var href = item.href;
+            var hrefBase = href.split('#')[0];
+            // Look up by path only (no fragment) so spine.get() can match correctly.
+            // Navigate by spine index when available — more reliable than href
+            // navigation in epub.js 0.3.x paginated mode.
+            var section = book.spine.get(hrefBase);
+            if (section !== undefined && section.index !== undefined) {
+              rendition.display(section.index);
+            } else {
+              rendition.display(hrefBase);
+            }
             document.getElementById('toc-panel').classList.remove('open');
           });
           li.appendChild(a);
