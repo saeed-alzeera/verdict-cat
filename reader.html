@@ -527,20 +527,43 @@
             a.style.fontSize = '12px';
             a.style.color = 'var(--muted)';
           }
+          function doNavigate(navHref) {
+            var base = navHref.split('#')[0];
+            var norm = base.replace(/^\//, '').toLowerCase();
+            document.getElementById('toc-panel').classList.remove('open');
+            // Iterate spine.items directly so href format differences don't matter
+            var found = null;
+            var items = book.spine.items;
+            for (var j = 0; j < items.length; j++) {
+              var si = items[j];
+              if (si && si.href) {
+                var siNorm = si.href.split('#')[0].replace(/^\//, '').toLowerCase();
+                if (siNorm === norm) { found = si; break; }
+              }
+            }
+            var target = (found !== null) ? found.index : base;
+            rendition.display(target).catch(function() {
+              rendition.display(base).catch(function() {});
+            });
+          }
           a.addEventListener('click', function(e) {
             e.preventDefault();
-            var href = item.href;
-            var hrefBase = href.split('#')[0];
-            // Look up by path only (no fragment) so spine.get() can match correctly.
-            // Navigate by spine index when available — more reliable than href
-            // navigation in epub.js 0.3.x paginated mode.
-            var section = book.spine.get(hrefBase);
-            if (section !== undefined && section.index !== undefined) {
-              rendition.display(section.index);
-            } else {
-              rendition.display(hrefBase);
+            doNavigate(item.href);
+          });
+          // iOS Safari: click can silently fail in fixed+overflow-scroll containers
+          var _tStart = null;
+          a.addEventListener('touchstart', function(e) {
+            _tStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+          }, { passive: true });
+          a.addEventListener('touchend', function(e) {
+            if (!_tStart) return;
+            var dx = e.changedTouches[0].clientX - _tStart.x;
+            var dy = e.changedTouches[0].clientY - _tStart.y;
+            _tStart = null;
+            if (Math.abs(dx) < 8 && Math.abs(dy) < 8) {
+              e.preventDefault();
+              doNavigate(item.href);
             }
-            document.getElementById('toc-panel').classList.remove('open');
           });
           li.appendChild(a);
           container.appendChild(li);
