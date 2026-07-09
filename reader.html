@@ -541,7 +541,7 @@
                 if (siNorm === norm) { found = si; break; }
               }
             }
-            var target = (found !== null) ? found.index : base;
+            var target = found ? found.href : base;
             rendition.display(target).catch(function() {
               rendition.display(base).catch(function() {});
             });
