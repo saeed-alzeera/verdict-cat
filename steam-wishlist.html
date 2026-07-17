@@ -375,7 +375,7 @@
   function setStatus(type, msg) {
     var el = document.getElementById('status-msg');
     if (!type) { el.style.display = 'none'; return; }
-    el.style.display = '';
+    el.style.display = 'block';
     el.className = type;
     el.textContent = msg;
   }
@@ -414,7 +414,10 @@
   });
 
   document.getElementById('steam-id-input').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') saveSettings();
+    if (e.key === 'Enter') {
+      var cc = document.getElementById('cc-input').value.trim();
+      if (cc) saveSettings(); else document.getElementById('cc-input').focus();
+    }
   });
 
   document.getElementById('cc-input').addEventListener('keydown', function (e) {
