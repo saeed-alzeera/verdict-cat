@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Steam Wishlist Sales</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
+<link rel="shortcut icon" href="favicon.ico" />
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #1a1d23;
+    --panel-alt: #1e2128;
+    --row-alt: #181b21;
+    --ink: #e8eaed;
+    --muted: #8b9099;
+    --line: #2e3238;
+    --accent: #5b9bd5;
+    --warn: #e8a730;
+    --green: #4caf82;
+    --red: #e05c5c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.45; -webkit-text-size-adjust: 100%; }
+
+  header {
+    padding: 16px 16px 10px;
+    display: flex; gap: 12px; align-items: center;
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg); border-bottom: 1px solid var(--line);
+  }
+  #hub-back {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 13px; color: var(--muted);
+    text-decoration: none; padding: 6px 10px;
+    border: 1px solid var(--line); border-radius: 8px;
+    white-space: nowrap; flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  #hub-back:hover { color: var(--ink); border-color: var(--muted); }
+  #header-text { flex: 1; min-width: 0; }
+  h1 { font-size: 18px; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .header-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .btn {
+    font: inherit; padding: 7px 14px;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); color: var(--muted);
+    cursor: pointer; font-size: 13px;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { color: var(--ink); border-color: var(--muted); }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { opacity: 0.88; color: #fff; border-color: var(--accent); }
+
+  main { padding: 16px 16px 80px; max-width: 900px; margin: 0 auto; }
+
+  #status-msg {
+    margin: 0 0 14px;
+    padding: 11px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    display: none;
+  }
+  #status-msg.loading { background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
+  #status-msg.error   { background: rgba(224,92,92,0.1); border: 1px solid var(--red); color: var(--red); }
+
+  table {
+    width: 100%; border-collapse: collapse;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; overflow: hidden;
+  }
+  thead th {
+    text-align: left; font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--muted); background: var(--panel-alt);
+    padding: 10px 12px; border-bottom: 1px solid var(--line); font-weight: 600;
+    white-space: nowrap;
+  }
+  thead th.sortable { cursor: pointer; user-select: none; }
+  thead th.sortable:hover { color: var(--ink); }
+  thead th.sort-active { color: var(--accent); }
+  tbody td {
+    padding: 11px 12px; border-bottom: 1px solid var(--line);
+    vertical-align: middle; font-variant-numeric: tabular-nums;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:nth-child(odd) td { background: var(--row-alt); }
+  .col-name { font-weight: 500; }
+  .col-orig { color: var(--muted); white-space: nowrap; }
+  .col-sale { white-space: nowrap; font-weight: 600; color: var(--green); }
+  .col-pct  {
+    white-space: nowrap; font-weight: 700; font-size: 14px;
+    color: var(--accent);
+  }
+  .col-pct.big { color: var(--green); }
+
+  #empty-msg {
+    display: none; text-align: center;
+    padding: 40px 20px; color: var(--muted); font-size: 14px;
+  }
+
+  /* Settings modal */
+  #settings-modal {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0,0,0,0.7);
+    display: none; align-items: center; justify-content: center;
+  }
+  #settings-box {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 32px 36px;
+    width: 420px; max-width: calc(100vw - 32px);
+  }
+  #settings-box h2 { font-size: 17px; font-weight: 600; margin: 0 0 6px; }
+  #settings-box .modal-sub { font-size: 13px; color: var(--muted); margin: 0 0 20px; line-height: 1.55; }
+  .field-label { font-size: 12px; color: var(--muted); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 6px; }
+  .field-group { margin-bottom: 16px; }
+  .field-input {
+    width: 100%; padding: 10px 12px;
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; color: var(--ink); font-size: 14px;
+    font-family: monospace; outline: none; transition: border-color 0.15s;
+  }
+  .field-input:focus { border-color: var(--accent); }
+  .field-hint { font-size: 12px; color: var(--muted); margin-top: 5px; }
+  .modal-actions { display: flex; gap: 8px; flex-direction: column; margin-top: 4px; }
+  .modal-actions .btn { width: 100%; padding: 10px; font-size: 14px; text-align: center; }
+
+  @media (max-width: 520px) {
+    header { flex-wrap: wrap; }
+    .header-actions { width: 100%; }
+    .header-actions .btn { flex: 1; text-align: center; }
+    thead th:nth-child(2) { display: none; }
+    tbody td:nth-child(2) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <a id="hub-back" href="index.html">← Hub</a>
+  <div id="header-text">
+    <h1>Steam Wishlist Sales</h1>
+    <div class="sub" id="subtitle">—</div>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-primary" id="refresh-btn" onclick="startFetch()">Refresh</button>
+    <button class="btn" id="settings-btn" onclick="openSettings()" title="Settings">⚙ Settings</button>
+  </div>
+</header>
+
+<main>
+  <div id="status-msg"></div>
+
+  <div id="table-wrap" style="display:none;">
+    <table>
+      <thead>
+        <tr>
+          <th class="sortable" data-col="name">Game</th>
+          <th class="sortable" data-col="initial">Normal Price</th>
+          <th class="sortable" data-col="final">Sale Price</th>
+          <th class="sortable sort-active" data-col="discount" id="th-discount">Discount ▼</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <div id="empty-msg">No games on sale in your wishlist right now.</div>
+</main>
+
+<!-- Settings modal -->
+<div id="settings-modal">
+  <div id="settings-box">
+    <h2>Steam Settings</h2>
+    <p class="modal-sub">Your Steam profile must be set to public for wishlist data to load.</p>
+
+    <div class="field-group">
+      <label class="field-label" for="steam-id-input">Steam ID64</label>
+      <input class="field-input" id="steam-id-input" type="text"
+        placeholder="76561198000000000" autocomplete="off" spellcheck="false" />
+      <div class="field-hint">Find yours at steamid.io or in your Steam profile URL.</div>
+    </div>
+
+    <div class="field-group">
+      <label class="field-label" for="cc-input">Country Code</label>
+      <input class="field-input" id="cc-input" type="text"
+        placeholder="us" maxlength="4" autocomplete="off" spellcheck="false" />
+      <div class="field-hint">Two-letter code for pricing currency (e.g. us, gb, bh, de).</div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveSettings()">Save &amp; Refresh</button>
+      <button class="btn" onclick="closeSettings()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    if (localStorage.getItem('hub_auth') !== '1') {
+      window.location.replace('index.html');
+    }
+  })();
+
+  var LS_ID    = 'steam-id';
+  var LS_CC    = 'steam-cc';
+  var LS_CACHE = 'steam-wishlist-cache';
+  var LS_DATA  = 'steam-wishlist-data';
+
+  var allGames = [];
+  var sortCol  = 'discount';
+  var sortDir  = 'desc';
+
+  /* ── Init ── */
+  (function init() {
+    loadCached();
+    if (!localStorage.getItem(LS_ID)) {
+      openSettings();
+      return;
+    }
+    var raw = localStorage.getItem(LS_CACHE);
+    var cache = raw ? JSON.parse(raw) : null;
+    var stale = !cache || (Date.now() - cache.fetchedAt > 30 * 60 * 1000);
+    if (stale) startFetch();
+    else updateSubtitle(cache.count, cache.fetchedAt);
+  })();
+
+  function loadCached() {
+    var raw = localStorage.getItem(LS_DATA);
+    if (!raw) return;
+    try {
+      allGames = JSON.parse(raw);
+      if (allGames.length > 0) renderTable();
+    } catch (e) {}
+  }
+
+  /* ── Fetch ── */
+  async function startFetch() {
+    var steamId = localStorage.getItem(LS_ID);
+    if (!steamId) { openSettings(); return; }
+    var cc = localStorage.getItem(LS_CC) || 'us';
+
+    setStatus('loading', 'Fetching wishlist…');
+    document.getElementById('refresh-btn').disabled = true;
+
+    try {
+      /* Step 1: wishlist */
+      var wishlistUrl = 'https://store.steampowered.com/wishlist/profiles/' + steamId + '/wishlistdata/';
+      var wRes = await fetch(wishlistUrl);
+      if (!wRes.ok) throw new Error('Wishlist fetch failed (' + wRes.status + '). Check that your Steam profile is public.');
+      var wishlist = await wRes.json();
+
+      var appIds = Object.keys(wishlist);
+      var onSaleIds = appIds.filter(function (id) {
+        var g = wishlist[id];
+        return !g.is_free_game && g.subs && g.subs.some(function (s) { return s.discount_pct > 0; });
+      });
+
+      if (onSaleIds.length === 0) {
+        allGames = [];
+        saveCache(0);
+        renderTable();
+        setStatus(null);
+        return;
+      }
+
+      /* Step 2: appdetails for on-sale games only */
+      var games = [];
+      for (var i = 0; i < onSaleIds.length; i++) {
+        var appId = onSaleIds[i];
+        setStatus('loading', 'Fetching prices… ' + (i + 1) + ' / ' + onSaleIds.length);
+        try {
+          var pUrl = 'https://store.steampowered.com/api/appdetails?appids=' + appId + '&cc=' + cc + '&filters=price_overview';
+          var pRes = await fetch(pUrl);
+          var pData = await pRes.json();
+          var po = pData[appId] && pData[appId].data && pData[appId].data.price_overview;
+          if (po && po.discount_percent > 0) {
+            games.push({
+              appId:            appId,
+              name:             wishlist[appId].name,
+              initial:          po.initial,
+              final:            po.final,
+              discount:         po.discount_percent,
+              initialFormatted: po.initial_formatted,
+              finalFormatted:   po.final_formatted
+            });
+          }
+        } catch (e) { /* skip this game on error */ }
+        if (i < onSaleIds.length - 1) await delay(200);
+      }
+
+      allGames = games;
+      localStorage.setItem(LS_DATA, JSON.stringify(games));
+      saveCache(games.length);
+      renderTable();
+      setStatus(null);
+
+    } catch (e) {
+      var msg = e.message || String(e);
+      if (msg.toLowerCase().includes('failed to fetch') || msg.toLowerCase().includes('networkerror')) {
+        msg = 'Could not reach Steam (network error or CORS). Make sure your Steam profile is set to public. If this keeps happening, try opening the page in a browser without strict CORS blocking.';
+      }
+      setStatus('error', msg);
+    }
+
+    document.getElementById('refresh-btn').disabled = false;
+  }
+
+  function saveCache(count) {
+    var now = Date.now();
+    localStorage.setItem(LS_CACHE, JSON.stringify({ count: count, fetchedAt: now }));
+    updateSubtitle(count, now);
+  }
+
+  /* ── Table ── */
+  function renderTable() {
+    var sorted = allGames.slice().sort(function (a, b) {
+      var av = a[sortCol], bv = b[sortCol];
+      if (typeof av === 'string') {
+        return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+      }
+      return sortDir === 'asc' ? av - bv : bv - av;
+    });
+
+    var tbody = document.getElementById('rows');
+    tbody.innerHTML = '';
+    sorted.forEach(function (g) {
+      var tr = document.createElement('tr');
+      var pctClass = g.discount >= 50 ? 'col-pct big' : 'col-pct';
+      tr.innerHTML =
+        '<td class="col-name">' + esc(g.name) + '</td>' +
+        '<td class="col-orig">' + esc(g.initialFormatted) + '</td>' +
+        '<td class="col-sale">' + esc(g.finalFormatted) + '</td>' +
+        '<td class="' + pctClass + '">&minus;' + g.discount + '%</td>';
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('table-wrap').style.display  = sorted.length > 0 ? '' : 'none';
+    document.getElementById('empty-msg').style.display   = sorted.length === 0 ? '' : 'none';
+  }
+
+  /* Sort headers */
+  document.querySelectorAll('th.sortable').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var col = th.dataset.col;
+      if (sortCol === col) {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortCol = col;
+        sortDir = col === 'name' ? 'asc' : 'desc';
+      }
+      refreshSortHeaders();
+      renderTable();
+    });
+  });
+
+  function refreshSortHeaders() {
+    document.querySelectorAll('th.sortable').forEach(function (th) {
+      var col = th.dataset.col;
+      var base = { name: 'Game', initial: 'Normal Price', final: 'Sale Price', discount: 'Discount' }[col];
+      var active = col === sortCol;
+      th.textContent = base + (active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
+      th.classList.toggle('sort-active', active);
+    });
+  }
+
+  /* ── Status / subtitle ── */
+  function setStatus(type, msg) {
+    var el = document.getElementById('status-msg');
+    if (!type) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    el.className = type;
+    el.textContent = msg;
+  }
+
+  function updateSubtitle(count, fetchedAt) {
+    var mins = Math.round((Date.now() - fetchedAt) / 60000);
+    var when = mins < 1 ? 'just now' : mins + 'm ago';
+    var label = count === 0 ? 'No games on sale' : count + ' game' + (count === 1 ? '' : 's') + ' on sale';
+    document.getElementById('subtitle').textContent = label + ' · fetched ' + when;
+  }
+
+  /* ── Settings modal ── */
+  function openSettings() {
+    document.getElementById('steam-id-input').value = localStorage.getItem(LS_ID) || '';
+    document.getElementById('cc-input').value = localStorage.getItem(LS_CC) || 'us';
+    document.getElementById('settings-modal').style.display = 'flex';
+    setTimeout(function () { document.getElementById('steam-id-input').focus(); }, 50);
+  }
+
+  function closeSettings() {
+    document.getElementById('settings-modal').style.display = 'none';
+  }
+
+  function saveSettings() {
+    var steamId = document.getElementById('steam-id-input').value.trim();
+    var cc      = document.getElementById('cc-input').value.trim().toLowerCase() || 'us';
+    if (!steamId) { document.getElementById('steam-id-input').focus(); return; }
+    localStorage.setItem(LS_ID, steamId);
+    localStorage.setItem(LS_CC, cc);
+    closeSettings();
+    startFetch();
+  }
+
+  document.getElementById('settings-modal').addEventListener('click', function (e) {
+    if (e.target === this) closeSettings();
+  });
+
+  document.getElementById('steam-id-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') document.getElementById('cc-input').focus();
+  });
+
+  document.getElementById('cc-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') saveSettings();
+    if (e.key === 'Escape') closeSettings();
+  });
+
+  /* ── Util ── */
+  function delay(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+</script>
+</body>
+</html>

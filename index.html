@@ -242,6 +242,11 @@
       <div class="label">Games Games Games</div>
       <div class="desc">Play games</div>
     </div>
+    <div class="hub-card" onclick="go('steam-wishlist.html')">
+      <div class="icon">🏷️</div>
+      <div class="label">Steam Wishlist</div>
+      <div class="desc" id="steam-sale-desc">Wishlist sales</div>
+    </div>
   </div>
 </div>
 
@@ -251,6 +256,21 @@
     document.getElementById('hub').style.display = 'flex';
     document.getElementById('hub-bar').style.display = 'flex';
     updatePATBtn();
+    updateSteamCard();
+  }
+
+  function updateSteamCard() {
+    try {
+      var raw = localStorage.getItem('steam-wishlist-cache');
+      if (!raw) return;
+      var c = JSON.parse(raw);
+      var desc = document.getElementById('steam-sale-desc');
+      if (c.count === 0) {
+        desc.textContent = 'No games on sale';
+      } else {
+        desc.textContent = c.count + ' game' + (c.count === 1 ? '' : 's') + ' on sale';
+      }
+    } catch (e) {}
   }
 
   function updatePATBtn() {
