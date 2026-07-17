@@ -414,7 +414,7 @@
   });
 
   document.getElementById('steam-id-input').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') document.getElementById('cc-input').focus();
+    if (e.key === 'Enter') saveSettings();
   });
 
   document.getElementById('cc-input').addEventListener('keydown', function (e) {
