@@ -255,12 +255,13 @@
       /* Step 1: wishlist */
       var wishlistUrl = 'https://verdict-cat-steam.saeed-a-alzeera.workers.dev/wishlist/profiles/' + steamId + '/wishlistdata/';
       var wRes = await fetch(wishlistUrl);
-      if (!wRes.ok) throw new Error('Wishlist fetch failed (' + wRes.status + '). Check that your Steam profile is public.');
       var wishlistText = await wRes.text();
       var wishlist;
       try { wishlist = JSON.parse(wishlistText); } catch (e) {
-        throw new Error('Steam returned an unexpected response (not JSON). Make sure your Steam ID is correct and your Steam profile visibility is set to Public.');
+        throw new Error('Steam returned an unexpected response (not JSON). Make sure your Steam ID is correct and your Steam profile is set to Public.');
       }
+      if (wishlist && wishlist.error) throw new Error(wishlist.error);
+      if (!wRes.ok) throw new Error('Wishlist fetch failed (' + wRes.status + '). Check that your Steam profile is public.');
       if (!wishlist || typeof wishlist !== 'object' || Array.isArray(wishlist)) {
         throw new Error('Steam returned an empty or invalid wishlist. Check that your Steam profile is set to Public.');
       }
