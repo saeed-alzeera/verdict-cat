@@ -70,6 +70,7 @@
   }
   #status-msg.loading { background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
   #status-msg.error   { background: rgba(224,92,92,0.1); border: 1px solid var(--red); color: var(--red); }
+  #status-msg.warn    { background: rgba(232,167,48,0.1); border: 1px solid var(--warn); color: var(--warn); }
 
   table {
     width: 100%; border-collapse: collapse;
@@ -252,7 +253,7 @@
 
     try {
       /* Step 1: wishlist */
-      var wishlistUrl = 'https://store.steampowered.com/wishlist/profiles/' + steamId + '/wishlistdata/';
+      var wishlistUrl = 'https://verdict-cat-steam.saeed-a-alzeera.workers.dev/wishlist/profiles/' + steamId + '/wishlistdata/';
       var wRes = await fetch(wishlistUrl);
       if (!wRes.ok) throw new Error('Wishlist fetch failed (' + wRes.status + '). Check that your Steam profile is public.');
       var wishlist = await wRes.json();
@@ -277,7 +278,7 @@
         var appId = onSaleIds[i];
         setStatus('loading', 'Fetching prices… ' + (i + 1) + ' / ' + onSaleIds.length);
         try {
-          var pUrl = 'https://store.steampowered.com/api/appdetails?appids=' + appId + '&cc=' + cc + '&filters=price_overview';
+          var pUrl = 'https://verdict-cat-steam.saeed-a-alzeera.workers.dev/api/appdetails?appids=' + appId + '&cc=' + cc + '&filters=price_overview';
           var pRes = await fetch(pUrl);
           var pData = await pRes.json();
           var po = pData[appId] && pData[appId].data && pData[appId].data.price_overview;
@@ -304,10 +305,15 @@
 
     } catch (e) {
       var msg = e.message || String(e);
-      if (msg.toLowerCase().includes('failed to fetch') || msg.toLowerCase().includes('networkerror')) {
-        msg = 'Could not reach Steam (network error or CORS). Make sure your Steam profile is set to public. If this keeps happening, try opening the page in a browser without strict CORS blocking.';
+      var isCors = msg.toLowerCase().includes('failed to fetch') || msg.toLowerCase().includes('networkerror');
+      if (isCors && allGames.length > 0) {
+        setStatus('warn', 'Couldn\'t refresh — showing cached data. Check your Steam profile is public, or try again later.');
+      } else {
+        if (isCors) {
+          msg = 'Could not reach Steam (network error or CORS). Make sure your Steam profile is set to public. If this keeps happening, try opening the page in a browser without strict CORS blocking.';
+        }
+        setStatus('error', msg);
       }
-      setStatus('error', msg);
     }
 
     document.getElementById('refresh-btn').disabled = false;
