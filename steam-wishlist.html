@@ -253,7 +253,7 @@
 
     try {
       /* Step 1: wishlist */
-      var wishlistUrl = 'https://store.steampowered.com/wishlist/profiles/' + steamId + '/wishlistdata/';
+      var wishlistUrl = 'https://verdict-cat-steam.saeed-a-alzeera.workers.dev/wishlist/profiles/' + steamId + '/wishlistdata/';
       var wRes = await fetch(wishlistUrl);
       if (!wRes.ok) throw new Error('Wishlist fetch failed (' + wRes.status + '). Check that your Steam profile is public.');
       var wishlist = await wRes.json();
@@ -278,7 +278,7 @@
         var appId = onSaleIds[i];
         setStatus('loading', 'Fetching prices… ' + (i + 1) + ' / ' + onSaleIds.length);
         try {
-          var pUrl = 'https://store.steampowered.com/api/appdetails?appids=' + appId + '&cc=' + cc + '&filters=price_overview';
+          var pUrl = 'https://verdict-cat-steam.saeed-a-alzeera.workers.dev/api/appdetails?appids=' + appId + '&cc=' + cc + '&filters=price_overview';
           var pRes = await fetch(pUrl);
           var pData = await pRes.json();
           var po = pData[appId] && pData[appId].data && pData[appId].data.price_overview;
