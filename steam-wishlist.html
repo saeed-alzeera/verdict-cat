@@ -129,7 +129,9 @@
     font-family: monospace; outline: none; transition: border-color 0.15s;
   }
   .field-input:focus { border-color: var(--accent); }
+  .field-input.invalid { border-color: var(--red); }
   .field-hint { font-size: 12px; color: var(--muted); margin-top: 5px; }
+  .field-hint.error { color: var(--red); }
   .modal-actions { display: flex; gap: 8px; flex-direction: column; margin-top: 4px; }
   .modal-actions .btn { width: 100%; padding: 10px; font-size: 14px; text-align: center; }
 
@@ -185,8 +187,9 @@
     <div class="field-group">
       <label class="field-label" for="steam-id-input">Steam ID64</label>
       <input class="field-input" id="steam-id-input" type="text"
-        placeholder="76561198000000000" autocomplete="off" spellcheck="false" />
-      <div class="field-hint">Find yours at steamid.io or in your Steam profile URL.</div>
+        placeholder="76561198000000000" autocomplete="off" spellcheck="false"
+        oninput="validateSteamIdInput(this)" />
+      <div class="field-hint" id="steam-id-hint">Find yours at steamid.io or in your Steam profile URL.</div>
     </div>
 
     <div class="field-group">
@@ -285,26 +288,19 @@
       for (var i = 0; i < onSaleIds.length; i++) {
         var appId = onSaleIds[i];
         setStatus('loading', 'Fetching prices… ' + (i + 1) + ' / ' + onSaleIds.length);
-        try {
-          var pUrl = 'https://verdict-cat-steam.saeed-a-alzeera.workers.dev/api/appdetails?appids=' + appId + '&cc=' + cc + '&filters=price_overview';
-          var pRes = await fetch(pUrl);
-          var pText = await pRes.text();
-          var pData;
-          try { pData = JSON.parse(pText); } catch (e) { continue; }
-          var po = pData[appId] && pData[appId].data && pData[appId].data.price_overview;
-          if (po && po.discount_percent > 0) {
-            games.push({
-              appId:            appId,
-              name:             wishlist[appId].name,
-              initial:          po.initial,
-              final:            po.final,
-              discount:         po.discount_percent,
-              initialFormatted: po.initial_formatted,
-              finalFormatted:   po.final_formatted
-            });
-          }
-        } catch (e) { /* skip this game on error */ }
-        if (i < onSaleIds.length - 1) await delay(200);
+        var po = await fetchPriceOverview(appId, cc);
+        if (po && po.discount_percent > 0) {
+          games.push({
+            appId:            appId,
+            name:             wishlist[appId].name,
+            initial:          po.initial,
+            final:            po.final,
+            discount:         po.discount_percent,
+            initialFormatted: po.initial_formatted,
+            finalFormatted:   po.final_formatted
+          });
+        }
+        if (i < onSaleIds.length - 1) await delay(350);
       }
 
       allGames = games;
@@ -415,10 +411,36 @@
     document.getElementById('settings-modal').style.display = 'none';
   }
 
+  function isValidSteamId(id) {
+    return /^\d{17}$/.test(id) && id.startsWith('7656119');
+  }
+
+  function validateSteamIdInput(input) {
+    var val = input.value.trim();
+    var hint = document.getElementById('steam-id-hint');
+    if (!val) {
+      input.classList.remove('invalid');
+      hint.className = 'field-hint';
+      hint.textContent = 'Find yours at steamid.io or in your Steam profile URL.';
+      return true;
+    }
+    if (!isValidSteamId(val)) {
+      input.classList.add('invalid');
+      hint.className = 'field-hint error';
+      hint.textContent = 'Must be a 17-digit Steam ID64 (e.g. 76561198012345678). Not your username or vanity URL.';
+      return false;
+    }
+    input.classList.remove('invalid');
+    hint.className = 'field-hint';
+    hint.textContent = 'Find yours at steamid.io or in your Steam profile URL.';
+    return true;
+  }
+
   function saveSettings() {
-    var steamId = document.getElementById('steam-id-input').value.trim();
+    var input   = document.getElementById('steam-id-input');
+    var steamId = input.value.trim();
     var cc      = document.getElementById('cc-input').value.trim().toLowerCase() || 'us';
-    if (!steamId) { document.getElementById('steam-id-input').focus(); return; }
+    if (!steamId || !validateSteamIdInput(input)) { input.focus(); return; }
     localStorage.setItem(LS_ID, steamId);
     localStorage.setItem(LS_CC, cc);
     closeSettings();
@@ -443,6 +465,22 @@
 
   /* ── Util ── */
   function delay(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  async function fetchPriceOverview(appId, cc, attempt) {
+    attempt = attempt || 1;
+    try {
+      var pUrl = 'https://verdict-cat-steam.saeed-a-alzeera.workers.dev/api/appdetails?appids=' + appId + '&cc=' + cc + '&filters=price_overview';
+      var pRes = await fetch(pUrl);
+      var pText = await pRes.text();
+      var pData;
+      try { pData = JSON.parse(pText); } catch (e) { return null; }
+      if (!pData || !pData[appId] || !pData[appId].success) return null;
+      return pData[appId].data && pData[appId].data.price_overview || null;
+    } catch (e) {
+      if (attempt < 2) { await delay(1000); return fetchPriceOverview(appId, cc, 2); }
+      return null;
+    }
+  }
   function esc(s) {
     return String(s)
       .replace(/&/g, '&amp;')
