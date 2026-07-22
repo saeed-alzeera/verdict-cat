@@ -180,6 +180,7 @@ header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.4px; }
 }
 #grid-editor .cell:not(.black):hover { background: var(--surface2); }
 #grid-editor .cell.black:hover { opacity: .8; }
+#grid-editor .cell.conflict { box-shadow: inset 0 0 0 2px #e67e22; }
 
 /* ── buttons ── */
 .btn {
@@ -238,6 +239,10 @@ header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.4px; }
   position: sticky; top: 0; background: var(--surface); z-index: 1;
   border-bottom: 1px solid var(--border);
 }
+.blank-bank { padding: 6px 12px 10px; font-size: .74rem; color: var(--ink); }
+.blank-bank-row { display: flex; justify-content: space-between; padding: 2px 0; }
+.blank-bank-row .count { font-weight: 700; }
+.blank-bank-empty { color: var(--muted); font-style: italic; }
 .clue-item {
   display: grid; grid-template-columns: 28px 1fr;
   padding: 5px 10px 5px 8px; cursor: pointer;
@@ -420,6 +425,8 @@ header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.4px; }
   </div>
   <div class="clue-pane">
     <div class="clue-pane-scroll" id="clue-pane-scroll">
+      <div class="clue-section-title">Blanks needed</div>
+      <div id="blank-bank" class="blank-bank"></div>
       <div class="clue-section-title">Across</div>
       <div id="clue-list-across"></div>
       <div class="clue-section-title">Down</div>
@@ -581,7 +588,7 @@ const S = {
   awaitAssign: false, pendingWord: null, pendingClue: null,
   wordsByLength: new Map(), dictLoading: new Set(),
   stage: 'import', showSolution: false,
-  importedEntries: [], suggestedPlacements: null,
+  importedEntries: [], suggestedPlacements: null, suggestionConflicts: [],
   theme: localStorage.getItem('cw_theme') || 'dark',
 };
 
@@ -610,7 +617,8 @@ function renderDesignGrid() {
   for (let r = 0; r < N; r++) {
     for (let c = 0; c < N; c++) {
       const cell = document.createElement('div');
-      cell.className = 'cell' + (S.blacks.has(r+','+c) ? ' black' : '');
+      cell.className = 'cell' + (S.blacks.has(r+','+c) ? ' black' : '')
+        + (S.suggestionConflicts.some(k => k.r === r && k.c === c) ? ' conflict' : '');
       cell.dataset.r = r; cell.dataset.c = c;
       cell.addEventListener('click', () => toggleBlack(r, c));
       el.appendChild(cell);
@@ -634,7 +642,8 @@ function toggleBlack(r, c) {
 
 function setDesignCell(r, c) {
   const el = document.querySelector(`#grid-editor [data-r="${r}"][data-c="${c}"]`);
-  if (el) el.className = 'cell' + (S.blacks.has(r+','+c) ? ' black' : '');
+  if (el) el.className = 'cell' + (S.blacks.has(r+','+c) ? ' black' : '')
+    + (S.suggestionConflicts.some(k => k.r === r && k.c === c) ? ' conflict' : '');
 }
 
 document.getElementById('size-dec').addEventListener('click', () => {
@@ -841,6 +850,30 @@ function updateACB() {
 function renderCluePane() {
   renderClueDir('across');
   renderClueDir('down');
+  renderBlankBank();
+}
+
+function computeBlankBank() {
+  const counts = new Map();
+  for (const slot of S.slots) {
+    const blank = slot.cells.every(({r, c}) => !S.grid[r][c]);
+    if (blank) counts.set(slot.length, (counts.get(slot.length) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([length, count]) => ({length, count}))
+    .sort((a, b) => a.length - b.length);
+}
+
+function renderBlankBank() {
+  const el = document.getElementById('blank-bank');
+  const bank = computeBlankBank();
+  if (!bank.length) {
+    el.innerHTML = '<div class="blank-bank-empty">✓ No blanks — fully filled</div>';
+    return;
+  }
+  el.innerHTML = bank.map(({length, count}) =>
+    `<div class="blank-bank-row"><span>${count} blank${count!==1?'s':''}</span><span class="count">${length} letters</span></div>`
+  ).join('');
 }
 
 function renderClueDir(dir) {
@@ -1388,20 +1421,36 @@ function generateLayout(entries) {
   const stillUnplaced = [];
   for (const e of remaining) { if (!tryLoosePlace(e)) stillUnplaced.push(e); }
 
-  // Minimal caps: black only the cell immediately before/after each word.
+  // Minimal caps: black only the cell immediately before/after each word,
+  // mirrored for 180° symmetry. If a cap's mirror lands on a cell another
+  // placed word occupies with a letter, that single cap is left unmirrored
+  // and flagged as a conflict for the user to resolve by hand.
   const blacks = new Set();
+  const conflictKeys = new Set();
+  function addBlack(r, c) {
+    const key = r + ',' + c;
+    blacks.add(key);
+    const mr = N - 1 - r, mc = N - 1 - c, mkey = mr + ',' + mc;
+    if (mkey === key) return;
+    if (get(mr, mc) !== null) { conflictKeys.add(mkey); return; }
+    blacks.add(mkey);
+  }
   for (const p of placements) {
     const [dr, dc] = stepOf(p.dir);
     const beforeR = p.r - dr, beforeC = p.c - dc;
     const afterR = p.r + dr * p.word.length, afterC = p.c + dc * p.word.length;
     if (beforeR >= 0 && beforeC >= 0 && beforeR < N && beforeC < N && get(beforeR, beforeC) === null)
-      blacks.add(beforeR + ',' + beforeC);
+      addBlack(beforeR, beforeC);
     if (afterR >= 0 && afterC >= 0 && afterR < N && afterC < N && get(afterR, afterC) === null)
-      blacks.add(afterR + ',' + afterC);
+      addBlack(afterR, afterC);
   }
+  const conflicts = [...conflictKeys].map(key => {
+    const [r, c] = key.split(',').map(Number);
+    return {r, c};
+  });
 
   return {
-    size: N, blacks,
+    size: N, blacks, conflicts,
     placements: placements.map(p => ({word: p.word, clue: p.clue, r: p.r, c: p.c, dir: p.dir})),
     placed: placements.length, total: entries.length,
   };
@@ -1468,10 +1517,11 @@ document.getElementById('import-drop').addEventListener('drop', e => {
 
 document.getElementById('btn-suggest-layout').addEventListener('click', () => {
   if (!S.importedEntries.length) return;
-  const {size, blacks, placements, placed, total} = generateLayout(S.importedEntries);
+  const {size, blacks, placements, conflicts, placed, total} = generateLayout(S.importedEntries);
   S.gridSize = size;
   S.blacks = blacks;
   S.suggestedPlacements = placements;
+  S.suggestionConflicts = conflicts;
   updateSizeDisp();
   renderDesignGrid();
   const lengths = S.importedEntries.map(e => e.word.length);
@@ -1481,7 +1531,10 @@ document.getElementById('btn-suggest-layout').addEventListener('click', () => {
   const placedNote = missed
     ? `${placed}/${total} words placed — ${missed} couldn't fit, adjust layout as needed`
     : `All ${total} words placed`;
-  banner.textContent = `${size}×${size} grid generated (lengths ${minL}–${maxL}) · ${placedNote} — click cells to tweak, then Build Grid`;
+  const conflictNote = conflicts.length
+    ? ` · ⚠ ${conflicts.length} cell${conflicts.length!==1?'s':''} couldn't stay symmetric — highlighted below`
+    : '';
+  banner.textContent = `${size}×${size} grid generated (lengths ${minL}–${maxL}) · ${placedNote}${conflictNote} — click cells to tweak, then Build Grid`;
   banner.style.display = 'block';
   goStage('design');
 });
@@ -1489,6 +1542,7 @@ document.getElementById('btn-suggest-layout').addEventListener('click', () => {
 document.getElementById('btn-skip-to-design').addEventListener('click', () => {
   S.importedEntries = [];
   S.suggestedPlacements = null;
+  S.suggestionConflicts = [];
   document.getElementById('design-suggestion').style.display = 'none';
   goStage('design');
 });
