@@ -1,0 +1,1226 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Crossword</title>
+<style>
+/* ── tokens ── */
+:root[data-theme="dark"] {
+  --bg: #111418; --surface: #1a1d23; --surface2: #22262e;
+  --border: #2e3340; --border2: #3d4455;
+  --ink: #e8eaed; --muted: #8b9099; --faint: #4a5060;
+  --accent: #5b9bd5; --accent-dim: #132540;
+  --err: #e05555; --err-bg: #3a1a1a;
+  --hi-slot: #1c2e48; --hi-cell: #2a4a72;
+  --cell-black: #08090c;
+  --shadow: 0 4px 24px rgba(0,0,0,.5);
+}
+:root[data-theme="light"] {
+  --bg: #f0f2f5; --surface: #ffffff; --surface2: #e8eaed;
+  --border: #d0d5de; --border2: #b0b8c8;
+  --ink: #1a1d23; --muted: #5a6070; --faint: #a0a8b8;
+  --accent: #2563eb; --accent-dim: #dbeafe;
+  --err: #dc2626; --err-bg: #fee2e2;
+  --hi-slot: #dbeafe; --hi-cell: #93c5fd;
+  --cell-black: #1a1d23;
+  --shadow: 0 4px 24px rgba(0,0,0,.12);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  min-height: 100%; display: flex; flex-direction: column;
+  transition: background .2s, color .2s;
+}
+
+/* ── header ── */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px; height: 52px; flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg); z-index: 100;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-btn {
+  color: var(--muted); text-decoration: none; font-size: .8rem;
+  padding: 5px 9px; border-radius: 6px; border: 1px solid var(--border);
+  transition: all .15s; white-space: nowrap; line-height: 1;
+}
+.back-btn:hover { color: var(--ink); border-color: var(--accent); }
+header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.4px; }
+.icon-btn {
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--ink); border-radius: 8px; padding: 6px 10px;
+  cursor: pointer; font-size: .82rem; transition: background .15s;
+  line-height: 1;
+}
+.icon-btn:hover { background: var(--border); }
+
+/* ── stage base ── */
+.stage { display: none; }
+
+/* ── design stage ── */
+#stage-design.active {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 18px 16px 32px; gap: 14px; flex: 1;
+}
+.size-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center;
+}
+.size-label { font-size: .84rem; color: var(--muted); }
+.size-stepper {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px;
+}
+.step-btn {
+  width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--ink); font-size: 1.1rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; line-height: 1;
+  transition: background .1s; flex-shrink: 0;
+}
+.step-btn:hover { background: var(--border); }
+.size-display { font-size: 1rem; font-weight: 700; min-width: 56px; text-align: center; }
+.opt-row {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: center;
+  font-size: .82rem; color: var(--muted);
+}
+.opt-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+.opt-row input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; }
+.design-wrap { overflow: auto; max-width: 100%; }
+.hint-text { font-size: .74rem; color: var(--faint); text-align: center; }
+
+/* ── crossword grid ── */
+.cw-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cw-cols, 15), 1fr);
+  background: var(--border2); gap: 1px;
+  border: 2px solid var(--border2); border-radius: 6px; overflow: hidden;
+  box-shadow: var(--shadow); flex-shrink: 0;
+}
+#grid-editor {
+  width: min(calc(var(--cw-cols, 15) * 36px), min(88vw, 560px));
+}
+.cell {
+  aspect-ratio: 1; background: var(--surface);
+  position: relative; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: clamp(8px, 2vw, 20px); font-weight: 800;
+  text-transform: uppercase; color: var(--ink);
+  user-select: none; transition: background .07s;
+}
+.cell.black { background: var(--cell-black); cursor: pointer; }
+.cell.in-slot { background: var(--hi-slot); }
+.cell.active-cell { background: var(--hi-cell); }
+.cell-num {
+  position: absolute; top: 1px; left: 2px;
+  font-size: clamp(5px, 0.85vw, 9px); font-weight: 500; color: var(--muted);
+  line-height: 1; pointer-events: none;
+}
+#grid-editor .cell:not(.black):hover { background: var(--surface2); }
+#grid-editor .cell.black:hover { opacity: .8; }
+
+/* ── buttons ── */
+.btn {
+  padding: 7px 13px; border-radius: 8px; font-size: .79rem; font-weight: 600;
+  border: 1px solid var(--border); background: var(--surface2); color: var(--ink);
+  cursor: pointer; transition: all .15s; white-space: nowrap; line-height: 1;
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover:not(:disabled) { opacity: .88; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── fill stage ── */
+#stage-fill.active {
+  display: flex; flex-direction: row; align-items: stretch;
+  width: 100%; height: calc(100vh - 52px); overflow: hidden;
+}
+.grid-pane {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 14px 14px 14px; gap: 10px;
+  flex: 1; min-width: 0; overflow-y: auto;
+}
+#crossword-grid {
+  width: min(calc(var(--cw-cols, 15) * 34px), min(75vw, 510px));
+}
+.active-clue-banner {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 13px;
+  font-size: .84rem; min-height: 38px;
+  width: min(calc(var(--cw-cols, 15) * 34px), min(75vw, 510px));
+  display: flex; align-items: center; gap: 8px;
+}
+.acb-num { font-weight: 700; color: var(--accent); white-space: nowrap; font-size: .8rem; flex-shrink: 0; }
+.acb-text { color: var(--muted); font-style: italic; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acb-text.has-clue { color: var(--ink); font-style: normal; }
+.fill-toolbar { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.fill-status { font-size: .76rem; color: var(--muted); min-height: 18px; text-align: center; }
+.spinner {
+  display: inline-block; width: 10px; height: 10px;
+  border: 2px solid var(--border2); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .6s linear infinite; margin-right: 5px;
+  vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── clue pane ── */
+.clue-pane {
+  width: 255px; min-width: 200px; flex-shrink: 0;
+  border-left: 1px solid var(--border); background: var(--surface);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.clue-pane-scroll { flex: 1; overflow-y: auto; }
+.clue-section-title {
+  font-size: .68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--muted); padding: 8px 12px 4px;
+  position: sticky; top: 0; background: var(--surface); z-index: 1;
+  border-bottom: 1px solid var(--border);
+}
+.clue-item {
+  display: grid; grid-template-columns: 28px 1fr;
+  padding: 5px 10px 5px 8px; cursor: pointer;
+  border-left: 3px solid transparent; transition: background .1s;
+}
+.clue-item:hover { background: var(--surface2); }
+.clue-item.active { background: var(--accent-dim); border-left-color: var(--accent); }
+.clue-item-num { font-weight: 700; font-size: .76rem; color: var(--accent); padding-top: 1px; }
+.clue-item-body { min-width: 0; }
+.clue-word-pat {
+  font-size: .7rem; font-weight: 600; color: var(--ink);
+  font-family: 'Courier New', monospace; letter-spacing: 1.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.clue-text-disp {
+  font-size: .7rem; color: var(--muted); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.clue-text-disp.filled { color: var(--ink); }
+.clue-edit-in {
+  width: 100%; font-size: .7rem; background: var(--surface);
+  border: 1px solid var(--accent); border-radius: 4px; padding: 2px 5px;
+  color: var(--ink); outline: none; margin-top: 2px; font-family: inherit;
+}
+
+/* ── assign panel ── */
+.assign-panel {
+  position: fixed; top: 62px; left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px; z-index: 200;
+  box-shadow: var(--shadow); width: min(340px, 90vw);
+  display: none;
+}
+.assign-panel.visible { display: block; }
+.assign-panel h3 { font-size: .84rem; margin-bottom: 8px; }
+.assign-item {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border); margin-bottom: 4px; transition: all .1s;
+}
+.assign-item:hover { border-color: var(--accent); }
+.assign-item.selected { background: var(--accent-dim); border-color: var(--accent); }
+.assign-word { font-size: .82rem; font-family: monospace; font-weight: 700; }
+.assign-clue { font-size: .72rem; color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assign-no-slot { font-size: .72rem; color: var(--err); margin-top: 6px; }
+.assign-hint { font-size: .71rem; color: var(--muted); margin-top: 6px; }
+
+/* ── preview stage ── */
+#stage-preview.active {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 18px 16px 40px; gap: 16px; flex: 1;
+}
+.preview-toolbar { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.print-area { width: 100%; max-width: 820px; }
+.print-header { text-align: center; margin-bottom: 14px; }
+.print-header h2 { font-size: 1.15rem; font-weight: 700; }
+.print-body { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+.print-grid-wrap { flex-shrink: 0; }
+#print-grid .cell {
+  font-size: clamp(5px, 1.3vw, 13px); font-weight: 700;
+  border: 1px solid var(--border2);
+}
+.print-clues { flex: 1; min-width: 200px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.print-clues h3 { font-size: .82rem; font-weight: 700; margin-bottom: 6px; border-bottom: 2px solid var(--ink); padding-bottom: 3px; }
+.print-clue { font-size: .75rem; margin-bottom: 4px; line-height: 1.4; }
+.print-clue strong { color: var(--accent); margin-right: 3px; }
+
+/* ── shortcuts help ── */
+.shortcuts-row {
+  font-size: .7rem; color: var(--faint); text-align: center; line-height: 1.8;
+}
+.shortcuts-row kbd {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 3px; padding: 1px 4px; font-size: .68rem; color: var(--muted);
+}
+
+/* ── responsive ── */
+@media (max-width: 640px) {
+  #stage-fill.active { flex-direction: column; height: auto; overflow: visible; }
+  .clue-pane { width: 100%; min-width: 0; border-left: none; border-top: 1px solid var(--border); max-height: 200px; }
+  .grid-pane { overflow: visible; }
+  #crossword-grid { width: min(calc(var(--cw-cols, 15) * 22px), 96vw); }
+  .active-clue-banner { width: min(calc(var(--cw-cols, 15) * 22px), 96vw); }
+  .print-clues { grid-template-columns: 1fr; }
+}
+
+/* ── print ── */
+@media print {
+  header, .preview-toolbar, .assign-panel { display: none !important; }
+  #stage-design, #stage-fill { display: none !important; }
+  #stage-preview { display: block !important; padding: 0 !important; }
+  body { background: white !important; color: black !important; }
+  .cw-grid { box-shadow: none !important; }
+  .cell { border: 1px solid #333 !important; background: white !important; color: black !important; }
+  .cell.black { background: #111 !important; }
+  .cell-num { color: #333 !important; }
+  .print-clue strong { color: black !important; }
+  .print-body { flex-direction: row !important; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <a class="back-btn" href="../../games.html">← Games</a>
+    <h1>Crossword</h1>
+  </div>
+  <button class="icon-btn" id="btn-theme" title="Toggle theme">🌙</button>
+</header>
+
+<!-- ── Stage 1: Design ── -->
+<div id="stage-design" class="stage active">
+  <div class="size-row">
+    <span class="size-label">Grid Size</span>
+    <div class="size-stepper">
+      <button class="step-btn" id="size-dec" title="Smaller">−</button>
+      <span class="size-display" id="size-display">15×15</span>
+      <button class="step-btn" id="size-inc" title="Larger">+</button>
+    </div>
+  </div>
+  <div class="opt-row">
+    <label>
+      <input type="checkbox" id="chk-symmetry" checked>
+      180° rotational symmetry
+    </label>
+    <button class="btn" id="btn-clear-blacks">Clear Grid</button>
+  </div>
+  <div class="design-wrap">
+    <div id="grid-editor" class="cw-grid"></div>
+  </div>
+  <div class="hint-text">Click cells to toggle black ◼ — symmetry mirrors your edits</div>
+  <button class="btn primary" id="btn-go-fill" style="min-width:140px;">Build Grid →</button>
+</div>
+
+<!-- ── Stage 2: Fill ── -->
+<div id="stage-fill" class="stage">
+  <div class="grid-pane">
+    <div id="crossword-grid" class="cw-grid"></div>
+    <div class="active-clue-banner" id="acb">
+      <span class="acb-num" id="acb-num"></span>
+      <span class="acb-text" id="acb-text">Select a cell to begin</span>
+    </div>
+    <div class="fill-toolbar">
+      <button class="btn primary" id="btn-autofill">Autofill</button>
+      <button class="btn" id="btn-import-txt">Import .txt</button>
+      <button class="btn" id="btn-clear-fill">Clear Words</button>
+      <button class="btn" id="btn-redesign">← Redesign</button>
+      <button class="btn" id="btn-go-preview">Preview →</button>
+    </div>
+    <div class="fill-status" id="fill-status"></div>
+    <div class="shortcuts-row">
+      <kbd>Letter</kbd> type &nbsp; <kbd>⌫</kbd> delete &nbsp;
+      <kbd>Space</kbd> flip direction &nbsp; <kbd>Tab</kbd> next slot &nbsp;
+      <kbd>↑↓←→</kbd> move &nbsp; click twice to flip
+    </div>
+  </div>
+  <div class="clue-pane">
+    <div class="clue-pane-scroll" id="clue-pane-scroll">
+      <div class="clue-section-title">Across</div>
+      <div id="clue-list-across"></div>
+      <div class="clue-section-title">Down</div>
+      <div id="clue-list-down"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Stage 3: Preview ── -->
+<div id="stage-preview" class="stage">
+  <div class="preview-toolbar">
+    <button class="btn" id="btn-toggle-sol">Show Solution</button>
+    <button class="btn" id="btn-back-fill">← Back</button>
+    <button class="btn" id="btn-export-json">Save .json</button>
+    <button class="btn primary" id="btn-print">Print</button>
+  </div>
+  <div class="print-area">
+    <div class="print-header"><h2 id="print-title">Crossword Puzzle</h2></div>
+    <div class="print-body">
+      <div class="print-grid-wrap">
+        <div id="print-grid" class="cw-grid"></div>
+      </div>
+      <div class="print-clues">
+        <div>
+          <h3>Across</h3>
+          <div id="print-across"></div>
+        </div>
+        <div>
+          <h3>Down</h3>
+          <div id="print-down"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Assign panel (overlay for .txt import) ── -->
+<div class="assign-panel" id="assign-panel">
+  <h3>Manual Assignment Needed</h3>
+  <div id="assign-list"></div>
+  <div class="assign-hint" id="assign-hint"></div>
+  <div style="margin-top:10px;display:flex;gap:6px;">
+    <button class="btn" id="btn-close-assign">Close</button>
+  </div>
+</div>
+
+<input type="file" id="file-input" accept=".txt" style="display:none">
+
+<script>
+// ── Fallback words (offline, common 3-7 letter words) ──
+const FALLBACK = 'ACE AGE AID AIM AIR ALL AND ANT ANY APE APT ARC ARE ARM ART ASH ASK AWE AXE BAD BAG BAN BAR BAT BAY BED BIG BIT BOW BOX BOY BUD BUN BUS BUT BUY CAB CAP CAR CAT COB COD COG COP COT CUB CUD CUP CUT DAB DAM DAY DEN DEW DIG DIM DIP DOC DOE DOG DOT DRY DUE DUG DUO DYE EAR EAT EGG ELK ELM ERA EWE FAD FAN FAR FAT FAX FED FIG FIN FIT FLY FOE FOG FOX FUN FUR GAP GAY GEL GEM GET GIN GOD GUM GUN GUT GUY GYM HAD HAM HAS HAT HAY HEM HEN HID HIM HIT HOG HON HOP HOT HUB HUG HUM HUT ICE ILL IMP INN ION IRE JAB JAG JAM JAR JAW JAY JET JIB JIG JOB JOT JOY JUG JUT KEG KID KIT LAB LAD LAP LAW LAY LEA LED LEG LET LID LIP LIT LOG LOP LOT LOW LUG MAD MAP MAR MAT MAY MEN MET MOB MOD MOM MOO MOP MOW MUD MUG NAB NAG NAP NAY NIT NOD NUN NUT OAF OAK OAR OAT ODD ODE OFT OHM OPT ORB ORE OWE OWL OWN PAD PAR PAT PAW PAY PEA PEG PEN PEP PEW PIE PIG PIN PIT PLY POD POP POT POW PRO PUB PUG PUN PUP PUT RAG RAM RAP RAT RAW RAY RED REF REP RIB RID RIG RIM RIP ROB ROD ROE ROT ROW RUB RUG RUM RUN RUT RYE SAC SAG SAP SAT SAW SAY SEA SET SEW SOB SOD SON SOP SOT SOW SOY SPA SPY SUB SUM SUN SUP TAB TAD TAN TAP TAR TAX TEA TED TEN TIP TOE TON TOO TOP TOT TOW TOY TUB TUG TUN TWO URN USE VAN VAT VET VIA VIM VOW WAD WAR WAX WEB WED WIG WIN WIT WOE WOK WON WOW YAK YAM YAP YAW YEA YES YET YEW YIN YIP ZAP ZEN ZIT ZOO ABLE AGED ALSO AREA ARMY AWAY BABY BACK BALL BAND BANK BASE BATH BEAR BEAT BEEN BEER BELL BELT BEST BIRD BITE BLOW BLUE BOAT BODY BOMB BOND BONE BOOK BOOM BORN BOTH BOWL BURN BUSY CAFE CAKE CALL CALM CAME CARD CARE CASE CASH CAST CAVE CELL CENT CHAT CHIN CHIP CITY CLAP CLAW CLAY CLIP CLUB CLUE COAT CODE COIL COLD COME COOL COPE COPY CORD CORE CORN COST COZY CREW CROP CROW CUBE CURE DARE DATA DATE DAWN DEAD DEAF DEAL DEAR DECK DEED DEEP DEER DENT DENY DESK DINE DISH DISK DIVE DOCK DOME DONE DOOM DOOR DOSE DOVE DRAG DRAW DRIP DROP DRUM DUAL DULL DUMP DUNE DUSK DUST DUTY EACH EARL EARN EASE EAST EASY EDGE EMIT EPIC EVEN EVER EVIL EXAM FADE FAIL FAIR FAME FARE FARM FAST FATE FAWN FEAR FEAT FEED FEEL FELL FELT FERN FILE FILL FILM FIND FINE FIRE FIRM FISH FIST FIVE FLAP FLAT FLAW FLEA FLEW FLEX FLIP FLOW FOAM FOLD FOND FONT FORD FORM FORT FOUL FOUR FOWL FREE FROM FUEL FUME FUSE FURY GAIN GALE GAME GANG GAZE GENE GILD GIVE GLAD GLEE GLIB GLOB GLOW GLUE GOAL GOES GOLD GOLF GONE GOOD GRAB GRAM GRIM GRIN GRIP GRIT GROW GULF GUST GUTS GUYS HACK HAIL HAIR HALF HALL HALT HAND HANG HARD HARE HARM HARP HATE HAZE HEAD HEAR HEAT HEEL HEIR HELD HELP HERB HERO HIGH HILL HINT HIRE HOLE HOLY HOME HOOD HOOK HOPE HORN HOUR HUGE HUNT HYMN ICON IDEA INCH IRIS ISLE ITEM JADE JAIL JEST JIVE JOIN JOKE JUMP JUST KEEN KEPT KICK KILL KIND KING KNEE KNEW KNOT KNOW LACK LAID LAKE LAMP LAND LANE LARK LAST LATE LAUD LAVA LAWN LAZY LEAD LEAF LEAN LEAP LEND LENS LEVY LIFE LIFT LIKE LIME LINE LINK LION LIST LIVE LOAD LOAF LONE LONG LOOK LORE LOSE LOUD LOVE LUCK LURE LUSH LUST MADE MAIL MAIN MAKE MALT MANE MANY MARE MARK MARS MART MASH MAST MATE MATH MAZE MEAL MEAN MEAT MEND MERE MESH MICE MILD MILE MILK MILL MIME MIND MINE MINT MISS MIST MOAT MOCK MODE MOLE MONK MOON MOOR MOPE MORE MOST MOVE MUCH MULE MUST MYTH NAIL NAME NAVE NAVY NEAR NECK NEED NEON NEST NEXT NICE NODE NONE NORM NOSE NOTE NOUN NUKE OATH OBEY ODDS OMEN OMIT ONCE ONLY OPEN ORAL OURS OVER OVEN OWED OWLS PACE PACK PAIN PAIR PALE PALM PANG PARK PART PASS PAST PATH PAVE PEAK PEEL PEER PERK PEST PIER PILE PINE PINK PIPE PLAN PLAY PLOD PLOT PLOW PLUS POEM POET POLE POLL POND POOL POOR POSE POUR PRAY PREY PULL PULP PUMP PURE RAGE RAID RAIL RAIN RAKE RAMP RANG RANK RANT RARE RASH RAVE RAYS REAL REAP REIN RELY RENT REST RICE RICH RIDE RIFF RILE RING RIOT RISE RISK ROAM ROAR ROBE ROCK RODE ROLE ROLL ROOF ROOM ROOT ROSE RUDE RULE RUSE RUSH RUST SAFE SAGE SAIL SAKE SALE SALT SAME SAND SANE SANG SANK SAVE SCAN SCAR SEAL SEAM SEED SEEK SEEM SEEN SELL SEND SERF SHED SHIP SHOE SHOP SHOT SHOW SHUT SIFT SIGN SILK SILL SILO SIRE SITE SLAB SLAP SLID SLIM SLIP SLOT SLOW SNAP SNOB SNOW SNUG SOAR SOCK SOIL SOLE SOME SONG SOON SOOT SORT SOUL SOUR SPAN SPAR SPIN SPIT SPOT SPUR STAB STAG STAR STAY STEM STEP STEW STIR STOP STUB STUD STUN SUCH SUIT SUNG SUNK SURE SURF SWAM SWAT SWAP SWAY SYNC TACK TALE TALL TAME TANG TANK TART TASK TAUT TEAL TEAM TEAR TELL TEND TENT TERM THAT THEN THEY THIN THIS THUD THUS TICK TIDE TILL TIME TINY TOAD TOIL TOLL TOMB TONE TOOK TOOL TORN TOSS TOWN TRAP TRAY TREE TRIP TRIO TROY TRUE TUCK TUNA TUNE TURF TWIN TWIG TYPE UGLY UNDO UNIT UPON URGE USED VAIN VALE VARY VAST VEIL VENT VERB VERY VEST VICE VILE VINE VOID WAIL WAIT WAKE WANE WARD WARE WARM WART WARY WAVE WEAK WEAL WELD WELL WEND WENT WEST WHEN WHIM WILD WILL WILT WIND WINE WING WINK WIRY WISE WISH WISP WOLF WOMB WOOL WORD WORK WORM WORN WRAP YELL YOUR ZEAL ZINC ZONE ZOOM ABOVE ABUSE ACUTE ADMIT ADOPT ADULT AFTER AGAIN AGENT AGILE AGREE AHEAD ALARM ALBUM ALERT ALIGN ALIKE ALIVE ALONG ALTER AMAZE AMBER AMPLE ANGEL ANGRY ANKLE ANNEX ANNOY APPLY APRON ARDOR ARENA ARGUE ARISE ARMOR AROMA ARSON ASIDE ASSET ATLAS ATONE ATTIC AVAIL AVID AVOID AWAKE AWASH AWARE AWFUL BADGE BAGEL BANJO BARON BATCH BEACH BEADY BEGAN BEING BELOW BENCH BESET BLAZE BLEAK BLEED BLEND BLESS BLOCK BLOOM BLOWN BOARD BOGUS BONUS BOXER BRACE BRAID BRAND BRAVE BREAD BREAK BREED BRIDE BRIEF BRINE BRING BRISK BROKE BROOK BROWN BUILT BUILD BULLY BUNCH BURST BUYER CABIN CADRE CANDY CARGO CARRY CARVE CATCH CAUSE CEDAR CHARM CHASE CHEAP CHECK CHEEK CHEER CHESS CHEST CHEWY CHIEF CHILD CHIMP CHILL CHOSE CIVIC CIVIL CLAIM CLASH CLASP CLASS CLEAN CLEAR CLIMB CLING CLOCK CLOSE CLOTH CLOUD COACH COMET COULD COUNT COVER CRACK CRAFT CRANE CRASH CRAVE CRAZY CREEK CRIME CRISP CROSS CROWD CRUST CUBIC CURVE CYCLE DANCE DECAY DECOY DELVE DENSE DEPOT DEPTH DERBY DEVIL DIGIT DIRTY DIZZY DODGE DOLLY DOWEL DRAFT DRAIN DRAPE DREAD DREAM DRESS DRIED DRIFT DRILL DRINK DRIVE DROWN DUNCE DWARF DWELL EAGLE EARLY EARTH EIGHT ELITE EMPTY ENEMY ENJOY ENTER ENTRY ENVOY EQUAL ERUPT ESSAY EVADE EVENT EVERY EXACT EXERT EXILE EXTRA FABLE FACET FAITH FALSE FANCY FATAL FEAST FENCE FERRY FETCH FEVER FEWER FIBER FIELD FIFTH FIFTY FIGHT FINAL FIRST FIXED FLAME FLASK FLEET FLESH FLOAT FLOCK FLOOD FLOOR FLOUR FLUTE FOLIO FOUND FRAIL FRANK FREED FRESH FROST FULLY FUNKY FUNNY FUZZY GAVEL GAUZE GENRE GHOST GIANT GLASS GLEAM GLIDE GLOOM GLOSS GLOVE GNOME GRACE GRADE GRAFT GRAIN GRAND GRANT GRAPE GRASP GRAVE GRAZE GREED GREEN GREET GRIEF GROAN GROOM GROSS GROVE GROWL GRUEL GUILE GUSTO HUMAN HYPER IMAGE IMPLY INDEX INFER INLET INNER INPUT INTER INTRO IRONY ISSUE IVORY ITCHY JELLY JIFFY JOKER JUICY KINGS KNEEL KNIFE KNOCK KNOWN LADEN LARGE LASER LATER LAUGH LAYER LEARN LEDGE LEGAL LEMON LEVEL LIGHT LIMBO LINEN LINER LIVER LOBBY LOFTY LOGIC LUCID LUMEN LUNAR MAGIC MAJOR MAKER MANOR MAPLE MARCH MARRY MARSH MATTE MAUVE MAYOR MEDIA MERIT METAL MIGHT MIRTH MODEL MONTH MOTOR MOTTO MOURN MOUSE MOUTH MOVER MURKY MUSIC MUTED NAKED NASTY NAVAL NOBLE NORTH NOTED NOVEL NIFTY OCCUR OFTEN OLIVE ONSET OPTIC ORBIT ORGAN OUTER OZONE PANSY PAPER PARTY PAUSE PEACE PENAL PENNY PERKY PETTY PHASE PHONE PHOTO PILOT PITCH PIXEL PIZZA PLACE PLAIN PLANE PLANT PLEAT PLUMB PLUME POINT POKER POLAR PORCH PRANK PRESS PRICE PRIDE PRIME PRINT PRIOR PRIZE PROBE PRONE PROSE PROUD PROOF PRUNE PULSE PUNCH PUPPY PURSE QUEEN QUERY QUEST QUEUE QUICK QUIET QUIRK QUOTE RABBI RADAR RADIO RAISE RALLY RANGE RAVEN REBEL REFER REGAL REIGN RELAX RELAY RELIC REMIX REPAY RIDER RIGID RISKY RIVAL RIVER ROGUE RULER RURAL RUSTY SAINT SALVE SAUCE SAVOR SAVVY SCALD SCALP SCANT SCARE SCOFF SCOLD SCOPE SCORE SCOUT SCRAP SCREW SCRUB SEIZE SENSE SERVE SEVEN SEVER SHADE SHAKE SHAME SHAPE SHARE SHARK SHARP SHAVE SHEEP SHELF SHELL SHIFT SHINE SHINY SHOCK SHORE SHOUT SKILL SLANT SLASH SLEEP SLEEK SLEET SLOPE SLUMP SMART SMELL SMILE SMOKE SNARE SNEAK SNIFF SNORE SOLID SOLVE SORRY SOUND SOUTH SPACE SPARE SPEED SPELL SPEND SPICE SPIKE SPILL SPINE SPIRE SPITE SPOON SPRAY STACK STAIN STALE STALL STAMP STAND STANK STARK STEAL STEAM STEEL STEEP STICK STIFF STILL STING STOCK STONE STOOD STORM STORY STRAP STRAY STRIP STUCK STUDY STYLE SUGAR SUITE SURGE SWAMP SWIFT SWIRL SWOOP SWORD TASTE TAUNT TEPID THEFT THEIR THICK THERE THINK THORN THOSE THROW TIGER TIGHT TIMER TOAST TONIC TOPIC TOTAL TOUCH TOWER TOXIC TRACK TRADE TRAIL TRAIN TREAD TREAT TREND TRIAL TRIED TRUCK TRULY TRUST TRUTH TULIP TWIST TYPED ULTRA UNCLE UNDER UNION UNITY UNTIL UPPER UPSET USAGE VAGUE VALID VALOR VALVE VERGE VERSE VIGOR VIOLA VIPER VIRAL VIRUS VISTA VITAL VIVID VOCAL VOTER WALTZ WASTE WATCH WATER WEARY WEAVE WEDGE WEIRD WHEEL WHERE WHILE WHITE WHOLE WIDER WIDOW WIELD WINDY WITTY WORLD WORSE WORST WORTH WOULD WOUND WRATH WRECK WRING WRONG WROTE YACHT YEAST YIELD YOUNG YOUTH ABLING ABLOOM ABOARD ABROAD ABSENT ACCENT ACCEPT ACCESS ACROSS ACTING ACTIVE ACTUAL AERIAL AFRAID AGENCY AGENDA ALMOST ALWAYS AMOUNT ANIMAL ANSWER ANYONE APPEAR AROUND ARRIVE ARTIST ASPECT ASSURE ATTACK AUTHOR AUTUMN AVENUE BATTLE BEAUTY BECAME BECOME BEFORE BEHALF BEHIND BELIEF BELONG BEYOND BORDER BOTTLE BOTTOM BOUGHT BRANCH BREATH BRIDGE BRIGHT BROKEN BRONZE BUDGET BUMBLE BUNDLE BURDEN BUTTER BUTTON CAMERA CANDLE CANYON CARBON CASTLE CASUAL CAUSES CAUGHT CENTER CHANGE CHARGE CHOSEN CIRCLE CIRCUS CLIENT CLOSED CLOSER CLOUDS COFFEE COLUMN COMBAT COMEDY COMING COMMON CORNER COUPLE COURSE COUSIN CREATE CREDIT CRISIS CUSTOM DANGER DAZZLE DEGREE DESERT DESIRE DETAIL DEVOTE DIRECT DIVIDE DOLLAR DONKEY DOUBLE DOUGH DRAGON DRAWER DURING EASILY EITHER EITHER ENABLE ENGAGE ENOUGH ESCAPE EXPAND EXPERT FACTOR FALLEN FAMILY FAMOUS FATHER FASTER FEEDER FINGER FINISH FLAVOR FLIGHT FLOWER FOLLOW FOREST FORMAL FORMER FOSTER FOURTH FRIEND FROZEN FUTURE GARDEN GATHER GENTLE GLANCE GLOBAL GRAMMAR GRAVEL GROUND GROWTH HANDLE HAPPEN HEALTH HEARTS HAPPEN HEAVEN HELPED HIDDEN HIGHER HISTORY HOLLOW HONEST HOSPITAL HUNDRED HUNGER IGNORE IMAGE IMPACT INCOME INFORM INSIDE INTEND ISLAND ITSELF JIGSAW JUNGLE KINDLY KNIGHT LESSEN LETTER LIKELY LINEAR LISTEN LITTLE LIVING LONELY LOVELY LOWEST LOWEST MASTER MATTER MEADOW MIDDLE MIRROR MOMENT MONKEY MOTHER MOTION MUSCLE MUTUAL NARROW NATION NEARLY NEEDED NEPHEW NETWORK NEWBIE NOBODY NORMAL NOTICE OBJECT OBTAIN OCCURS OFFICE OLDISH ONLINE OPTION OTHERS OUTPUT PADDLE PARENT PARTLY PATROL PENCIL PERSON PHRASE PILLOW PIRATE PLANET PLAYER POETRY PORTAL POTATO POWDER PRETTY PRINCE PRISON PROFIT PROPER PROVEN PUBLIC PURPLE RABBIT RACIAL RATHER READER REALLY RECORD REGION RELISH REMAIN REMOVE REPAIR REPORT RESCUE REWARD RHYTHM ROCKET ROTATE RUBBER SADDLE SAMPLE SCALES SCARED SCREEN SEARCH SECOND SECTOR SETTLE SIMPLE SINGLE SISTER SLIDER SLOWER SMOOTH SOCCER SOCIAL SOLACE SOLVER SORTED SPLASH SPREAD SPRING SQUARE STABLE STARTS STATUE STEADY STOLEN STORED STREET STRIKE STRONG STRUCK STUPID SUBMIT SUNSET SUPER SURELY SYMBOL TABLES TAKING TALENT TARGET TESTED THEORY THOUGH THROAT TIGHTEN TIMBER TINGLE TOGETH TOMATO TOTING TRAVEL TRICKY TRYING UNABLE UNIQUE UNLIKE UPDATE USEFUL VALLEY VERBAL VARIES VARIED VICTIM VIOLET VISION VISIT WALRUS WANTED WARMTH WEALTH WEEKLY WEIGHT WINDOW WINNER WITHIN WONDER WOODEN WORKED WRITER'.split(' ');
+
+// ── Worker source ──
+const WORKER_SRC = `
+'use strict';
+let done = false;
+const T0 = Date.now();
+const LIMIT = 20000;
+
+self.onmessage = function(e) {
+  if (e.data.type === 'cancel') { done = true; return; }
+  if (e.data.type !== 'start') return;
+  const { slots, grid, wbl } = e.data;
+  const dict = new Map(Object.entries(wbl).map(([k,v]) => [+k, v]));
+
+  const placed = new Set(slots.filter(s => isFull(s, grid)).map(s => s.id));
+  const unfilled = slots.filter(s => !placed.has(s.id));
+
+  if (!unfilled.length) { self.postMessage({type:'solution', grid}); return; }
+
+  const domains = new Map();
+  for (const s of slots) domains.set(s.id, match(s, grid, dict));
+
+  for (const s of unfilled) {
+    if (!domains.get(s.id).length) {
+      self.postMessage({type:'fail', msg:'No words available for ' + s.id.replace('-',' ') + '. Clear some constrained cells and try again.'});
+      return;
+    }
+  }
+
+  const res = bt(unfilled, grid, domains, dict, slots);
+  if (res) self.postMessage({type:'solution', grid: res});
+  else if (done) self.postMessage({type:'fail', msg:'Cancelled.'});
+  else self.postMessage({type:'fail', msg:'Could not complete the grid. Try clearing some words or adjusting the grid pattern.'});
+};
+
+function bt(rem, grid, doms, dict, all) {
+  if (done || Date.now()-T0 > LIMIT) return null;
+  if (!rem.length) return grid;
+
+  let bi = 0, bv = Infinity;
+  for (let i = 0; i < rem.length; i++) {
+    const v = doms.get(rem[i].id).length;
+    if (v === 0) return null;
+    if (v < bv) { bv = v; bi = i; }
+  }
+
+  const slot = rem[bi];
+  const rest = rem.filter((_,i) => i !== bi);
+  let cands = shuffle(doms.get(slot.id));
+  if (cands.length > 120) cands = cands.slice(0, 120);
+
+  const crosses = xslots(slot, all);
+
+  for (const word of cands) {
+    const ng = place(grid, slot, word);
+    const nd = new Map(doms);
+    let ok = true;
+    for (const cx of crosses) {
+      if (!rest.find(s => s.id === cx.id)) continue;
+      const m = match(cx, ng, dict);
+      if (!m.length) { ok = false; break; }
+      nd.set(cx.id, m);
+    }
+    if (!ok) continue;
+    const r = bt(rest, ng, nd, dict, all);
+    if (r) return r;
+  }
+  return null;
+}
+
+function isFull(slot, grid) {
+  return slot.cells.every(({r,c}) => !!grid[r][c] && grid[r][c] !== '.');
+}
+function match(slot, grid, dict) {
+  const pat = slot.cells.map(({r,c}) => grid[r][c] || '');
+  const words = dict.get(slot.length) || [];
+  return words.filter(w => {
+    for (let i = 0; i < w.length; i++) if (pat[i] && pat[i] !== w[i]) return false;
+    return true;
+  });
+}
+function place(grid, slot, word) {
+  const g = grid.map(r => r.slice());
+  slot.cells.forEach(({r,c}, i) => { g[r][c] = word[i]; });
+  return g;
+}
+function xslots(slot, all) {
+  const set = new Set(slot.cells.map(({r,c}) => r+','+c));
+  return all.filter(s => s.id !== slot.id && s.cells.some(({r,c}) => set.has(r+','+c)));
+}
+function shuffle(a) {
+  const b = a.slice();
+  for (let i = b.length-1; i > 0; i--) {
+    const j = Math.random()*(i+1)|0;
+    [b[i],b[j]] = [b[j],b[i]];
+  }
+  return b;
+}
+`;
+
+// ── State ──
+const S = {
+  gridSize: 15, symmetry: true, blacks: new Set(),
+  gridNums: [], slots: [], cellSlotMap: {},
+  grid: [], clues: {}, buildHash: '',
+  activeSlotId: null, activeCellKey: null,
+  fillWorker: null,
+  awaitAssign: false, pendingWord: null, pendingClue: null,
+  wordsByLength: new Map(), dictLoading: new Set(),
+  stage: 'design', showSolution: false,
+  theme: localStorage.getItem('cw_theme') || 'dark',
+};
+
+// ── Theme ──
+function applyTheme(t) {
+  S.theme = t;
+  document.documentElement.dataset.theme = t;
+  document.getElementById('btn-theme').textContent = t === 'dark' ? '☀️' : '🌙';
+  localStorage.setItem('cw_theme', t);
+}
+document.getElementById('btn-theme').addEventListener('click', () =>
+  applyTheme(S.theme === 'dark' ? 'light' : 'dark'));
+
+// ── Stage switching ──
+function goStage(name) {
+  document.querySelectorAll('.stage').forEach(el => el.classList.remove('active'));
+  document.getElementById('stage-' + name).classList.add('active');
+  S.stage = name;
+}
+
+// ── Design ──
+function renderDesignGrid() {
+  const N = S.gridSize, el = document.getElementById('grid-editor');
+  el.style.setProperty('--cw-cols', N);
+  el.innerHTML = '';
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell' + (S.blacks.has(r+','+c) ? ' black' : '');
+      cell.dataset.r = r; cell.dataset.c = c;
+      cell.addEventListener('click', () => toggleBlack(r, c));
+      el.appendChild(cell);
+    }
+  }
+}
+
+function toggleBlack(r, c) {
+  const N = S.gridSize, key = r+','+c;
+  const mr = N-1-r, mc = N-1-c, mkey = mr+','+mc;
+  if (S.blacks.has(key)) {
+    S.blacks.delete(key);
+    if (S.symmetry && mkey !== key) S.blacks.delete(mkey);
+  } else {
+    S.blacks.add(key);
+    if (S.symmetry && mkey !== key) S.blacks.add(mkey);
+  }
+  setDesignCell(r, c);
+  if (S.symmetry && (mr !== r || mc !== c)) setDesignCell(mr, mc);
+}
+
+function setDesignCell(r, c) {
+  const el = document.querySelector(`#grid-editor [data-r="${r}"][data-c="${c}"]`);
+  if (el) el.className = 'cell' + (S.blacks.has(r+','+c) ? ' black' : '');
+}
+
+document.getElementById('size-dec').addEventListener('click', () => {
+  if (S.gridSize > 5) { S.gridSize--; S.blacks.clear(); renderDesignGrid(); updateSizeDisp(); }
+});
+document.getElementById('size-inc').addEventListener('click', () => {
+  if (S.gridSize < 21) { S.gridSize++; S.blacks.clear(); renderDesignGrid(); updateSizeDisp(); }
+});
+function updateSizeDisp() {
+  document.getElementById('size-display').textContent = S.gridSize + '×' + S.gridSize;
+}
+document.getElementById('btn-clear-blacks').addEventListener('click', () => {
+  S.blacks.clear(); renderDesignGrid();
+});
+
+// ── Auto-numbering ──
+function computeGrid() {
+  const N = S.gridSize;
+  S.gridNums = Array.from({length: N}, () => new Array(N).fill(0));
+  S.slots = [];
+  let n = 1;
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      if (S.blacks.has(r+','+c)) continue;
+      const lE = c === 0 || S.blacks.has(r+','+(c-1));
+      const rO = c+1 < N && !S.blacks.has(r+','+(c+1));
+      const tE = r === 0 || S.blacks.has((r-1)+','+c);
+      const dO = r+1 < N && !S.blacks.has((r+1)+','+c);
+      const sA = lE && rO, sD = tE && dO;
+      if (!sA && !sD) continue;
+      S.gridNums[r][c] = n;
+      if (sA) {
+        const cells = [];
+        for (let cc = c; cc < N && !S.blacks.has(r+','+cc); cc++) cells.push({r, c: cc});
+        S.slots.push({id:'across-'+n, num:n, direction:'across', row:r, col:c, length:cells.length, cells});
+      }
+      if (sD) {
+        const cells = [];
+        for (let rr = r; rr < N && !S.blacks.has(rr+','+c); rr++) cells.push({r:rr, c});
+        S.slots.push({id:'down-'+n, num:n, direction:'down', row:r, col:c, length:cells.length, cells});
+      }
+      n++;
+    }
+  }
+  // Build cell→slot map
+  S.cellSlotMap = {};
+  for (const slot of S.slots) {
+    for (const {r,c} of slot.cells) {
+      const key = r+','+c;
+      if (!S.cellSlotMap[key]) S.cellSlotMap[key] = [];
+      S.cellSlotMap[key].push(slot.id);
+    }
+  }
+}
+
+// ── Design → Fill ──
+document.getElementById('btn-go-fill').addEventListener('click', () => {
+  computeGrid();
+  if (!S.slots.length) { alert('No valid slots found. The grid needs white cells that form words of 2+ letters.'); return; }
+  const hash = [...S.blacks].sort().join('|') + ':' + S.gridSize;
+  const N = S.gridSize;
+  if (hash !== S.buildHash || S.grid.length !== N) {
+    S.grid = Array.from({length:N}, (_,r) =>
+      Array.from({length:N}, (__,c) => S.blacks.has(r+','+c) ? '.' : ''));
+    S.clues = {};
+    S.buildHash = hash;
+  }
+  S.activeSlotId = null; S.activeCellKey = null;
+  renderFillGrid();
+  renderCluePane();
+  updateACB();
+  goStage('fill');
+});
+
+// ── Fill grid ──
+function renderFillGrid() {
+  const N = S.gridSize, el = document.getElementById('crossword-grid');
+  el.style.setProperty('--cw-cols', N);
+  el.innerHTML = '';
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.r = r; cell.dataset.c = c;
+      if (S.blacks.has(r+','+c)) {
+        cell.classList.add('black');
+      } else {
+        const num = S.gridNums[r][c];
+        if (num) {
+          const ns = document.createElement('span');
+          ns.className = 'cell-num'; ns.textContent = num;
+          cell.appendChild(ns);
+        }
+        const letter = S.grid[r][c];
+        if (letter) cell.appendChild(document.createTextNode(letter));
+        cell.addEventListener('click', () => onCellClick(r, c));
+      }
+      el.appendChild(cell);
+    }
+  }
+  hilite();
+}
+
+function gCell(r, c) {
+  return document.querySelector(`#crossword-grid [data-r="${r}"][data-c="${c}"]`);
+}
+
+function refreshCell(r, c) {
+  const el = gCell(r, c);
+  if (!el || el.classList.contains('black')) return;
+  for (const ch of [...el.childNodes]) if (ch.nodeType === Node.TEXT_NODE) ch.remove();
+  const v = S.grid[r][c];
+  if (v && v !== '.') el.appendChild(document.createTextNode(v));
+}
+
+function hilite() {
+  document.querySelectorAll('#crossword-grid .cell').forEach(el =>
+    el.classList.remove('in-slot', 'active-cell'));
+  if (!S.activeSlotId) return;
+  const slot = S.slots.find(s => s.id === S.activeSlotId);
+  if (!slot) return;
+  for (const {r,c} of slot.cells) {
+    const el = gCell(r, c);
+    if (el) el.classList.add('in-slot');
+  }
+  if (S.activeCellKey) {
+    const [r,c] = S.activeCellKey.split(',').map(Number);
+    const el = gCell(r, c);
+    if (el) { el.classList.remove('in-slot'); el.classList.add('active-cell'); }
+  }
+}
+
+function onCellClick(r, c) {
+  // Assign-mode: click a cell to assign the pending word to the slot containing it
+  if (S.awaitAssign) {
+    const key = r+','+c;
+    const ids = S.cellSlotMap[key] || [];
+    let target = ids.map(id => S.slots.find(s => s.id === id))
+      .find(s => s && s.length === S.pendingWord.length && !slotFull(s));
+    if (target) {
+      putWord(target, S.pendingWord, S.pendingClue);
+      S.awaitAssign = false; S.pendingWord = null; S.pendingClue = null;
+      document.querySelectorAll('#crossword-grid .cell').forEach(el => el.style.outline='');
+      document.getElementById('assign-panel').classList.remove('visible');
+      renderCluePane(); setStatus('Word placed!');
+    } else {
+      setStatus('No matching empty slot at that cell. Try the cell where the word starts.');
+    }
+    return;
+  }
+
+  const key = r+','+c;
+  const ids = S.cellSlotMap[key] || [];
+  if (!ids.length) return;
+
+  if (key === S.activeCellKey && ids.length > 1) {
+    const other = ids.find(id => id !== S.activeSlotId) || ids[0];
+    activateSlot(other, key);
+  } else {
+    const across = ids.find(id => id.startsWith('across-'));
+    activateSlot(across || ids[0], key);
+  }
+}
+
+function activateSlot(slotId, cellKey) {
+  S.activeSlotId = slotId;
+  if (cellKey) {
+    S.activeCellKey = cellKey;
+  } else if (slotId) {
+    const slot = S.slots.find(s => s.id === slotId);
+    if (slot) S.activeCellKey = slot.cells[0].r+','+slot.cells[0].c;
+  }
+  hilite();
+  updateACB();
+  syncActive();
+  scrollClue(slotId);
+}
+
+function updateACB() {
+  const numEl = document.getElementById('acb-num');
+  const txtEl = document.getElementById('acb-text');
+  if (!S.activeSlotId) {
+    numEl.textContent = ''; txtEl.textContent = 'Select a cell to begin';
+    txtEl.className = 'acb-text'; return;
+  }
+  const slot = S.slots.find(s => s.id === S.activeSlotId);
+  if (!slot) return;
+  const entry = S.clues[slot.id] || {};
+  numEl.textContent = slot.num + ' ' + (slot.direction === 'across' ? 'Across' : 'Down') + ':';
+  if (entry.clue) { txtEl.textContent = entry.clue; txtEl.className = 'acb-text has-clue'; }
+  else { txtEl.textContent = '(no clue — click the clue list to add one)'; txtEl.className = 'acb-text'; }
+}
+
+// ── Clue pane ──
+function renderCluePane() {
+  renderClueDir('across');
+  renderClueDir('down');
+}
+
+function renderClueDir(dir) {
+  const c = document.getElementById('clue-list-' + dir);
+  c.innerHTML = '';
+  for (const slot of S.slots.filter(s => s.direction === dir))
+    c.appendChild(makeClueItem(slot));
+}
+
+function makeClueItem(slot) {
+  const entry = S.clues[slot.id] || {};
+  const item = document.createElement('div');
+  item.className = 'clue-item' + (slot.id === S.activeSlotId ? ' active' : '');
+  item.dataset.slotId = slot.id;
+
+  const numEl = document.createElement('div');
+  numEl.className = 'clue-item-num';
+  numEl.textContent = slot.num + '.';
+
+  const body = document.createElement('div');
+  body.className = 'clue-item-body';
+
+  const pat = document.createElement('div');
+  pat.className = 'clue-word-pat';
+  pat.textContent = slot.cells.map(({r,c}) => S.grid[r][c] || '_').join('');
+
+  const disp = document.createElement('div');
+  disp.className = 'clue-text-disp' + (entry.clue ? ' filled' : '');
+  disp.textContent = entry.clue || 'Add clue…';
+
+  item.addEventListener('click', e => {
+    if (e.target === disp || e.target.tagName === 'INPUT') return;
+    activateSlot(slot.id);
+  });
+  disp.addEventListener('click', e => {
+    e.stopPropagation();
+    activateSlot(slot.id);
+    editClue(disp, slot.id, entry.clue || '');
+  });
+
+  body.appendChild(pat); body.appendChild(disp);
+  item.appendChild(numEl); item.appendChild(body);
+  return item;
+}
+
+function editClue(dispEl, slotId, current) {
+  if (dispEl.querySelector('input')) return;
+  const inp = document.createElement('input');
+  inp.className = 'clue-edit-in'; inp.type = 'text';
+  inp.value = current; inp.placeholder = 'Enter clue…';
+  dispEl.innerHTML = ''; dispEl.appendChild(inp);
+  inp.focus(); inp.select();
+  const save = () => {
+    const v = inp.value.trim();
+    if (!S.clues[slotId]) S.clues[slotId] = {word:'', clue:''};
+    S.clues[slotId].clue = v;
+    dispEl.innerHTML = '';
+    dispEl.textContent = v || 'Add clue…';
+    dispEl.className = 'clue-text-disp' + (v ? ' filled' : '');
+    updateACB();
+  };
+  inp.addEventListener('blur', save);
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') inp.blur();
+    else if (e.key === 'Escape') { inp.value = current; inp.blur(); }
+    e.stopPropagation();
+  });
+}
+
+function syncActive() {
+  document.querySelectorAll('.clue-item').forEach(el =>
+    el.classList.toggle('active', el.dataset.slotId === S.activeSlotId));
+}
+
+function scrollClue(slotId) {
+  const el = document.querySelector(`.clue-item[data-slot-id="${slotId}"]`);
+  if (el) el.scrollIntoView({block:'nearest', behavior:'smooth'});
+}
+
+function updateWordPat(slot) {
+  const el = document.querySelector(`.clue-item[data-slot-id="${slot.id}"] .clue-word-pat`);
+  if (el) el.textContent = slot.cells.map(({r,c}) => S.grid[r][c] || '_').join('');
+}
+
+function slotFull(slot) {
+  return slot.cells.every(({r,c}) => !!S.grid[r][c] && S.grid[r][c] !== '.');
+}
+
+// ── NYT-style keyboard ──
+document.addEventListener('keydown', e => {
+  if (S.stage !== 'fill') return;
+  const tag = document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+  // Space = toggle direction
+  if (e.key === ' ') {
+    e.preventDefault();
+    if (!S.activeCellKey) return;
+    const ids = S.cellSlotMap[S.activeCellKey] || [];
+    if (ids.length > 1) {
+      const other = ids.find(id => id !== S.activeSlotId) || ids[0];
+      activateSlot(other, S.activeCellKey);
+    }
+    return;
+  }
+
+  // Tab = next/prev slot
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    nextSlot(e.shiftKey ? -1 : 1);
+    return;
+  }
+
+  // Enter = focus first empty cell in active slot
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (!S.activeSlotId) return;
+    const slot = S.slots.find(s => s.id === S.activeSlotId);
+    const first = slot.cells.find(({r,c}) => !S.grid[r][c]);
+    if (first) { S.activeCellKey = first.r+','+first.c; hilite(); }
+    return;
+  }
+
+  const slot = S.slots.find(s => s.id === S.activeSlotId);
+  if (!slot) return;
+  const ci = slot.cells.findIndex(({r,c}) => r+','+c === S.activeCellKey);
+
+  // Letter
+  if (e.key.length === 1 && /[a-zA-Z]/.test(e.key) && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    if (ci < 0) return;
+    const {r,c} = slot.cells[ci];
+    S.grid[r][c] = e.key.toUpperCase();
+    refreshCell(r, c); updateWordPat(slot);
+    if (ci + 1 < slot.cells.length) {
+      S.activeCellKey = slot.cells[ci+1].r+','+slot.cells[ci+1].c; hilite();
+    } else { nextSlot(1); }
+    return;
+  }
+
+  // Backspace
+  if (e.key === 'Backspace') {
+    e.preventDefault();
+    if (ci < 0) return;
+    const {r,c} = slot.cells[ci];
+    if (S.grid[r][c]) { S.grid[r][c] = ''; refreshCell(r,c); updateWordPat(slot); }
+    else if (ci > 0) {
+      const prev = slot.cells[ci-1];
+      S.activeCellKey = prev.r+','+prev.c;
+      S.grid[prev.r][prev.c] = ''; refreshCell(prev.r,prev.c); updateWordPat(slot); hilite();
+    }
+    return;
+  }
+
+  // Delete
+  if (e.key === 'Delete') {
+    e.preventDefault();
+    if (ci < 0) return;
+    const {r,c} = slot.cells[ci];
+    S.grid[r][c] = ''; refreshCell(r,c); updateWordPat(slot);
+    return;
+  }
+
+  // Arrow keys
+  const ARROWS = {ArrowLeft:[0,-1], ArrowRight:[0,1], ArrowUp:[-1,0], ArrowDown:[1,0]};
+  if (ARROWS[e.key]) {
+    e.preventDefault();
+    if (!S.activeCellKey) return;
+    const [r,c] = S.activeCellKey.split(',').map(Number);
+    const [dr,dc] = ARROWS[e.key];
+    const nr = r+dr, nc = c+dc, N = S.gridSize;
+    if (nr < 0 || nr >= N || nc < 0 || nc >= N || S.blacks.has(nr+','+nc)) return;
+    const nkey = nr+','+nc;
+    const nids = S.cellSlotMap[nkey] || [];
+    if (!nids.length) return;
+    const wantAcross = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+    const pref = nids.find(id => id.startsWith(wantAcross ? 'across-' : 'down-'));
+    activateSlot(pref || nids[0], nkey);
+  }
+});
+
+function nextSlot(delta) {
+  const idx = S.slots.findIndex(s => s.id === S.activeSlotId);
+  if (idx < 0) { if (S.slots.length) activateSlot(S.slots[0].id); return; }
+  const next = S.slots[(idx + delta + S.slots.length) % S.slots.length];
+  activateSlot(next.id, next.cells[0].r+','+next.cells[0].c);
+}
+
+// ── Word placement ──
+function putWord(slot, word, clue) {
+  for (let i = 0; i < slot.cells.length && i < word.length; i++) {
+    const {r,c} = slot.cells[i];
+    S.grid[r][c] = word[i].toUpperCase();
+  }
+  if (!S.clues[slot.id]) S.clues[slot.id] = {word:'', clue:''};
+  S.clues[slot.id].word = word.toUpperCase();
+  if (clue) S.clues[slot.id].clue = clue;
+  for (const {r,c} of slot.cells) refreshCell(r, c);
+  updateWordPat(slot);
+}
+
+// ── Dictionary ──
+function loadFallback() {
+  for (const w of FALLBACK) {
+    if (!S.wordsByLength.has(w.length)) S.wordsByLength.set(w.length, []);
+    const arr = S.wordsByLength.get(w.length);
+    if (!arr.includes(w)) arr.push(w);
+  }
+}
+
+async function ensureWords(len) {
+  if (S.wordsByLength.has(len)) return;
+  if (S.dictLoading.has(len)) {
+    while (S.dictLoading.has(len)) await new Promise(r => setTimeout(r, 60));
+    return;
+  }
+  S.dictLoading.add(len);
+  const ckey = 'cw_dict_' + len;
+  const cached = sessionStorage.getItem(ckey);
+  if (cached) {
+    const parsed = JSON.parse(cached);
+    const existing = S.wordsByLength.get(len) || [];
+    S.wordsByLength.set(len, [...new Set([...existing, ...parsed])]);
+    S.dictLoading.delete(len); return;
+  }
+  try {
+    const url = 'https://api.datamuse.com/words?sp=' + '?'.repeat(len) + '&max=5000';
+    const resp = await fetch(url);
+    const data = await resp.json();
+    const words = [...new Set(
+      data.map(w => w.word.toUpperCase()).filter(w => /^[A-Z]+$/.test(w) && w.length === len)
+    )];
+    const existing = S.wordsByLength.get(len) || [];
+    const merged = [...new Set([...existing, ...words])];
+    S.wordsByLength.set(len, merged);
+    try { sessionStorage.setItem(ckey, JSON.stringify(merged)); } catch {}
+  } catch { if (!S.wordsByLength.has(len)) S.wordsByLength.set(len, []); }
+  S.dictLoading.delete(len);
+}
+
+async function loadAllLengths() {
+  const lens = [...new Set(S.slots.map(s => s.length))];
+  await Promise.all(lens.map(ensureWords));
+}
+
+// ── Autofill ──
+document.getElementById('btn-autofill').addEventListener('click', async () => {
+  if (S.fillWorker) {
+    S.fillWorker.postMessage({type:'cancel'});
+    S.fillWorker.terminate(); S.fillWorker = null;
+    document.getElementById('btn-autofill').textContent = 'Autofill';
+    setStatus('Cancelled.'); return;
+  }
+  document.getElementById('btn-autofill').textContent = 'Cancel';
+  document.getElementById('btn-go-preview').disabled = true;
+  setStatus('<span class="spinner"></span>Loading word lists…');
+  loadFallback();
+  await loadAllLengths();
+  setStatus('<span class="spinner"></span>Filling… (this may take a few seconds)');
+
+  const wbl = {};
+  for (const [k,v] of S.wordsByLength) wbl[k] = v;
+
+  const blob = new Blob([WORKER_SRC], {type:'application/javascript'});
+  const url = URL.createObjectURL(blob);
+  const worker = new Worker(url);
+  URL.revokeObjectURL(url);
+  S.fillWorker = worker;
+
+  worker.onmessage = e => {
+    if (e.data.type === 'solution') {
+      S.grid = e.data.grid;
+      renderFillGrid();
+      renderCluePane();
+      if (S.activeSlotId) activateSlot(S.activeSlotId);
+      setStatus('✓ Autofill complete!');
+    } else if (e.data.type === 'fail') {
+      setStatus('⚠ ' + e.data.msg);
+    }
+    S.fillWorker = null;
+    document.getElementById('btn-autofill').textContent = 'Autofill';
+    document.getElementById('btn-go-preview').disabled = false;
+  };
+  worker.onerror = err => {
+    setStatus('⚠ Worker error: ' + (err.message || 'unknown'));
+    S.fillWorker = null;
+    document.getElementById('btn-autofill').textContent = 'Autofill';
+    document.getElementById('btn-go-preview').disabled = false;
+  };
+  worker.postMessage({type:'start', slots: S.slots, grid: S.grid, wbl});
+});
+
+function setStatus(html) { document.getElementById('fill-status').innerHTML = html; }
+
+// ── .txt Import ──
+document.getElementById('btn-import-txt').addEventListener('click', () =>
+  document.getElementById('file-input').click());
+
+document.getElementById('file-input').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => { handleImport(ev.target.result); e.target.value = ''; };
+  reader.readAsText(file);
+});
+
+function parseImport(text) {
+  return text.split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('#'))
+    .map(l => {
+      const colon = l.indexOf(':');
+      if (colon < 1) return null;
+      const word = l.slice(0, colon).trim().toUpperCase().replace(/[^A-Z]/g, '');
+      const clue = l.slice(colon+1).trim();
+      return (word && clue) ? {word, clue} : null;
+    })
+    .filter(Boolean);
+}
+
+function compatSlots(word) {
+  return S.slots.filter(s =>
+    s.length === word.length && !slotFull(s) &&
+    s.cells.every(({r,c},i) => !S.grid[r][c] || S.grid[r][c] === word[i])
+  );
+}
+
+function handleImport(text) {
+  const entries = parseImport(text);
+  if (!entries.length) { setStatus('⚠ No valid entries. Use format: WORD: clue text'); return; }
+  let placed = 0; const unassigned = [];
+  for (const {word, clue} of entries) {
+    const matches = compatSlots(word);
+    if (matches.length === 1) { putWord(matches[0], word, clue); placed++; }
+    else unassigned.push({word, clue, options: matches});
+  }
+  renderFillGrid(); renderCluePane();
+  if (unassigned.length) {
+    showAssignPanel(unassigned);
+    setStatus(`Placed ${placed} word${placed!==1?'s':''} · ${unassigned.length} need attention.`);
+  } else {
+    setStatus(`✓ Placed all ${placed} word${placed!==1?'s':''}.`);
+  }
+}
+
+function showAssignPanel(items) {
+  const list = document.getElementById('assign-list');
+  const hint = document.getElementById('assign-hint');
+  list.innerHTML = '';
+  const ambig = items.filter(i => i.options.length > 1);
+  const noSlot = items.filter(i => i.options.length === 0);
+
+  for (const item of ambig) {
+    const el = document.createElement('div');
+    el.className = 'assign-item';
+    el.innerHTML = `<span class="assign-word">${item.word}</span><span class="assign-clue">${item.clue}</span>`;
+    el.title = `${item.options.length} possible slots — click to select, then click a grid cell`;
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.assign-item').forEach(a => a.classList.remove('selected'));
+      el.classList.add('selected');
+      S.awaitAssign = true; S.pendingWord = item.word; S.pendingClue = item.clue;
+      setStatus(`Click the grid where "${item.word}" should go…`);
+      document.querySelectorAll('#crossword-grid .cell').forEach(c => c.style.outline='');
+      for (const s of item.options) {
+        const startEl = gCell(s.cells[0].r, s.cells[0].c);
+        if (startEl) startEl.style.outline = '2px solid var(--accent)';
+      }
+    });
+    list.appendChild(el);
+  }
+
+  if (noSlot.length) {
+    const err = document.createElement('div');
+    err.className = 'assign-no-slot';
+    err.textContent = 'No slot found for: ' + noSlot.map(i=>i.word).join(', ');
+    list.appendChild(err);
+  }
+
+  if (!ambig.length) { document.getElementById('assign-panel').classList.remove('visible'); return; }
+  hint.textContent = 'Click a word, then click its destination in the grid. Blue outlines show valid positions.';
+  document.getElementById('assign-panel').classList.add('visible');
+}
+
+document.getElementById('btn-close-assign').addEventListener('click', () => {
+  document.getElementById('assign-panel').classList.remove('visible');
+  S.awaitAssign = false; S.pendingWord = null; S.pendingClue = null;
+  document.querySelectorAll('#crossword-grid .cell').forEach(el => el.style.outline='');
+  setStatus('');
+});
+
+// ── Toolbar actions ──
+document.getElementById('btn-clear-fill').addEventListener('click', () => {
+  const N = S.gridSize;
+  S.grid = Array.from({length:N}, (_,r) =>
+    Array.from({length:N}, (__,c) => S.blacks.has(r+','+c) ? '.' : ''));
+  S.clues = {};
+  renderFillGrid(); renderCluePane();
+  setStatus('');
+  if (S.activeSlotId) activateSlot(S.activeSlotId);
+});
+
+document.getElementById('btn-redesign').addEventListener('click', () => {
+  goStage('design'); renderDesignGrid();
+});
+
+document.getElementById('btn-go-preview').addEventListener('click', () => {
+  buildPreview(); goStage('preview');
+});
+
+// ── Preview ──
+document.getElementById('btn-back-fill').addEventListener('click', () => {
+  goStage('fill');
+  if (S.activeSlotId) activateSlot(S.activeSlotId);
+});
+
+function buildPreview() {
+  const N = S.gridSize;
+  const pg = document.getElementById('print-grid');
+  pg.style.setProperty('--cw-cols', N);
+  pg.style.width = 'min(' + (N*22) + 'px, 55vw)';
+  pg.innerHTML = '';
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell' + (S.blacks.has(r+','+c) ? ' black' : '');
+      if (!S.blacks.has(r+','+c)) {
+        const num = S.gridNums[r][c];
+        if (num) {
+          const ns = document.createElement('span');
+          ns.className = 'cell-num'; ns.textContent = num;
+          cell.appendChild(ns);
+        }
+        if (S.showSolution) {
+          const letter = S.grid[r][c];
+          if (letter && letter !== '.') cell.appendChild(document.createTextNode(letter));
+        }
+      }
+      pg.appendChild(cell);
+    }
+  }
+  for (const dir of ['across','down']) {
+    const c = document.getElementById('print-' + dir);
+    c.innerHTML = '';
+    for (const slot of S.slots.filter(s => s.direction === dir)) {
+      const entry = S.clues[slot.id] || {};
+      const p = document.createElement('p');
+      p.className = 'print-clue';
+      p.innerHTML = `<strong>${slot.num}.</strong>${entry.clue || '…'}`;
+      c.appendChild(p);
+    }
+  }
+}
+
+document.getElementById('btn-toggle-sol').addEventListener('click', () => {
+  S.showSolution = !S.showSolution;
+  document.getElementById('btn-toggle-sol').textContent = S.showSolution ? 'Hide Solution' : 'Show Solution';
+  buildPreview();
+});
+
+document.getElementById('btn-print').addEventListener('click', () => window.print());
+
+// ── JSON export ──
+document.getElementById('btn-export-json').addEventListener('click', () => {
+  const data = {version:1, gridSize:S.gridSize, blacks:[...S.blacks], grid:S.grid, clues:S.clues};
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'crossword.json'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+// ── Init ──
+applyTheme(S.theme);
+renderDesignGrid();
+</script>
+</body>
+</html>
