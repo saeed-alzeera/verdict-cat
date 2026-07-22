@@ -92,6 +92,65 @@ header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.4px; }
 .design-wrap { overflow: auto; max-width: 100%; }
 .hint-text { font-size: .74rem; color: var(--faint); text-align: center; }
 
+/* ── import stage ── */
+#stage-import.active {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 24px 16px 32px; gap: 16px; flex: 1;
+  max-width: 580px; margin: 0 auto; width: 100%;
+}
+.import-zone { width: 100%; display: flex; flex-direction: column; gap: 12px; }
+.import-drop {
+  border: 2px dashed var(--border2); border-radius: 12px;
+  padding: 28px 20px; text-align: center; cursor: default;
+  transition: border-color .15s, background .15s;
+}
+.import-drop.drag-over { border-color: var(--accent); background: var(--accent-dim); }
+.import-drop-icon { font-size: 2rem; margin-bottom: 10px; }
+.import-drop-label { font-size: .9rem; color: var(--muted); }
+.import-drop-label strong { color: var(--ink); }
+.import-browse-btn {
+  display: inline; padding: 2px 9px; font-size: .82rem;
+  vertical-align: baseline; cursor: pointer;
+}
+.import-drop-fmt { font-size: .76rem; color: var(--faint); margin-top: 6px; }
+.import-drop-fmt code {
+  background: var(--surface2); padding: 1px 5px;
+  border-radius: 4px; font-family: 'Courier New', monospace;
+}
+.import-or {
+  display: flex; align-items: center; gap: 12px;
+  font-size: .76rem; color: var(--faint);
+}
+.import-or::before, .import-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.import-textarea {
+  width: 100%; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; font-size: .82rem; font-family: 'Courier New', monospace;
+  resize: vertical; outline: none; transition: border-color .15s; line-height: 1.6;
+  min-height: 140px;
+}
+.import-textarea:focus { border-color: var(--accent); }
+.import-preview { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.import-preview-header {
+  font-size: .76rem; color: var(--muted);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.import-words-grid { display: flex; flex-wrap: wrap; gap: 5px; }
+.import-word-chip {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 3px 8px;
+  font-size: .73rem; font-family: 'Courier New', monospace; color: var(--ink);
+}
+.import-error-msg { font-size: .76rem; color: var(--err); }
+.import-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+/* ── design suggestion banner ── */
+.design-suggestion {
+  background: var(--accent-dim); border: 1px solid var(--accent);
+  border-radius: 8px; padding: 8px 14px;
+  font-size: .82rem; color: var(--ink); text-align: center; width: 100%; max-width: 520px;
+}
+
 /* ── crossword grid ── */
 .cw-grid {
   display: grid;
@@ -290,8 +349,28 @@ header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.4px; }
   <button class="icon-btn" id="btn-theme" title="Toggle theme">🌙</button>
 </header>
 
+<!-- ── Stage 0: Import ── -->
+<div id="stage-import" class="stage active">
+  <div class="import-zone">
+    <div class="import-drop" id="import-drop">
+      <div class="import-drop-icon">📄</div>
+      <p class="import-drop-label">Drop a <strong>.txt</strong> file here, or <button class="btn import-browse-btn" id="btn-import-browse">browse</button></p>
+      <p class="import-drop-fmt">One entry per line: <code>WORD: clue text</code></p>
+    </div>
+    <div class="import-or"><span>or paste your word list</span></div>
+    <textarea id="import-textarea" class="import-textarea" placeholder="APPLE: A red fruit&#10;BREAD: Baked from dough&#10;CLOUD: Fluffy sky formation&#10;..."></textarea>
+  </div>
+  <div id="import-preview" class="import-preview"></div>
+  <div class="import-actions">
+    <button class="btn primary" id="btn-suggest-layout" disabled>Suggest Layout →</button>
+    <button class="btn" id="btn-skip-to-design">Design Grid Manually →</button>
+  </div>
+  <p class="hint-text">Import your words first — we'll suggest a grid size that fits them</p>
+</div>
+
 <!-- ── Stage 1: Design ── -->
-<div id="stage-design" class="stage active">
+<div id="stage-design" class="stage">
+  <div id="design-suggestion" class="design-suggestion" style="display:none"></div>
   <div class="size-row">
     <span class="size-label">Grid Size</span>
     <div class="size-stepper">
@@ -311,7 +390,10 @@ header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.4px; }
     <div id="grid-editor" class="cw-grid"></div>
   </div>
   <div class="hint-text">Click cells to toggle black ◼ — symmetry mirrors your edits</div>
-  <button class="btn primary" id="btn-go-fill" style="min-width:140px;">Build Grid →</button>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+    <button class="btn" id="btn-back-to-import">← Back to Import</button>
+    <button class="btn primary" id="btn-go-fill" style="min-width:140px;">Build Grid →</button>
+  </div>
 </div>
 
 <!-- ── Stage 2: Fill ── -->
@@ -324,7 +406,7 @@ header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.4px; }
     </div>
     <div class="fill-toolbar">
       <button class="btn primary" id="btn-autofill">Autofill</button>
-      <button class="btn" id="btn-import-txt">Import .txt</button>
+      <button class="btn" id="btn-import-txt">Re-import .txt</button>
       <button class="btn" id="btn-clear-fill">Clear Words</button>
       <button class="btn" id="btn-redesign">← Redesign</button>
       <button class="btn" id="btn-go-preview">Preview →</button>
@@ -498,7 +580,8 @@ const S = {
   fillWorker: null,
   awaitAssign: false, pendingWord: null, pendingClue: null,
   wordsByLength: new Map(), dictLoading: new Set(),
-  stage: 'design', showSolution: false,
+  stage: 'import', showSolution: false,
+  importedEntries: [],
   theme: localStorage.getItem('cw_theme') || 'dark',
 };
 
@@ -613,17 +696,20 @@ document.getElementById('btn-go-fill').addEventListener('click', () => {
   if (!S.slots.length) { alert('No valid slots found. The grid needs white cells that form words of 2+ letters.'); return; }
   const hash = [...S.blacks].sort().join('|') + ':' + S.gridSize;
   const N = S.gridSize;
+  let freshGrid = false;
   if (hash !== S.buildHash || S.grid.length !== N) {
     S.grid = Array.from({length:N}, (_,r) =>
       Array.from({length:N}, (__,c) => S.blacks.has(r+','+c) ? '.' : ''));
     S.clues = {};
     S.buildHash = hash;
+    freshGrid = true;
   }
   S.activeSlotId = null; S.activeCellKey = null;
   renderFillGrid();
   renderCluePane();
   updateACB();
   goStage('fill');
+  if (freshGrid && S.importedEntries.length) placeImportedEntries(S.importedEntries);
 });
 
 // ── Fill grid ──
@@ -1050,7 +1136,16 @@ document.getElementById('btn-import-txt').addEventListener('click', () =>
 document.getElementById('file-input').addEventListener('change', e => {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
-  reader.onload = ev => { handleImport(ev.target.result); e.target.value = ''; };
+  reader.onload = ev => {
+    const text = ev.target.result;
+    if (S.stage === 'import') {
+      document.getElementById('import-textarea').value = text;
+      updateImportPreview();
+    } else {
+      handleImport(text);
+    }
+    e.target.value = '';
+  };
   reader.readAsText(file);
 });
 
@@ -1136,6 +1231,112 @@ document.getElementById('btn-close-assign').addEventListener('click', () => {
   S.awaitAssign = false; S.pendingWord = null; S.pendingClue = null;
   document.querySelectorAll('#crossword-grid .cell').forEach(el => el.style.outline='');
   setStatus('');
+});
+
+// ── Import stage ──
+function updateImportPreview() {
+  const text = document.getElementById('import-textarea').value;
+  const entries = parseImport(text);
+  S.importedEntries = entries;
+  const preview = document.getElementById('import-preview');
+  const btn = document.getElementById('btn-suggest-layout');
+  if (!text.trim()) { preview.innerHTML = ''; btn.disabled = true; return; }
+  if (!entries.length) {
+    preview.innerHTML = '<div class="import-error-msg">No valid entries found. Use format: WORD: clue text</div>';
+    btn.disabled = true; return;
+  }
+  const lengths = entries.map(e => e.word.length);
+  const minL = Math.min(...lengths), maxL = Math.max(...lengths);
+  preview.innerHTML = `
+    <div class="import-preview-header">
+      <span>${entries.length} word${entries.length !== 1 ? 's' : ''} parsed &nbsp;·&nbsp; lengths ${minL}–${maxL}</span>
+    </div>
+    <div class="import-words-grid">
+      ${entries.map(e => `<span class="import-word-chip">${e.word}</span>`).join('')}
+    </div>`;
+  btn.disabled = false;
+}
+
+function suggestGridSize(entries) {
+  if (!entries.length) return 15;
+  const maxLen = Math.max(...entries.map(e => e.word.length));
+  const n = entries.length;
+  let size;
+  if (n <= 10) size = 9;
+  else if (n <= 20) size = 11;
+  else if (n <= 35) size = 13;
+  else if (n <= 50) size = 15;
+  else size = 17;
+  size = Math.max(size, maxLen + 1);
+  if (size % 2 === 0) size++;
+  return Math.min(size, 21);
+}
+
+function placeImportedEntries(entries) {
+  if (!entries.length) return;
+  let placed = 0; const unassigned = [];
+  for (const {word, clue} of entries) {
+    const matches = compatSlots(word);
+    if (matches.length === 1) { putWord(matches[0], word, clue); placed++; }
+    else unassigned.push({word, clue, options: matches});
+  }
+  renderFillGrid(); renderCluePane();
+  if (unassigned.length) {
+    showAssignPanel(unassigned);
+    setStatus(`Placed ${placed} word${placed!==1?'s':''} · ${unassigned.length} need attention.`);
+  } else if (placed) {
+    setStatus(`✓ Placed all ${placed} imported word${placed!==1?'s':''}.`);
+  }
+}
+
+document.getElementById('import-textarea').addEventListener('input', updateImportPreview);
+
+document.getElementById('import-drop').addEventListener('click', e => {
+  if (e.target.id === 'btn-import-browse' || e.target.closest('#btn-import-browse'))
+    document.getElementById('file-input').click();
+});
+
+document.getElementById('import-drop').addEventListener('dragover', e => {
+  e.preventDefault(); e.currentTarget.classList.add('drag-over');
+});
+document.getElementById('import-drop').addEventListener('dragleave', e => {
+  e.currentTarget.classList.remove('drag-over');
+});
+document.getElementById('import-drop').addEventListener('drop', e => {
+  e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('import-textarea').value = ev.target.result;
+    updateImportPreview();
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById('btn-suggest-layout').addEventListener('click', () => {
+  if (!S.importedEntries.length) return;
+  const suggested = suggestGridSize(S.importedEntries);
+  S.gridSize = suggested;
+  S.blacks.clear();
+  updateSizeDisp();
+  renderDesignGrid();
+  const n = S.importedEntries.length;
+  const lengths = S.importedEntries.map(e => e.word.length);
+  const minL = Math.min(...lengths), maxL = Math.max(...lengths);
+  const banner = document.getElementById('design-suggestion');
+  banner.textContent = `${n} word${n!==1?'s':''} imported (lengths ${minL}–${maxL}) · Suggested ${suggested}×${suggested} — adjust black cells, then Build Grid`;
+  banner.style.display = 'block';
+  goStage('design');
+});
+
+document.getElementById('btn-skip-to-design').addEventListener('click', () => {
+  S.importedEntries = [];
+  document.getElementById('design-suggestion').style.display = 'none';
+  goStage('design');
+});
+
+document.getElementById('btn-back-to-import').addEventListener('click', () => {
+  goStage('import');
 });
 
 // ── Toolbar actions ──
