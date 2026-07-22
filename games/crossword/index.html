@@ -355,10 +355,10 @@ header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.4px; }
     <div class="import-drop" id="import-drop">
       <div class="import-drop-icon">📄</div>
       <p class="import-drop-label">Drop a <strong>.txt</strong> file here, or <button class="btn import-browse-btn" id="btn-import-browse">browse</button></p>
-      <p class="import-drop-fmt">One entry per line: <code>WORD: clue text</code></p>
+      <p class="import-drop-fmt">Sectioned list: <code>ACROSS:</code> / <code>DOWN:</code> headers, one <code>WORD: clue text</code> per line</p>
     </div>
     <div class="import-or"><span>or paste your word list</span></div>
-    <textarea id="import-textarea" class="import-textarea" placeholder="APPLE: A red fruit&#10;BREAD: Baked from dough&#10;CLOUD: Fluffy sky formation&#10;..."></textarea>
+    <textarea id="import-textarea" class="import-textarea" placeholder="ACROSS:&#10;APPLE: A red fruit&#10;RIVER: Flows to the sea&#10;&#10;DOWN:&#10;BREAD: Baked from dough&#10;PEAR: Green fruit"></textarea>
   </div>
   <div id="import-preview" class="import-preview"></div>
   <div class="import-actions">
@@ -581,7 +581,7 @@ const S = {
   awaitAssign: false, pendingWord: null, pendingClue: null,
   wordsByLength: new Map(), dictLoading: new Set(),
   stage: 'import', showSolution: false,
-  importedEntries: [],
+  importedEntries: [], suggestedPlacements: null,
   theme: localStorage.getItem('cw_theme') || 'dark',
 };
 
@@ -712,7 +712,10 @@ document.getElementById('btn-go-fill').addEventListener('click', () => {
   renderCluePane();
   updateACB();
   goStage('fill');
-  if (freshGrid && S.importedEntries.length) placeImportedEntries(S.importedEntries);
+  if (freshGrid) {
+    if (S.suggestedPlacements?.length) placeSuggested(S.suggestedPlacements);
+    else if (S.importedEntries.length) placeImportedEntries(S.importedEntries);
+  }
 });
 
 // ── Fill grid ──
@@ -1153,17 +1156,21 @@ document.getElementById('file-input').addEventListener('change', e => {
 });
 
 function parseImport(text) {
-  return text.split('\n')
-    .map(l => l.trim())
-    .filter(l => l && !l.startsWith('#'))
-    .map(l => {
-      const colon = l.indexOf(':');
-      if (colon < 1) return null;
-      const word = l.slice(0, colon).trim().toUpperCase().replace(/[^A-Z]/g, '');
-      const clue = l.slice(colon+1).trim();
-      return (word && clue) ? {word, clue} : null;
-    })
-    .filter(Boolean);
+  const out = [];
+  let dir = null;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    if (/^across:?$/i.test(line)) { dir = 'across'; continue; }
+    if (/^down:?$/i.test(line))   { dir = 'down';   continue; }
+    if (!dir) continue;
+    const colon = line.indexOf(':');
+    if (colon < 1) continue;
+    const word = line.slice(0, colon).trim().toUpperCase().replace(/[^A-Z]/g, '');
+    const clue = line.slice(colon + 1).trim();
+    if (word && clue) out.push({word, clue, dir});
+  }
+  return out;
 }
 
 function compatSlots(word) {
@@ -1175,7 +1182,7 @@ function compatSlots(word) {
 
 function handleImport(text) {
   const entries = parseImport(text);
-  if (!entries.length) { setStatus('⚠ No valid entries. Use format: WORD: clue text'); return; }
+  if (!entries.length) { setStatus('⚠ No valid entries. Use ACROSS:/DOWN: sections with WORD: clue text'); return; }
   let placed = 0; const unassigned = [];
   for (const {word, clue} of entries) {
     const matches = compatSlots(word);
@@ -1245,17 +1252,19 @@ function updateImportPreview() {
   const btn = document.getElementById('btn-suggest-layout');
   if (!text.trim()) { preview.innerHTML = ''; btn.disabled = true; return; }
   if (!entries.length) {
-    preview.innerHTML = '<div class="import-error-msg">No valid entries found. Use format: WORD: clue text</div>';
+    preview.innerHTML = '<div class="import-error-msg">No valid entries found. Use ACROSS:/DOWN: section headers with WORD: clue text</div>';
     btn.disabled = true; return;
   }
   const lengths = entries.map(e => e.word.length);
   const minL = Math.min(...lengths), maxL = Math.max(...lengths);
+  const acrossCount = entries.filter(e => e.dir === 'across').length;
+  const downCount = entries.filter(e => e.dir === 'down').length;
   preview.innerHTML = `
     <div class="import-preview-header">
-      <span>${entries.length} word${entries.length !== 1 ? 's' : ''} parsed &nbsp;·&nbsp; lengths ${minL}–${maxL}</span>
+      <span>${acrossCount} across · ${downCount} down &nbsp;·&nbsp; lengths ${minL}–${maxL}</span>
     </div>
     <div class="import-words-grid">
-      ${entries.map(e => `<span class="import-word-chip">${e.word}</span>`).join('')}
+      ${entries.map(e => `<span class="import-word-chip">${e.word} <small>${e.dir === 'across' ? 'A' : 'D'}</small></span>`).join('')}
     </div>`;
   btn.disabled = false;
 }
@@ -1263,14 +1272,16 @@ function updateImportPreview() {
 function suggestGridSize(entries) {
   if (!entries.length) return 15;
   const maxLen = Math.max(...entries.map(e => e.word.length));
-  const n = entries.length;
+  const acrossCount = entries.filter(e => e.dir === 'across').length;
+  const downCount = entries.filter(e => e.dir === 'down').length;
+  const n = Math.max(entries.length, acrossCount, downCount);
   let size;
   if (n <= 10) size = 9;
   else if (n <= 20) size = 11;
   else if (n <= 35) size = 13;
   else if (n <= 50) size = 15;
   else size = 17;
-  size = Math.max(size, maxLen + 1);
+  size = Math.max(size, maxLen + 2);
   if (size % 2 === 0) size++;
   return Math.min(size, 21);
 }
@@ -1278,15 +1289,17 @@ function suggestGridSize(entries) {
 function generateLayout(entries) {
   const N = suggestGridSize(entries);
   const cells = {};
-  const placed = [];
+  const placements = [];
 
   function get(r, c) { return cells[r + ',' + c] ?? null; }
   function set(r, c, ch) { cells[r + ',' + c] = ch; }
+  function stepOf(dir) { return dir === 'down' ? [1, 0] : [0, 1]; }
+  function perpOf(dir) { return dir === 'down' ? [0, 1] : [1, 0]; }
 
-  function canPlace(word, r, c, dir) {
+  function canPlace(word, r, c, dir, allowNoCross) {
     const len = word.length;
-    const [dr, dc] = dir === 'V' ? [1, 0] : [0, 1];
-    const [pr, pc] = dir === 'V' ? [0, 1] : [1, 0];
+    const [dr, dc] = stepOf(dir);
+    const [pr, pc] = perpOf(dir);
     if (r < 0 || c < 0) return false;
     const er = r + dr * (len - 1), ec = c + dc * (len - 1);
     if (er >= N || ec >= N) return false;
@@ -1304,53 +1317,94 @@ function generateLayout(entries) {
             (cr + pr < N && cc + pc < N && get(cr + pr, cc + pc) !== null)) return false;
       }
     }
-    if (placed.length > 0 && intersections === 0) return false;
+    if (placements.length > 0 && intersections === 0 && !allowNoCross) return false;
     return true;
   }
 
-  function doPlace(word, r, c, dir) {
-    const [dr, dc] = dir === 'V' ? [1, 0] : [0, 1];
+  function doPlace(word, clue, r, c, dir) {
+    const [dr, dc] = stepOf(dir);
     for (let i = 0; i < word.length; i++) set(r + dr * i, c + dc * i, word[i]);
-    placed.push({word, r, c, dir});
+    placements.push({word, clue, r, c, dir});
   }
 
-  function tryPlace(word) {
-    if (placed.length === 0) {
-      const r = Math.floor(N / 2);
-      const c = Math.floor((N - word.length) / 2);
-      if (canPlace(word, r, c, 'H')) { doPlace(word, r, c, 'H'); return true; }
-      return false;
-    }
-    let best = null, bestScore = -Infinity;
-    for (const p of placed) {
-      const newDir = p.dir === 'H' ? 'V' : 'H';
-      for (let pi = 0; pi < p.word.length; pi++) {
-        for (let wi = 0; wi < word.length; wi++) {
-          if (p.word[pi] !== word[wi]) continue;
-          const nr = p.dir === 'H' ? p.r - wi : p.r + pi;
-          const nc = p.dir === 'H' ? p.c + pi : p.c - wi;
-          if (!canPlace(word, nr, nc, newDir)) continue;
-          const score = -(Math.abs(nr - N / 2) + Math.abs(nc - N / 2));
-          if (score > bestScore) { bestScore = score; best = {r: nr, c: nc, dir: newDir}; }
+  const bySize = [...entries].sort((a, b) => b.word.length - a.word.length);
+  const seed = bySize.find(e => e.dir === 'across') || bySize[0];
+  if (seed.dir === 'across') {
+    const r = Math.floor(N / 2), c = Math.floor((N - seed.word.length) / 2);
+    doPlace(seed.word, seed.clue, r, c, 'across');
+  } else {
+    const c = Math.floor(N / 2), r = Math.floor((N - seed.word.length) / 2);
+    doPlace(seed.word, seed.clue, r, c, 'down');
+  }
+
+  let remaining = entries.filter(e => e !== seed);
+
+  // Interlock pass: repeatedly cross unplaced words against placed words of the
+  // opposite direction, scoring candidates by proximity to center.
+  let progress = true;
+  while (progress) {
+    progress = false;
+    for (let i = 0; i < remaining.length; i++) {
+      const e = remaining[i];
+      const [edr, edc] = stepOf(e.dir);
+      let best = null, bestScore = -Infinity;
+      for (const p of placements) {
+        if (p.dir === e.dir) continue;
+        const [pdr, pdc] = stepOf(p.dir);
+        for (let pi = 0; pi < p.word.length; pi++) {
+          for (let wi = 0; wi < e.word.length; wi++) {
+            if (p.word[pi] !== e.word[wi]) continue;
+            const xr = p.r + pdr * pi, xc = p.c + pdc * pi;
+            const nr = xr - edr * wi, nc = xc - edc * wi;
+            if (!canPlace(e.word, nr, nc, e.dir, false)) continue;
+            const score = -(Math.abs(nr - N / 2) + Math.abs(nc - N / 2));
+            if (score > bestScore) { bestScore = score; best = {r: nr, c: nc}; }
+          }
         }
       }
+      if (best) {
+        doPlace(e.word, e.clue, best.r, best.c, e.dir);
+        remaining.splice(i, 1);
+        i--;
+        progress = true;
+      }
     }
-    if (best) { doPlace(word, best.r, best.c, best.dir); return true; }
-    return false;
   }
 
-  const words = [...entries].sort((a, b) => b.word.length - a.word.length);
-  const unplaced = [];
-  for (const e of words) { if (!tryPlace(e.word)) unplaced.push(e); }
+  // Loose pass: place remaining words in their own open row/column, no crossing.
+  function tryLoosePlace(e) {
+    const len = e.word.length;
+    if (e.dir === 'across') {
+      for (let r = 0; r < N; r++)
+        for (let c = 0; c <= N - len; c++)
+          if (canPlace(e.word, r, c, 'across', true)) { doPlace(e.word, e.clue, r, c, 'across'); return true; }
+    } else {
+      for (let c = 0; c < N; c++)
+        for (let r = 0; r <= N - len; r++)
+          if (canPlace(e.word, r, c, 'down', true)) { doPlace(e.word, e.clue, r, c, 'down'); return true; }
+    }
+    return false;
+  }
   const stillUnplaced = [];
-  for (const e of unplaced) { if (!tryPlace(e.word)) stillUnplaced.push(e); }
+  for (const e of remaining) { if (!tryLoosePlace(e)) stillUnplaced.push(e); }
 
+  // Minimal caps: black only the cell immediately before/after each word.
   const blacks = new Set();
-  for (let r = 0; r < N; r++)
-    for (let c = 0; c < N; c++)
-      if (!cells[r + ',' + c]) blacks.add(r + ',' + c);
+  for (const p of placements) {
+    const [dr, dc] = stepOf(p.dir);
+    const beforeR = p.r - dr, beforeC = p.c - dc;
+    const afterR = p.r + dr * p.word.length, afterC = p.c + dc * p.word.length;
+    if (beforeR >= 0 && beforeC >= 0 && beforeR < N && beforeC < N && get(beforeR, beforeC) === null)
+      blacks.add(beforeR + ',' + beforeC);
+    if (afterR >= 0 && afterC >= 0 && afterR < N && afterC < N && get(afterR, afterC) === null)
+      blacks.add(afterR + ',' + afterC);
+  }
 
-  return {size: N, blacks, placed: placed.length, total: entries.length};
+  return {
+    size: N, blacks,
+    placements: placements.map(p => ({word: p.word, clue: p.clue, r: p.r, c: p.c, dir: p.dir})),
+    placed: placements.length, total: entries.length,
+  };
 }
 
 function placeImportedEntries(entries) {
@@ -1367,6 +1421,24 @@ function placeImportedEntries(entries) {
     setStatus(`Placed ${placed} word${placed!==1?'s':''} · ${unassigned.length} need attention.`);
   } else if (placed) {
     setStatus(`✓ Placed all ${placed} imported word${placed!==1?'s':''}.`);
+  }
+}
+
+function placeSuggested(placements) {
+  let placed = 0; const unassigned = [];
+  for (const {word, clue, r, c, dir} of placements) {
+    const slot = S.slots.find(s => s.row === r && s.col === c && s.direction === dir);
+    if (slot) { putWord(slot, word, clue); placed++; continue; }
+    const matches = compatSlots(word);
+    if (matches.length === 1) { putWord(matches[0], word, clue); placed++; }
+    else unassigned.push({word, clue, options: matches});
+  }
+  renderFillGrid(); renderCluePane();
+  if (unassigned.length) {
+    showAssignPanel(unassigned);
+    setStatus(`Placed ${placed} word${placed!==1?'s':''} · ${unassigned.length} need attention.`);
+  } else if (placed) {
+    setStatus(`✓ Placed all ${placed} word${placed!==1?'s':''}.`);
   }
 }
 
@@ -1396,9 +1468,10 @@ document.getElementById('import-drop').addEventListener('drop', e => {
 
 document.getElementById('btn-suggest-layout').addEventListener('click', () => {
   if (!S.importedEntries.length) return;
-  const {size, blacks, placed, total} = generateLayout(S.importedEntries);
+  const {size, blacks, placements, placed, total} = generateLayout(S.importedEntries);
   S.gridSize = size;
   S.blacks = blacks;
+  S.suggestedPlacements = placements;
   updateSizeDisp();
   renderDesignGrid();
   const lengths = S.importedEntries.map(e => e.word.length);
@@ -1415,6 +1488,7 @@ document.getElementById('btn-suggest-layout').addEventListener('click', () => {
 
 document.getElementById('btn-skip-to-design').addEventListener('click', () => {
   S.importedEntries = [];
+  S.suggestedPlacements = null;
   document.getElementById('design-suggestion').style.display = 'none';
   goStage('design');
 });
