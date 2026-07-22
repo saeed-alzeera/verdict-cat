@@ -649,6 +649,9 @@ function updateSizeDisp() {
 document.getElementById('btn-clear-blacks').addEventListener('click', () => {
   S.blacks.clear(); renderDesignGrid();
 });
+document.getElementById('chk-symmetry').addEventListener('change', function() {
+  S.symmetry = this.checked;
+});
 
 // ── Auto-numbering ──
 function computeGrid() {
@@ -1272,6 +1275,84 @@ function suggestGridSize(entries) {
   return Math.min(size, 21);
 }
 
+function generateLayout(entries) {
+  const N = suggestGridSize(entries);
+  const cells = {};
+  const placed = [];
+
+  function get(r, c) { return cells[r + ',' + c] ?? null; }
+  function set(r, c, ch) { cells[r + ',' + c] = ch; }
+
+  function canPlace(word, r, c, dir) {
+    const len = word.length;
+    const [dr, dc] = dir === 'V' ? [1, 0] : [0, 1];
+    const [pr, pc] = dir === 'V' ? [0, 1] : [1, 0];
+    if (r < 0 || c < 0) return false;
+    const er = r + dr * (len - 1), ec = c + dc * (len - 1);
+    if (er >= N || ec >= N) return false;
+    if (r - dr >= 0 && c - dc >= 0 && get(r - dr, c - dc) !== null) return false;
+    if (er + dr < N && ec + dc < N && get(er + dr, ec + dc) !== null) return false;
+    let intersections = 0;
+    for (let i = 0; i < len; i++) {
+      const cr = r + dr * i, cc = c + dc * i;
+      const ex = get(cr, cc);
+      if (ex !== null) {
+        if (ex !== word[i]) return false;
+        intersections++;
+      } else {
+        if ((cr - pr >= 0 && cc - pc >= 0 && get(cr - pr, cc - pc) !== null) ||
+            (cr + pr < N && cc + pc < N && get(cr + pr, cc + pc) !== null)) return false;
+      }
+    }
+    if (placed.length > 0 && intersections === 0) return false;
+    return true;
+  }
+
+  function doPlace(word, r, c, dir) {
+    const [dr, dc] = dir === 'V' ? [1, 0] : [0, 1];
+    for (let i = 0; i < word.length; i++) set(r + dr * i, c + dc * i, word[i]);
+    placed.push({word, r, c, dir});
+  }
+
+  function tryPlace(word) {
+    if (placed.length === 0) {
+      const r = Math.floor(N / 2);
+      const c = Math.floor((N - word.length) / 2);
+      if (canPlace(word, r, c, 'H')) { doPlace(word, r, c, 'H'); return true; }
+      return false;
+    }
+    let best = null, bestScore = -Infinity;
+    for (const p of placed) {
+      const newDir = p.dir === 'H' ? 'V' : 'H';
+      for (let pi = 0; pi < p.word.length; pi++) {
+        for (let wi = 0; wi < word.length; wi++) {
+          if (p.word[pi] !== word[wi]) continue;
+          const nr = p.dir === 'H' ? p.r - wi : p.r + pi;
+          const nc = p.dir === 'H' ? p.c + pi : p.c - wi;
+          if (!canPlace(word, nr, nc, newDir)) continue;
+          const score = -(Math.abs(nr - N / 2) + Math.abs(nc - N / 2));
+          if (score > bestScore) { bestScore = score; best = {r: nr, c: nc, dir: newDir}; }
+        }
+      }
+    }
+    if (best) { doPlace(word, best.r, best.c, best.dir); return true; }
+    return false;
+  }
+
+  const words = [...entries].sort((a, b) => b.word.length - a.word.length);
+  const unplaced = [];
+  for (const e of words) { if (!tryPlace(e.word)) unplaced.push(e); }
+  const stillUnplaced = [];
+  for (const e of unplaced) { if (!tryPlace(e.word)) stillUnplaced.push(e); }
+
+  const blacks = new Set();
+  for (let r = 0; r < N; r++)
+    for (let c = 0; c < N; c++)
+      if (!cells[r + ',' + c]) blacks.add(r + ',' + c);
+
+  return {size: N, blacks, placed: placed.length, total: entries.length};
+}
+
 function placeImportedEntries(entries) {
   if (!entries.length) return;
   let placed = 0; const unassigned = [];
@@ -1315,16 +1396,19 @@ document.getElementById('import-drop').addEventListener('drop', e => {
 
 document.getElementById('btn-suggest-layout').addEventListener('click', () => {
   if (!S.importedEntries.length) return;
-  const suggested = suggestGridSize(S.importedEntries);
-  S.gridSize = suggested;
-  S.blacks.clear();
+  const {size, blacks, placed, total} = generateLayout(S.importedEntries);
+  S.gridSize = size;
+  S.blacks = blacks;
   updateSizeDisp();
   renderDesignGrid();
-  const n = S.importedEntries.length;
   const lengths = S.importedEntries.map(e => e.word.length);
   const minL = Math.min(...lengths), maxL = Math.max(...lengths);
   const banner = document.getElementById('design-suggestion');
-  banner.textContent = `${n} word${n!==1?'s':''} imported (lengths ${minL}–${maxL}) · Suggested ${suggested}×${suggested} — adjust black cells, then Build Grid`;
+  const missed = total - placed;
+  const placedNote = missed
+    ? `${placed}/${total} words placed — ${missed} couldn't fit, adjust layout as needed`
+    : `All ${total} words placed`;
+  banner.textContent = `${size}×${size} grid generated (lengths ${minL}–${maxL}) · ${placedNote} — click cells to tweak, then Build Grid`;
   banner.style.display = 'block';
   goStage('design');
 });
