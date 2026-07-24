@@ -142,7 +142,35 @@ header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.4px; }
   font-size: .73rem; font-family: 'Courier New', monospace; color: var(--ink);
 }
 .import-error-msg { font-size: .76rem; color: var(--err); }
+.import-rejected-note { font-size: .72rem; color: var(--err); }
 .import-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+/* ── seed stage ── */
+#stage-seed.active {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 18px 16px 32px; gap: 14px; flex: 1; width: 100%;
+}
+#seed-grid .cell { cursor: default; }
+.seed-report {
+  width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 10px;
+}
+.seed-report-stats {
+  background: var(--accent-dim); border: 1px solid var(--accent);
+  border-radius: 8px; padding: 8px 14px; font-size: .8rem; color: var(--ink); text-align: center;
+}
+.seed-report-section { display: flex; flex-direction: column; gap: 5px; }
+.seed-report-title { font-size: .78rem; font-weight: 700; color: var(--muted); }
+.seed-report-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.seed-report-empty { font-size: .74rem; color: var(--faint); }
+.seed-chip {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 8px; font-size: .74rem; color: var(--ink);
+  max-width: 260px;
+}
+.seed-chip.warn { border-color: var(--err); }
+.seed-chip small { color: var(--muted); font-weight: 400; }
+.seed-chip-clue { font-size: .68rem; color: var(--faint); margin-top: 2px; }
+.seed-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 
 /* ── design suggestion banner ── */
 .design-suggestion {
@@ -371,6 +399,19 @@ header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.4px; }
     <button class="btn" id="btn-skip-to-design">Design Grid Manually →</button>
   </div>
   <p class="hint-text">Import your words first — we'll suggest a grid size that fits them</p>
+</div>
+
+<!-- ── Stage 0.5: Seed layout ── -->
+<div id="stage-seed" class="stage">
+  <div class="design-wrap">
+    <div id="seed-grid" class="cw-grid"></div>
+  </div>
+  <div id="seed-report" class="seed-report"></div>
+  <div class="seed-actions">
+    <button class="btn" id="btn-seed-back">← Back to Import</button>
+    <button class="btn primary" id="btn-seed-to-design">Continue to Design →</button>
+  </div>
+  <p class="hint-text">A loose 15×15 seed layout — no black squares yet. Build it out by hand, then decide black squares when you're ready.</p>
 </div>
 
 <!-- ── Stage 1: Design ── -->
@@ -1279,13 +1320,13 @@ document.getElementById('btn-close-assign').addEventListener('click', () => {
 // ── Import stage ──
 function updateImportPreview() {
   const text = document.getElementById('import-textarea').value;
-  const entries = parseImport(text);
+  const {entries, rejected} = parseSeedInput(text);
   S.importedEntries = entries;
   const preview = document.getElementById('import-preview');
   const btn = document.getElementById('btn-suggest-layout');
   if (!text.trim()) { preview.innerHTML = ''; btn.disabled = true; return; }
   if (!entries.length) {
-    preview.innerHTML = '<div class="import-error-msg">No valid entries found. Use ACROSS:/DOWN: section headers with WORD: clue text</div>';
+    preview.innerHTML = '<div class="import-error-msg">No valid entries found. Use ACROSS:/DOWN: section headers with WORD: clue text (3+ letters, no duplicates)</div>';
     btn.disabled = true; return;
   }
   const lengths = entries.map(e => e.word.length);
@@ -1295,6 +1336,7 @@ function updateImportPreview() {
   preview.innerHTML = `
     <div class="import-preview-header">
       <span>${acrossCount} across · ${downCount} down &nbsp;·&nbsp; lengths ${minL}–${maxL}</span>
+      ${rejected.length ? `<span class="import-rejected-note">${rejected.length} rejected</span>` : ''}
     </div>
     <div class="import-words-grid">
       ${entries.map(e => `<span class="import-word-chip">${e.word} <small>${e.dir === 'across' ? 'A' : 'D'}</small></span>`).join('')}
@@ -1302,37 +1344,50 @@ function updateImportPreview() {
   btn.disabled = false;
 }
 
-function suggestGridSize(entries) {
-  if (!entries.length) return 15;
-  const maxLen = Math.max(...entries.map(e => e.word.length));
-  const acrossCount = entries.filter(e => e.dir === 'across').length;
-  const downCount = entries.filter(e => e.dir === 'down').length;
-  const n = Math.max(entries.length, acrossCount, downCount);
-  let size;
-  if (n <= 10) size = 9;
-  else if (n <= 20) size = 11;
-  else if (n <= 35) size = 13;
-  else if (n <= 50) size = 15;
-  else size = 17;
-  size = Math.max(size, maxLen + 2);
-  if (size % 2 === 0) size++;
-  return Math.min(size, 21);
+// ── Seed layout generator (spec v2: fixed 15×15, no black squares) ──
+const SEED_N = 15;
+
+function parseSeedInput(text) {
+  const entries = [];
+  const rejected = [];
+  const seen = new Set();
+  let dir = null;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    if (/^across:?$/i.test(line)) { dir = 'across'; continue; }
+    if (/^down:?$/i.test(line))   { dir = 'down';   continue; }
+    if (!dir) continue;
+    const colon = line.indexOf(':');
+    if (colon < 1) continue;
+    const word = line.slice(0, colon).trim().toUpperCase().replace(/[^A-Z]/g, '');
+    const clue = line.slice(colon + 1).trim();
+    if (!word) continue;
+    if (word.length < 3) { rejected.push({word, dir, clue, reason: 'shorter than 3 letters'}); continue; }
+    if (seen.has(word)) { rejected.push({word, dir, clue, reason: 'duplicate word already in the list'}); continue; }
+    seen.add(word);
+    entries.push({word, clue, dir});
+  }
+  return {entries, rejected};
 }
 
-function generateLayout(entries) {
-  const N = suggestGridSize(entries);
+function seedStepOf(dir) { return dir === 'down' ? [1, 0] : [0, 1]; }
+function seedPerpOf(dir) { return dir === 'down' ? [0, 1] : [1, 0]; }
+
+// One placement attempt over a given word ordering. Returns placements (each
+// with its intersection count), any words that found no legal spot at all,
+// and the raw cell map (for cell-usage stats).
+function runSeedAttempt(order, seedIdx, N) {
   const cells = {};
   const placements = [];
+  const get = (r, c) => cells[r + ',' + c] ?? null;
+  const set = (r, c, ch) => { cells[r + ',' + c] = ch; };
 
-  function get(r, c) { return cells[r + ',' + c] ?? null; }
-  function set(r, c, ch) { cells[r + ',' + c] = ch; }
-  function stepOf(dir) { return dir === 'down' ? [1, 0] : [0, 1]; }
-  function perpOf(dir) { return dir === 'down' ? [0, 1] : [1, 0]; }
-
+  // Returns false if illegal, otherwise the intersection count (may be 0).
   function canPlace(word, r, c, dir, allowNoCross) {
     const len = word.length;
-    const [dr, dc] = stepOf(dir);
-    const [pr, pc] = perpOf(dir);
+    const [dr, dc] = seedStepOf(dir);
+    const [pr, pc] = seedPerpOf(dir);
     if (r < 0 || c < 0) return false;
     const er = r + dr * (len - 1), ec = c + dc * (len - 1);
     if (er >= N || ec >= N) return false;
@@ -1351,109 +1406,241 @@ function generateLayout(entries) {
       }
     }
     if (placements.length > 0 && intersections === 0 && !allowNoCross) return false;
-    return true;
+    return intersections;
   }
 
-  function doPlace(word, clue, r, c, dir) {
-    const [dr, dc] = stepOf(dir);
+  // Open-cell fraction in a 1-cell-wider band around the word: the "cushion".
+  function cushionScore(word, r, c, dir) {
+    const len = word.length, [dr, dc] = seedStepOf(dir);
+    let open = 0, total = 0;
+    for (let i = -1; i <= len; i++) {
+      for (let d = -1; d <= 1; d++) {
+        const rr = r + dr * i + (dir === 'down' ? d : 0), cc = c + dc * i + (dir === 'across' ? d : 0);
+        if (rr < 0 || cc < 0 || rr >= N || cc >= N) continue;
+        total++;
+        if (get(rr, cc) === null) open++;
+      }
+    }
+    return total ? open / total : 0;
+  }
+
+  // How crowded is this word's 5×5 region already — used to spread words out.
+  function regionDensity(r, c) {
+    const rb = Math.floor(r / 5), cb = Math.floor(c / 5);
+    let count = 0;
+    for (const key in cells) {
+      const [rr, cc] = key.split(',').map(Number);
+      if (Math.floor(rr / 5) === rb && Math.floor(cc / 5) === cb) count++;
+    }
+    return count;
+  }
+
+  function centerScore(r, c, len, dir) {
+    const [dr, dc] = seedStepOf(dir);
+    const mr = r + dr * (len - 1) / 2, mc = c + dc * (len - 1) / 2;
+    return -(Math.abs(mr - N / 2) + Math.abs(mc - N / 2));
+  }
+
+  function doPlace(word, clue, r, c, dir, intersections) {
+    const [dr, dc] = seedStepOf(dir);
     for (let i = 0; i < word.length; i++) set(r + dr * i, c + dc * i, word[i]);
-    placements.push({word, clue, r, c, dir});
+    placements.push({word, clue, r, c, dir, intersections});
   }
 
-  const bySize = [...entries].sort((a, b) => b.word.length - a.word.length);
-  const seed = bySize.find(e => e.dir === 'across') || bySize[0];
-  if (seed.dir === 'across') {
-    const r = Math.floor(N / 2), c = Math.floor((N - seed.word.length) / 2);
-    doPlace(seed.word, seed.clue, r, c, 'across');
-  } else {
-    const c = Math.floor(N / 2), r = Math.floor((N - seed.word.length) / 2);
-    doPlace(seed.word, seed.clue, r, c, 'down');
-  }
+  const seed = order[seedIdx];
+  const seedR = seed.dir === 'across' ? Math.floor(N / 2) : Math.floor((N - seed.word.length) / 2);
+  const seedC = seed.dir === 'across' ? Math.floor((N - seed.word.length) / 2) : Math.floor(N / 2);
+  doPlace(seed.word, seed.clue, seedR, seedC, seed.dir, 0);
+  let remaining = order.filter((_, i) => i !== seedIdx);
 
-  let remaining = entries.filter(e => e !== seed);
-
-  // Interlock pass: repeatedly cross unplaced words against placed words of the
-  // opposite direction, scoring candidates by proximity to center.
+  // Interlock pass: repeatedly place whichever remaining word has the best-scoring
+  // legal crossing anywhere on the board, until no more crossings are possible.
+  // Re-scanning every remaining word each round is what lets a later placement
+  // open up a crossing for a word that had none earlier (spec §6.4).
   let progress = true;
   while (progress) {
     progress = false;
+    let bestPlacement = null, bestScore = -Infinity, bestIdx = -1;
     for (let i = 0; i < remaining.length; i++) {
       const e = remaining[i];
-      const [edr, edc] = stepOf(e.dir);
-      let best = null, bestScore = -Infinity;
+      const [edr, edc] = seedStepOf(e.dir);
       for (const p of placements) {
         if (p.dir === e.dir) continue;
-        const [pdr, pdc] = stepOf(p.dir);
+        const [pdr, pdc] = seedStepOf(p.dir);
         for (let pi = 0; pi < p.word.length; pi++) {
           for (let wi = 0; wi < e.word.length; wi++) {
             if (p.word[pi] !== e.word[wi]) continue;
             const xr = p.r + pdr * pi, xc = p.c + pdc * pi;
             const nr = xr - edr * wi, nc = xc - edc * wi;
-            if (!canPlace(e.word, nr, nc, e.dir, false)) continue;
-            const score = -(Math.abs(nr - N / 2) + Math.abs(nc - N / 2));
-            if (score > bestScore) { bestScore = score; best = {r: nr, c: nc}; }
+            const inter = canPlace(e.word, nr, nc, e.dir, false);
+            if (inter === false) continue;
+            const cushion = cushionScore(e.word, nr, nc, e.dir);
+            const density = regionDensity(nr, nc);
+            const center = centerScore(nr, nc, e.word.length, e.dir);
+            const score = inter * 10 + cushion * 4 - density * 1.5 + center * 0.3;
+            if (score > bestScore) { bestScore = score; bestPlacement = {r: nr, c: nc, inter}; bestIdx = i; }
           }
         }
       }
-      if (best) {
-        doPlace(e.word, e.clue, best.r, best.c, e.dir);
-        remaining.splice(i, 1);
-        i--;
-        progress = true;
-      }
+    }
+    if (bestPlacement) {
+      const e = remaining[bestIdx];
+      doPlace(e.word, e.clue, bestPlacement.r, bestPlacement.c, e.dir, bestPlacement.inter);
+      remaining.splice(bestIdx, 1);
+      progress = true;
     }
   }
 
-  // Loose pass: place remaining words in their own open row/column, no crossing.
-  function tryLoosePlace(e) {
-    const len = e.word.length;
-    if (e.dir === 'across') {
-      for (let r = 0; r < N; r++)
-        for (let c = 0; c <= N - len; c++)
-          if (canPlace(e.word, r, c, 'across', true)) { doPlace(e.word, e.clue, r, c, 'across'); return true; }
-    } else {
-      for (let c = 0; c < N; c++)
-        for (let r = 0; r <= N - len; r++)
-          if (canPlace(e.word, r, c, 'down', true)) { doPlace(e.word, e.clue, r, c, 'down'); return true; }
-    }
-    return false;
-  }
+  // Loose pass: words with no possible crossing get generous, isolated spacing —
+  // maximize distance from everything already placed, mild centering tiebreak.
   const stillUnplaced = [];
-  for (const e of remaining) { if (!tryLoosePlace(e)) stillUnplaced.push(e); }
+  for (const e of remaining) {
+    const len = e.word.length;
+    let best = null, bestScore = -Infinity;
+    const tryCell = (r, c) => {
+      const inter = canPlace(e.word, r, c, e.dir, true);
+      if (inter === false) return;
+      const [dr, dc] = seedStepOf(e.dir);
+      let minDist = Infinity;
+      for (let i = 0; i < len; i++) {
+        const rr = r + dr * i, cc = c + dc * i;
+        for (const key in cells) {
+          const [pr2, pc2] = key.split(',').map(Number);
+          const d = Math.abs(pr2 - rr) + Math.abs(pc2 - cc);
+          if (d < minDist) minDist = d;
+        }
+      }
+      if (minDist === Infinity) minDist = 0;
+      const score = minDist * 2 + centerScore(r, c, len, e.dir) * 0.2;
+      if (score > bestScore) { bestScore = score; best = {r, c}; }
+    };
+    if (e.dir === 'across') {
+      for (let r = 0; r < N; r++) for (let c = 0; c <= N - len; c++) tryCell(r, c);
+    } else {
+      for (let c = 0; c < N; c++) for (let r = 0; r <= N - len; r++) tryCell(r, c);
+    }
+    if (best) doPlace(e.word, e.clue, best.r, best.c, e.dir, 0);
+    else stillUnplaced.push(e);
+  }
 
-  // Minimal caps: black only the cell immediately before/after each word,
-  // mirrored for 180° symmetry. If a cap's mirror lands on a cell another
-  // placed word occupies with a letter, that single cap is left unmirrored
-  // and flagged as a conflict for the user to resolve by hand.
-  const blacks = new Set();
-  const conflictKeys = new Set();
-  function addBlack(r, c) {
-    const key = r + ',' + c;
-    blacks.add(key);
-    const mr = N - 1 - r, mc = N - 1 - c, mkey = mr + ',' + mc;
-    if (mkey === key) return;
-    if (get(mr, mc) !== null) { conflictKeys.add(mkey); return; }
-    blacks.add(mkey);
+  return {placements, unplaced: stillUnplaced, cells};
+}
+
+function scoreSeedAttempt(res) {
+  const totalInter = res.placements.reduce((s, p) => s + p.intersections, 0);
+  return res.placements.length * 100 + totalInter * 5 - res.unplaced.length * 50;
+}
+
+function shuffleSeed(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
   }
-  for (const p of placements) {
-    const [dr, dc] = stepOf(p.dir);
-    const beforeR = p.r - dr, beforeC = p.c - dc;
-    const afterR = p.r + dr * p.word.length, afterC = p.c + dc * p.word.length;
-    if (beforeR >= 0 && beforeC >= 0 && beforeR < N && beforeC < N && get(beforeR, beforeC) === null)
-      addBlack(beforeR, beforeC);
-    if (afterR >= 0 && afterC >= 0 && afterR < N && afterC < N && get(afterR, afterC) === null)
-      addBlack(afterR, afterC);
+  return a;
+}
+
+function generateSeedLayout(entries) {
+  const N = SEED_N;
+  if (!entries.length) return {N, placements: [], unplaced: []};
+
+  const bySize = [...entries].sort((a, b) => b.word.length - a.word.length);
+  const attempts = [
+    {order: bySize, seedIdx: Math.max(0, bySize.findIndex(e => e.dir === 'across'))},
+    {order: bySize, seedIdx: 0},
+  ];
+  for (let k = 0; k < 3; k++) {
+    const order = shuffleSeed(entries).sort((a, b) => b.word.length - a.word.length);
+    attempts.push({order, seedIdx: Math.max(0, order.findIndex(e => e.dir === 'across'))});
   }
-  const conflicts = [...conflictKeys].map(key => {
-    const [r, c] = key.split(',').map(Number);
-    return {r, c};
+
+  let best = null, bestScore = -Infinity;
+  for (const {order, seedIdx} of attempts) {
+    const res = runSeedAttempt(order, seedIdx, N);
+    const score = scoreSeedAttempt(res);
+    if (score > bestScore) { bestScore = score; best = res; }
+  }
+  return {N, placements: best.placements, unplaced: best.unplaced, cells: best.cells};
+}
+
+function buildSeedReport(entries, rejected, result) {
+  const {N, placements, unplaced, cells} = result;
+  const isolated = placements.filter(p => p.intersections === 0);
+  const weak = placements.filter(p => p.intersections === 1);
+  const totalAcross = entries.filter(e => e.dir === 'across').length;
+  const totalDown = entries.filter(e => e.dir === 'down').length;
+  const placedAcross = placements.filter(p => p.dir === 'across').length;
+  const placedDown = placements.filter(p => p.dir === 'down').length;
+  const unplacedReport = unplaced.map(e => {
+    const hasSharedLetter = entries.some(o =>
+      o.dir !== e.dir && [...new Set(o.word)].some(ch => e.word.includes(ch)));
+    return {
+      word: e.word, dir: e.dir, clue: e.clue,
+      reason: hasSharedLetter
+        ? 'shared letters existed but every candidate spot was blocked'
+        : 'no shared letters with anything in the opposite list',
+    };
   });
-
   return {
-    size: N, blacks, conflicts,
-    placements: placements.map(p => ({word: p.word, clue: p.clue, r: p.r, c: p.c, dir: p.dir})),
-    placed: placements.length, total: entries.length,
+    rejected,
+    unplaced: unplacedReport,
+    isolated: isolated.map(p => ({word: p.word, dir: p.dir, clue: p.clue})),
+    weak: weak.map(p => ({word: p.word, dir: p.dir, clue: p.clue})),
+    stats: {
+      total: entries.length, placed: placements.length,
+      totalAcross, totalDown, placedAcross, placedDown,
+      connected: placements.length - isolated.length, islands: isolated.length,
+      cellUsage: Math.round((Object.keys(cells).length / (N * N)) * 1000) / 10,
+    },
   };
+}
+
+function renderSeedGrid(placements, N) {
+  const el = document.getElementById('seed-grid');
+  el.style.setProperty('--cw-cols', N);
+  el.innerHTML = '';
+  const letters = {};
+  for (const p of placements) {
+    const [dr, dc] = seedStepOf(p.dir);
+    for (let i = 0; i < p.word.length; i++) letters[(p.r + dr * i) + ',' + (p.c + dc * i)] = p.word[i];
+  }
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      const ch = letters[r + ',' + c];
+      if (ch) cell.textContent = ch;
+      el.appendChild(cell);
+    }
+  }
+}
+
+function renderSeedReport(report) {
+  const {rejected, unplaced, isolated, weak, stats} = report;
+  const chip = (item, showReason) => `
+    <div class="seed-chip${showReason ? ' warn' : ''}">
+      <strong>${item.word}</strong> <small>${item.dir === 'across' ? 'A' : 'D'}</small>
+      ${showReason ? `<div class="seed-chip-clue">${item.reason}</div>` : ''}
+    </div>`;
+  const section = (title, items, showReason, emptyNote) => `
+    <div class="seed-report-section">
+      <div class="seed-report-title">${title}${items.length ? ` (${items.length})` : ''}</div>
+      ${items.length
+        ? `<div class="seed-report-list">${items.map(i => chip(i, showReason)).join('')}</div>`
+        : `<div class="seed-report-empty">${emptyNote}</div>`}
+    </div>`;
+  document.getElementById('seed-report').innerHTML = `
+    <div class="seed-report-stats">
+      ${stats.placed}/${stats.total} words placed
+      (${stats.placedAcross}/${stats.totalAcross} across · ${stats.placedDown}/${stats.totalDown} down)
+      &nbsp;·&nbsp; ${stats.connected} connected · ${stats.islands} island${stats.islands !== 1 ? 's' : ''}
+      &nbsp;·&nbsp; ${stats.cellUsage}% of grid used
+    </div>
+    ${section('Unplaced', unplaced, true, 'None — every word found a spot.')}
+    ${rejected.length ? section('Rejected on import', rejected, true, '') : ''}
+    ${section('Weak — single intersection', weak, false, 'None.')}
+    ${section('Isolated — no intersections (expected for this pass)', isolated, false, 'None — every placed word connects to another.')}
+  `;
 }
 
 function placeImportedEntries(entries) {
@@ -1516,27 +1703,14 @@ document.getElementById('import-drop').addEventListener('drop', e => {
 });
 
 document.getElementById('btn-suggest-layout').addEventListener('click', () => {
-  if (!S.importedEntries.length) return;
-  const {size, blacks, placements, conflicts, placed, total} = generateLayout(S.importedEntries);
-  S.gridSize = size;
-  S.blacks = blacks;
-  S.suggestedPlacements = placements;
-  S.suggestionConflicts = conflicts;
-  updateSizeDisp();
-  renderDesignGrid();
-  const lengths = S.importedEntries.map(e => e.word.length);
-  const minL = Math.min(...lengths), maxL = Math.max(...lengths);
-  const banner = document.getElementById('design-suggestion');
-  const missed = total - placed;
-  const placedNote = missed
-    ? `${placed}/${total} words placed — ${missed} couldn't fit, adjust layout as needed`
-    : `All ${total} words placed`;
-  const conflictNote = conflicts.length
-    ? ` · ⚠ ${conflicts.length} cell${conflicts.length!==1?'s':''} couldn't stay symmetric — highlighted below`
-    : '';
-  banner.textContent = `${size}×${size} grid generated (lengths ${minL}–${maxL}) · ${placedNote}${conflictNote} — click cells to tweak, then Build Grid`;
-  banner.style.display = 'block';
-  goStage('design');
+  const {entries, rejected} = parseSeedInput(document.getElementById('import-textarea').value);
+  S.importedEntries = entries;
+  if (!entries.length) return;
+  const result = generateSeedLayout(entries);
+  S.suggestedPlacements = result.placements;
+  renderSeedGrid(result.placements, result.N);
+  renderSeedReport(buildSeedReport(entries, rejected, result));
+  goStage('seed');
 });
 
 document.getElementById('btn-skip-to-design').addEventListener('click', () => {
@@ -1549,6 +1723,20 @@ document.getElementById('btn-skip-to-design').addEventListener('click', () => {
 
 document.getElementById('btn-back-to-import').addEventListener('click', () => {
   goStage('import');
+});
+
+document.getElementById('btn-seed-back').addEventListener('click', () => {
+  goStage('import');
+});
+
+document.getElementById('btn-seed-to-design').addEventListener('click', () => {
+  S.gridSize = SEED_N;
+  S.blacks = new Set();
+  S.suggestionConflicts = [];
+  document.getElementById('design-suggestion').style.display = 'none';
+  updateSizeDisp();
+  renderDesignGrid();
+  goStage('design');
 });
 
 // ── Toolbar actions ──
