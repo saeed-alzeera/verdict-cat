@@ -1,4 +1,4 @@
-const CACHE = 'verdict-cat-v1';
+const CACHE = 'verdict-cat-v2';
 
 const PRECACHE = [
   '/',
