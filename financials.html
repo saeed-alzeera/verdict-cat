@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>SEC Financials</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
+<link rel="shortcut icon" href="favicon.ico" />
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #1a1d23;
+    --panel-alt: #1e2128;
+    --row-alt: #181b21;
+    --ink: #e8eaed;
+    --muted: #8b9099;
+    --line: #2e3238;
+    --accent: #5b9bd5;
+    --warn: #e8a730;
+    --green: #4caf82;
+    --red: #e05c5c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.45; -webkit-text-size-adjust: 100%; }
+
+  header {
+    padding: 16px 16px 10px;
+    display: flex; gap: 12px; align-items: center;
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg); border-bottom: 1px solid var(--line);
+  }
+  #hub-back {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 13px; color: var(--muted);
+    text-decoration: none; padding: 6px 10px;
+    border: 1px solid var(--line); border-radius: 8px;
+    white-space: nowrap; flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  #hub-back:hover { color: var(--ink); border-color: var(--muted); }
+  #header-text { flex: 1; min-width: 0; }
+  h1 { font-size: 18px; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  main { padding: 16px 16px 80px; max-width: 900px; margin: 0 auto; }
+
+  #status-msg {
+    margin: 0 0 14px;
+    padding: 11px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    display: none;
+  }
+  #status-msg.loading { background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
+  #status-msg.error   { background: rgba(224,92,92,0.1); border: 1px solid var(--red); color: var(--red); }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 16px; margin-bottom: 16px;
+  }
+  .field-label { font-size: 12px; color: var(--muted); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 6px; }
+  .field-input {
+    width: 100%; padding: 10px 12px;
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; color: var(--ink); font-size: 14px;
+    outline: none; transition: border-color 0.15s;
+  }
+  .field-input:focus { border-color: var(--accent); }
+  .ticker-row { display: flex; gap: 8px; }
+  .ticker-row .field-input { flex: 1; }
+  .btn {
+    font: inherit; padding: 9px 16px;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel-alt); color: var(--muted);
+    cursor: pointer; font-size: 13px;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { color: var(--ink); border-color: var(--muted); }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { opacity: 0.88; color: #fff; border-color: var(--accent); }
+
+  .company-name { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+  .company-meta { font-size: 12px; color: var(--muted); }
+
+  .picker-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .picker-search { margin-bottom: 8px; }
+  .picker-list {
+    max-height: 260px; overflow-y: auto;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg);
+  }
+  .picker-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; font-size: 13px;
+    border-bottom: 1px solid var(--line); cursor: pointer;
+  }
+  .picker-item:last-child { border-bottom: none; }
+  .picker-item:hover { background: var(--panel-alt); }
+  .picker-item input { flex-shrink: 0; }
+  .picker-item .tag-code { color: var(--muted); font-size: 11px; margin-left: auto; }
+  .picker-empty { padding: 16px; text-align: center; color: var(--muted); font-size: 13px; }
+
+  table {
+    width: 100%; border-collapse: collapse;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; overflow: hidden;
+  }
+  thead th {
+    text-align: right; font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--muted); background: var(--panel-alt);
+    padding: 10px 12px; border-bottom: 1px solid var(--line); font-weight: 600;
+    white-space: nowrap;
+  }
+  thead th:first-child { text-align: left; }
+  tbody td {
+    padding: 11px 12px; border-bottom: 1px solid var(--line);
+    vertical-align: middle; font-variant-numeric: tabular-nums;
+    text-align: right; white-space: nowrap;
+  }
+  tbody td:first-child { text-align: left; white-space: normal; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:nth-child(odd) td { background: var(--row-alt); }
+  .cell-empty { color: var(--muted); }
+  .cell-value[title] { cursor: help; border-bottom: 1px dotted var(--muted); }
+
+  #empty-msg { display: none; text-align: center; padding: 40px 20px; color: var(--muted); font-size: 14px; }
+
+  @media (max-width: 520px) {
+    .ticker-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <a id="hub-back" href="index.html">← Hub</a>
+  <div id="header-text">
+    <h1>SEC Financials</h1>
+    <div class="sub">Build a table from a company's actual filings</div>
+  </div>
+</header>
+
+<main>
+  <div id="status-msg"></div>
+
+  <div class="panel">
+    <label class="field-label" for="ticker-input">Ticker</label>
+    <div class="ticker-row">
+      <input class="field-input" id="ticker-input" type="text" placeholder="AAPL" autocomplete="off" spellcheck="false" />
+      <button class="btn btn-primary" id="lookup-btn" onclick="lookupTicker()">Look up</button>
+    </div>
+    <div id="company-info" style="display:none; margin-top:12px;">
+      <div class="company-name" id="company-name"></div>
+      <div class="company-meta" id="company-meta"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="picker-panel" style="display:none;">
+    <div class="picker-head">
+      <label class="field-label" style="margin:0;">Fiscal years (10-K)</label>
+    </div>
+    <div class="picker-list" id="year-list"></div>
+  </div>
+
+  <div class="panel" id="items-panel" style="display:none;">
+    <div class="picker-head">
+      <label class="field-label" style="margin:0;">Line items</label>
+    </div>
+    <input class="field-input picker-search" id="item-search" type="text" placeholder="Filter line items…" oninput="renderItemList()" />
+    <div class="picker-list" id="item-list"></div>
+  </div>
+
+  <div style="display:none;" id="build-row">
+    <button class="btn btn-primary" onclick="buildTable()">Build table</button>
+  </div>
+
+  <div id="table-wrap" style="display:none; margin-top:16px;">
+    <table>
+      <thead><tr id="table-head"></tr></thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
+
+  <div id="empty-msg">Look up a ticker, then pick fiscal years and line items to build a table.</div>
+</main>
+
+<script>
+  (function () {
+    if (localStorage.getItem('hub_auth') !== '1') {
+      window.location.replace('index.html');
+    }
+  })();
+
+  var PROXY = 'https://verdict-cat-sec.saeed-a-alzeera.workers.dev';
+  var LS_TICKERS = 'sec-ticker-map';
+  var LS_TICKERS_AT = 'sec-ticker-map-at';
+
+  var facts = null;          // full companyfacts response
+  var years = [];            // available fiscal years (10-K, fp=FY)
+  var items = [];            // [{tag, label}]
+  var selectedYears = {};
+  var selectedItems = {};
+
+  document.getElementById('empty-msg').style.display = 'block';
+
+  document.getElementById('ticker-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') lookupTicker();
+  });
+
+  /* ── Ticker → CIK ── */
+  async function getTickerMap() {
+    var cached = localStorage.getItem(LS_TICKERS);
+    var at = parseInt(localStorage.getItem(LS_TICKERS_AT) || '0', 10);
+    if (cached && Date.now() - at < 24 * 60 * 60 * 1000) {
+      return JSON.parse(cached);
+    }
+    var res = await fetch(PROXY + '/www/files/company_tickers.json');
+    if (!res.ok) throw new Error('Could not load ticker list (' + res.status + ')');
+    var raw = await res.json();
+    var map = {};
+    Object.keys(raw).forEach(function (k) {
+      var entry = raw[k];
+      map[entry.ticker.toUpperCase()] = {
+        cik: String(entry.cik_str).padStart(10, '0'),
+        name: entry.title,
+      };
+    });
+    localStorage.setItem(LS_TICKERS, JSON.stringify(map));
+    localStorage.setItem(LS_TICKERS_AT, String(Date.now()));
+    return map;
+  }
+
+  async function lookupTicker() {
+    var ticker = document.getElementById('ticker-input').value.trim().toUpperCase();
+    if (!ticker) return;
+
+    resetTable();
+    setStatus('loading', 'Looking up ' + ticker + '…');
+    document.getElementById('lookup-btn').disabled = true;
+
+    try {
+      var map = await getTickerMap();
+      var entry = map[ticker];
+      if (!entry) throw new Error('Ticker "' + ticker + '" not found in SEC records.');
+
+      setStatus('loading', 'Loading filings for ' + entry.name + '…');
+      var res = await fetch(PROXY + '/data/api/xbrl/companyfacts/CIK' + entry.cik + '.json');
+      if (!res.ok) throw new Error('Could not load company facts (' + res.status + ')');
+      facts = await res.json();
+
+      document.getElementById('company-name').textContent = facts.entityName || entry.name;
+      document.getElementById('company-meta').textContent = 'CIK ' + entry.cik + ' · ' + ticker;
+      document.getElementById('company-info').style.display = 'block';
+
+      buildYearAndItemLists();
+      setStatus(null);
+    } catch (e) {
+      setStatus('error', e.message || String(e));
+    }
+
+    document.getElementById('lookup-btn').disabled = false;
+  }
+
+  /* ── Derive available years / line items from companyfacts ── */
+  function buildYearAndItemLists() {
+    var gaap = (facts.facts && facts.facts['us-gaap']) || {};
+    var yearSet = {};
+    var itemList = [];
+
+    Object.keys(gaap).forEach(function (tag) {
+      var concept = gaap[tag];
+      var unitKey = Object.keys(concept.units || {})[0];
+      if (!unitKey) return;
+      var hasAnnual = concept.units[unitKey].some(function (u) {
+        return u.form === '10-K' && u.fp === 'FY';
+      });
+      if (!hasAnnual) return;
+      itemList.push({ tag: tag, label: concept.label || tag });
+      concept.units[unitKey].forEach(function (u) {
+        if (u.form === '10-K' && u.fp === 'FY' && u.fy) yearSet[u.fy] = true;
+      });
+    });
+
+    years = Object.keys(yearSet).map(Number).sort(function (a, b) { return b - a; });
+    items = itemList.sort(function (a, b) { return a.label.localeCompare(b.label); });
+
+    selectedYears = {};
+    selectedItems = {};
+
+    renderYearList();
+    renderItemList();
+    document.getElementById('picker-panel').style.display = years.length ? 'block' : 'none';
+    document.getElementById('items-panel').style.display = items.length ? 'block' : 'none';
+    document.getElementById('build-row').style.display = (years.length && items.length) ? 'block' : 'none';
+  }
+
+  function renderYearList() {
+    var el = document.getElementById('year-list');
+    if (!years.length) { el.innerHTML = '<div class="picker-empty">No annual filings found.</div>'; return; }
+    el.innerHTML = years.map(function (y) {
+      return '<label class="picker-item"><input type="checkbox" data-year="' + y + '" onchange="toggleYear(' + y + ', this.checked)"' +
+        (selectedYears[y] ? ' checked' : '') + ' /> FY ' + y + '</label>';
+    }).join('');
+  }
+
+  function toggleYear(y, checked) {
+    if (checked) selectedYears[y] = true; else delete selectedYears[y];
+  }
+
+  function renderItemList() {
+    var el = document.getElementById('item-list');
+    var q = document.getElementById('item-search').value.trim().toLowerCase();
+    var filtered = q ? items.filter(function (it) {
+      return it.label.toLowerCase().indexOf(q) !== -1 || it.tag.toLowerCase().indexOf(q) !== -1;
+    }) : items;
+
+    if (!filtered.length) { el.innerHTML = '<div class="picker-empty">No matching line items.</div>'; return; }
+
+    el.innerHTML = filtered.slice(0, 200).map(function (it) {
+      return '<label class="picker-item"><input type="checkbox" data-tag="' + it.tag + '" onchange="toggleItem(\'' + it.tag + '\', this.checked)"' +
+        (selectedItems[it.tag] ? ' checked' : '') + ' /> ' + esc(it.label) + '<span class="tag-code">' + it.tag + '</span></label>';
+    }).join('');
+  }
+
+  function toggleItem(tag, checked) {
+    if (checked) selectedItems[tag] = true; else delete selectedItems[tag];
+  }
+
+  /* ── Build table ── */
+  function buildTable() {
+    var pickedYears = years.filter(function (y) { return selectedYears[y]; });
+    var pickedItems = items.filter(function (it) { return selectedItems[it.tag]; });
+
+    if (!pickedYears.length || !pickedItems.length) {
+      setStatus('error', 'Pick at least one fiscal year and one line item.');
+      return;
+    }
+    setStatus(null);
+
+    var gaap = facts.facts['us-gaap'];
+
+    var head = document.getElementById('table-head');
+    head.innerHTML = '<th>Line item</th>' + pickedYears.map(function (y) { return '<th>FY ' + y + '</th>'; }).join('');
+
+    var body = document.getElementById('table-body');
+    body.innerHTML = pickedItems.map(function (it) {
+      var concept = gaap[it.tag];
+      var unitKey = Object.keys(concept.units || {})[0];
+      var entries = concept.units[unitKey] || [];
+
+      var cells = pickedYears.map(function (y) {
+        var matches = entries.filter(function (u) {
+          return u.form === '10-K' && u.fp === 'FY' && u.fy === y;
+        }).sort(function (a, b) { return new Date(a.filed) - new Date(b.filed); });
+
+        if (!matches.length) return '<td class="cell-empty">—</td>';
+        var m = matches[0];
+        var title = m.form + ' filed ' + m.filed + ' · accession ' + m.accn + ' · period ended ' + m.end;
+        return '<td><span class="cell-value" title="' + esc(title) + '">' + formatValue(m.val, unitKey) + '</span></td>';
+      }).join('');
+
+      return '<tr><td>' + esc(it.label) + '</td>' + cells + '</tr>';
+    }).join('');
+
+    document.getElementById('table-wrap').style.display = 'block';
+  }
+
+  function formatValue(val, unit) {
+    if (typeof val !== 'number') return esc(String(val));
+    if (unit === 'USD/shares') return val.toFixed(2);
+    if (unit === 'shares' || unit === 'pure') return val.toLocaleString();
+    return '$' + val.toLocaleString();
+  }
+
+  function resetTable() {
+    document.getElementById('table-wrap').style.display = 'none';
+    document.getElementById('picker-panel').style.display = 'none';
+    document.getElementById('items-panel').style.display = 'none';
+    document.getElementById('build-row').style.display = 'none';
+    document.getElementById('company-info').style.display = 'none';
+  }
+
+  /* ── Status ── */
+  function setStatus(type, msg) {
+    var el = document.getElementById('status-msg');
+    if (!type) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.className = type;
+    el.textContent = msg;
+  }
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+</script>
+</body>
+</html>
