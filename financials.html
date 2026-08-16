@@ -130,6 +130,23 @@
   .cell-empty { color: var(--muted); }
   .cell-value[title] { cursor: help; border-bottom: 1px dotted var(--muted); }
 
+  .filing-link {
+    display: block; margin-top: 3px; font-size: 11px; font-weight: 500;
+    text-transform: none; letter-spacing: 0; color: var(--accent); text-decoration: none;
+  }
+  .filing-link:hover { text-decoration: underline; }
+
+  #fy-note { font-size: 13px; color: var(--muted); }
+  #fy-note strong { color: var(--ink); }
+  #fy-note ul { margin: 6px 0 0; padding-left: 18px; }
+  #fy-note li { margin: 2px 0; }
+
+  .term-def { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .term-def:last-child { border-bottom: none; }
+  .term-def dt { font-weight: 600; font-size: 13px; margin-bottom: 3px; }
+  .term-def dt .tag-code { font-weight: 400; margin-left: 6px; }
+  .term-def dd { margin: 0; font-size: 13px; color: var(--muted); white-space: pre-line; }
+
   #empty-msg { display: none; text-align: center; padding: 40px 20px; color: var(--muted); font-size: 14px; }
 
   @media (max-width: 520px) {
@@ -169,9 +186,17 @@
     <div class="picker-list" id="year-list"></div>
   </div>
 
+  <div class="panel" id="std-panel" style="display:none;">
+    <div class="picker-head">
+      <label class="field-label" style="margin:0;">Standardized metrics</label>
+    </div>
+    <div class="sub" style="margin:-4px 0 8px;">Merges renamed/replaced XBRL tags (e.g. Apple's revenue moved from <code>Revenues</code> to <code>RevenueFromContractWithCustomerExcludingAssessedTax</code> in FY2018) so each row has values across all years.</div>
+    <div class="picker-list" id="std-metric-list"></div>
+  </div>
+
   <div class="panel" id="items-panel" style="display:none;">
     <div class="picker-head">
-      <label class="field-label" style="margin:0;">Line items</label>
+      <label class="field-label" style="margin:0;">Raw line items (advanced)</label>
     </div>
     <input class="field-input picker-search" id="item-search" type="text" placeholder="Filter line items…" oninput="renderItemList()" />
     <div class="picker-list" id="item-list"></div>
@@ -182,10 +207,14 @@
   </div>
 
   <div id="table-wrap" style="display:none; margin-top:16px;">
-    <table>
-      <thead><tr id="table-head"></tr></thead>
-      <tbody id="table-body"></tbody>
-    </table>
+    <div class="panel" id="fy-note" style="padding:12px 16px;"></div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr id="table-head"></tr></thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+    <div class="panel" id="definitions-panel" style="margin-top:16px;"></div>
   </div>
 
   <div id="empty-msg">Look up a ticker, then pick fiscal years and line items to build a table.</div>
@@ -207,6 +236,45 @@
   var items = [];            // [{tag, label}]
   var selectedYears = {};
   var selectedItems = {};
+  var stdMetrics = [];       // standardized metrics with data available: [{key, label, tags}]
+  var selectedStdMetrics = {};
+  var cik = null;            // 10-digit zero-padded CIK of the looked-up company
+  var yearFilings = {};      // fy -> { accn, filed, end } of the representative 10-K
+
+  /* Canonical metrics mapped to the known us-gaap tags issuers have used for
+     them over time. XBRL tags get renamed/replaced across filings (e.g. the
+     2018 ASC 606 revenue-recognition update moved most issuers off `Revenues`
+     / `SalesRevenueNet` onto `RevenueFromContractWithCustomerExcludingAssessedTax`),
+     so a single raw tag only covers part of a company's history. For each
+     year we walk this list in order and use the first tag that has a value. */
+  var STANDARD_METRICS = [
+    { key: 'revenue', label: 'Total Revenue', tags: [
+      'RevenueFromContractWithCustomerExcludingAssessedTax',
+      'RevenueFromContractWithCustomerIncludingAssessedTax',
+      'Revenues',
+      'SalesRevenueNet',
+      'SalesRevenueGoodsNet',
+      'SalesRevenueServicesNet',
+    ], description: 'Total money the company earned from selling its goods and services during the fiscal year, before subtracting any costs or expenses. Also called "net sales" or "top line."' },
+    { key: 'costOfRevenue', label: 'Cost of Revenue', tags: [
+      'CostOfGoodsAndServicesSold', 'CostOfRevenue', 'CostOfGoodsSold', 'CostOfServices',
+    ], description: 'The direct cost of producing the goods or services the company sold (materials, manufacturing, direct labor). Revenue minus this equals gross profit.' },
+    { key: 'grossProfit', label: 'Gross Profit', tags: ['GrossProfit'], description: 'Revenue minus cost of revenue. Shows how much money is left to cover operating expenses (R&D, marketing, admin) after paying for what was sold.' },
+    { key: 'operatingIncome', label: 'Operating Income', tags: ['OperatingIncomeLoss'], description: 'Profit from the company\'s core business operations, after operating expenses but before interest and taxes. Also called "operating profit" or EBIT-like measure.' },
+    { key: 'netIncome', label: 'Net Income', tags: ['NetIncomeLoss', 'ProfitLoss'], description: 'The company\'s total profit after ALL expenses, interest, and taxes are subtracted from revenue. Also called the "bottom line."' },
+    { key: 'epsBasic', label: 'EPS (Basic)', tags: ['EarningsPerShareBasic'], description: 'Net income divided by the average number of common shares outstanding during the year. Shows profit earned per share of stock.' },
+    { key: 'epsDiluted', label: 'EPS (Diluted)', tags: ['EarningsPerShareDiluted'], description: 'Same as basic EPS, but assumes all convertible securities (stock options, convertible bonds, etc.) are converted into shares — a more conservative, "worst case" per-share profit figure.' },
+    { key: 'rAndD', label: 'R&D Expense', tags: ['ResearchAndDevelopmentExpense'], description: 'Money spent developing new products, technology, or services. Reported as an operating expense, not capitalized as an asset.' },
+    { key: 'totalAssets', label: 'Total Assets', tags: ['Assets'], description: 'Everything the company owns that has value — cash, investments, inventory, property, equipment, patents, etc. — as of the fiscal year-end balance sheet date.' },
+    { key: 'totalLiabilities', label: 'Total Liabilities', tags: ['Liabilities'], description: 'Everything the company owes — debt, accounts payable, deferred revenue, accrued expenses, etc. — as of the fiscal year-end balance sheet date.' },
+    { key: 'stockholdersEquity', label: 'Stockholders Equity', tags: [
+      'StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+    ], description: 'Total assets minus total liabilities. Represents the net worth of the company that would belong to shareholders if all assets were sold and all debts paid off.' },
+    { key: 'cash', label: 'Cash & Equivalents', tags: [
+      'CashAndCashEquivalentsAtCarryingValue', 'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
+    ], description: 'Cash on hand plus highly liquid short-term investments (like money market funds) that can be converted to cash within about 90 days.' },
+    { key: 'operatingCashFlow', label: 'Operating Cash Flow', tags: ['NetCashProvidedByUsedInOperatingActivities'], description: 'Actual cash generated (or used) by day-to-day business operations during the year. Unlike net income, this isn\'t affected by non-cash accounting items like depreciation.' },
+  ];
 
   document.getElementById('empty-msg').style.display = 'block';
 
@@ -249,6 +317,7 @@
       var map = await getTickerMap();
       var entry = map[ticker];
       if (!entry) throw new Error('Ticker "' + ticker + '" not found in SEC records.');
+      cik = entry.cik;
 
       setStatus('loading', 'Loading filings for ' + entry.name + '…');
       var res = await fetch(PROXY + '/data/api/xbrl/companyfacts/CIK' + entry.cik + '.json');
@@ -290,15 +359,74 @@
 
     years = Object.keys(yearSet).map(Number).sort(function (a, b) { return b - a; });
     items = itemList.sort(function (a, b) { return a.label.localeCompare(b.label); });
+    yearFilings = buildYearFilings(gaap);
+
+    stdMetrics = STANDARD_METRICS.filter(function (m) {
+      return m.tags.some(function (t) { return !!gaap[t]; });
+    });
 
     selectedYears = {};
     selectedItems = {};
+    selectedStdMetrics = {};
+    stdMetrics.forEach(function (m) { selectedStdMetrics[m.key] = true; });
 
     renderYearList();
+    renderStdMetricList();
     renderItemList();
     document.getElementById('picker-panel').style.display = years.length ? 'block' : 'none';
+    document.getElementById('std-panel').style.display = stdMetrics.length ? 'block' : 'none';
     document.getElementById('items-panel').style.display = items.length ? 'block' : 'none';
-    document.getElementById('build-row').style.display = (years.length && items.length) ? 'block' : 'none';
+    document.getElementById('build-row').style.display = (years.length && (stdMetrics.length || items.length)) ? 'block' : 'none';
+  }
+
+  /* For each fiscal year, find the 10-K filing (accession) that actually
+     reported that year's annual figures, by tallying every annual (10-K,
+     FY) datapoint across all us-gaap concepts and taking the accession
+     that shows up most often for that year — i.e. the real originating
+     filing, not a later filing that merely restates it as a comparative. */
+  function buildYearFilings(gaap) {
+    var tally = {};
+    Object.keys(gaap).forEach(function (tag) {
+      var concept = gaap[tag];
+      Object.keys(concept.units || {}).forEach(function (unitKey) {
+        concept.units[unitKey].forEach(function (u) {
+          if (u.form !== '10-K' || u.fp !== 'FY' || !u.fy) return;
+          var byAccn = tally[u.fy] || (tally[u.fy] = {});
+          var rec = byAccn[u.accn] || (byAccn[u.accn] = { accn: u.accn, filed: u.filed, end: u.end, count: 0 });
+          rec.count++;
+        });
+      });
+    });
+    var result = {};
+    Object.keys(tally).forEach(function (fy) {
+      var best = null;
+      Object.keys(tally[fy]).forEach(function (accn) {
+        var rec = tally[fy][accn];
+        if (!best || rec.count > best.count) best = rec;
+      });
+      result[fy] = best;
+    });
+    return result;
+  }
+
+  function filingUrl(accn) {
+    if (!cik || !accn) return null;
+    var noDash = accn.replace(/-/g, '');
+    var cikNum = String(parseInt(cik, 10));
+    return 'https://www.sec.gov/Archives/edgar/data/' + cikNum + '/' + noDash + '/' + accn + '-index.htm';
+  }
+
+  function renderStdMetricList() {
+    var el = document.getElementById('std-metric-list');
+    if (!stdMetrics.length) { el.innerHTML = '<div class="picker-empty">No standardized metrics found.</div>'; return; }
+    el.innerHTML = stdMetrics.map(function (m) {
+      return '<label class="picker-item"><input type="checkbox" data-std="' + m.key + '" onchange="toggleStdMetric(\'' + m.key + '\', this.checked)"' +
+        (selectedStdMetrics[m.key] ? ' checked' : '') + ' /> ' + esc(m.label) + '</label>';
+    }).join('');
+  }
+
+  function toggleStdMetric(key, checked) {
+    if (checked) selectedStdMetrics[key] = true; else delete selectedStdMetrics[key];
   }
 
   function renderYearList() {
@@ -336,10 +464,11 @@
   /* ── Build table ── */
   function buildTable() {
     var pickedYears = years.filter(function (y) { return selectedYears[y]; });
+    var pickedStd = stdMetrics.filter(function (m) { return selectedStdMetrics[m.key]; });
     var pickedItems = items.filter(function (it) { return selectedItems[it.tag]; });
 
-    if (!pickedYears.length || !pickedItems.length) {
-      setStatus('error', 'Pick at least one fiscal year and one line item.');
+    if (!pickedYears.length || !(pickedStd.length || pickedItems.length)) {
+      setStatus('error', 'Pick at least one fiscal year and one metric or line item.');
       return;
     }
     setStatus(null);
@@ -347,27 +476,70 @@
     var gaap = facts.facts['us-gaap'];
 
     var head = document.getElementById('table-head');
-    head.innerHTML = '<th>Line item</th>' + pickedYears.map(function (y) { return '<th>FY ' + y + '</th>'; }).join('');
+    head.innerHTML = '<th>Line item</th>' + pickedYears.map(function (y) {
+      var filing = yearFilings[y];
+      var url = filing ? filingUrl(filing.accn) : null;
+      var link = url ? '<a class="filing-link" href="' + url + '" target="_blank" rel="noopener">10-K ↗</a>' : '';
+      return '<th>FY ' + y + link + '</th>';
+    }).join('');
 
-    var body = document.getElementById('table-body');
-    body.innerHTML = pickedItems.map(function (it) {
-      var concept = gaap[it.tag];
+    var fyNote = document.getElementById('fy-note');
+    var fyItems = pickedYears
+      .filter(function (y) { return yearFilings[y]; })
+      .map(function (y) { return '<li><strong>FY ' + y + '</strong> ended ' + esc(yearFilings[y].end) + ' (10-K filed ' + esc(yearFilings[y].filed) + ')</li>'; })
+      .join('');
+    fyNote.innerHTML = '<strong>Fiscal year-end dates</strong> — figures below are as reported for the 12 months ending on each date. Each column header links to the source 10-K filing on SEC EDGAR.' +
+      (fyItems ? '<ul>' + fyItems + '</ul>' : '');
+
+    /* Finds the annual (10-K, FY) entry for a single raw tag + year, picking
+       the latest-filed value if a company restated/refiled that period. */
+    function bestAnnualEntry(tag, y) {
+      var concept = gaap[tag];
+      if (!concept) return null;
       var unitKey = Object.keys(concept.units || {})[0];
-      var entries = concept.units[unitKey] || [];
+      if (!unitKey) return null;
+      var matches = (concept.units[unitKey] || []).filter(function (u) {
+        return u.form === '10-K' && u.fp === 'FY' && u.fy === y;
+      }).sort(function (a, b) { return new Date(a.filed) - new Date(b.filed); });
+      if (!matches.length) return null;
+      var m = matches[matches.length - 1];
+      return { entry: m, unit: unitKey, tag: tag };
+    }
 
+    function cellHtml(found) {
+      if (!found) return '<td class="cell-empty">—</td>';
+      var m = found.entry;
+      var title = 'us-gaap:' + found.tag + ' · ' + m.form + ' filed ' + m.filed + ' · accession ' + m.accn + ' · period ended ' + m.end;
+      return '<td><span class="cell-value" title="' + esc(title) + '">' + formatValue(m.val, found.unit) + '</span></td>';
+    }
+
+    var stdRows = pickedStd.map(function (m) {
       var cells = pickedYears.map(function (y) {
-        var matches = entries.filter(function (u) {
-          return u.form === '10-K' && u.fp === 'FY' && u.fy === y;
-        }).sort(function (a, b) { return new Date(a.filed) - new Date(b.filed); });
-
-        if (!matches.length) return '<td class="cell-empty">—</td>';
-        var m = matches[0];
-        var title = m.form + ' filed ' + m.filed + ' · accession ' + m.accn + ' · period ended ' + m.end;
-        return '<td><span class="cell-value" title="' + esc(title) + '">' + formatValue(m.val, unitKey) + '</span></td>';
+        var found = null;
+        for (var i = 0; i < m.tags.length && !found; i++) found = bestAnnualEntry(m.tags[i], y);
+        return cellHtml(found);
       }).join('');
+      return '<tr><td>' + esc(m.label) + '</td>' + cells + '</tr>';
+    }).join('');
 
+    var itemRows = pickedItems.map(function (it) {
+      var cells = pickedYears.map(function (y) { return cellHtml(bestAnnualEntry(it.tag, y)); }).join('');
       return '<tr><td>' + esc(it.label) + '</td>' + cells + '</tr>';
     }).join('');
+
+    document.getElementById('table-body').innerHTML = stdRows + itemRows;
+
+    var stdDefs = pickedStd.map(function (m) {
+      return '<div class="term-def"><dt>' + esc(m.label) + '</dt><dd>' + esc(m.description || 'No description available.') + '</dd></div>';
+    }).join('');
+    var itemDefs = pickedItems.map(function (it) {
+      var concept = gaap[it.tag] || {};
+      var desc = concept.description || concept.label || 'No description available from the SEC taxonomy.';
+      return '<div class="term-def"><dt>' + esc(it.label) + '<span class="tag-code">us-gaap:' + esc(it.tag) + '</span></dt><dd>' + esc(desc) + '</dd></div>';
+    }).join('');
+    document.getElementById('definitions-panel').innerHTML =
+      '<label class="field-label" style="margin-bottom:8px;">Term definitions</label>' +
+      '<dl style="margin:0;">' + stdDefs + itemDefs + '</dl>';
 
     document.getElementById('table-wrap').style.display = 'block';
   }
@@ -382,6 +554,7 @@
   function resetTable() {
     document.getElementById('table-wrap').style.display = 'none';
     document.getElementById('picker-panel').style.display = 'none';
+    document.getElementById('std-panel').style.display = 'none';
     document.getElementById('items-panel').style.display = 'none';
     document.getElementById('build-row').style.display = 'none';
     document.getElementById('company-info').style.display = 'none';
