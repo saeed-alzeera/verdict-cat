@@ -240,6 +240,7 @@
   var selectedStdMetrics = {};
   var cik = null;            // 10-digit zero-padded CIK of the looked-up company
   var yearFilings = {};      // fy -> { accn, filed, end } of the representative 10-K
+  var primaryDocs = {};      // accn -> primaryDocument filename (from submissions history)
 
   /* Canonical metrics mapped to the known us-gaap tags issuers have used for
      them over time. XBRL tags get renamed/replaced across filings (e.g. the
@@ -323,6 +324,8 @@
       var res = await fetch(PROXY + '/data/api/xbrl/companyfacts/CIK' + entry.cik + '.json');
       if (!res.ok) throw new Error('Could not load company facts (' + res.status + ')');
       facts = await res.json();
+
+      primaryDocs = await fetchPrimaryDocs(entry.cik);
 
       document.getElementById('company-name').textContent = facts.entityName || entry.name;
       document.getElementById('company-meta').textContent = 'CIK ' + entry.cik + ' · ' + ticker;
@@ -409,10 +412,43 @@
     return result;
   }
 
+  /* Maps accession number -> primary document filename, by reading the
+     submissions history (which, unlike companyfacts, records which file
+     within each filing is the actual filed report). Recent filings live
+     in filings.recent; older ones are split across the paginated files
+     listed in filings.files. */
+  async function fetchPrimaryDocs(cikStr) {
+    var map = {};
+    function ingest(obj) {
+      var acc = (obj && obj.accessionNumber) || [];
+      var doc = (obj && obj.primaryDocument) || [];
+      for (var i = 0; i < acc.length; i++) {
+        if (acc[i] && doc[i]) map[acc[i]] = doc[i];
+      }
+    }
+    try {
+      var res = await fetch(PROXY + '/data/submissions/CIK' + cikStr + '.json');
+      if (!res.ok) return map;
+      var data = await res.json();
+      ingest(data.filings && data.filings.recent);
+      var files = (data.filings && data.filings.files) || [];
+      await Promise.all(files.map(async function (f) {
+        try {
+          var r = await fetch(PROXY + '/data/submissions/' + f.name);
+          if (!r.ok) return;
+          ingest(await r.json());
+        } catch (e) { /* best-effort; fall back to index page for these */ }
+      }));
+    } catch (e) { /* best-effort; fall back to index page */ }
+    return map;
+  }
+
   function filingUrl(accn) {
     if (!cik || !accn) return null;
     var noDash = accn.replace(/-/g, '');
     var cikNum = String(parseInt(cik, 10));
+    var doc = primaryDocs[accn];
+    if (doc) return 'https://www.sec.gov/ix?doc=/Archives/edgar/data/' + cikNum + '/' + noDash + '/' + doc;
     return 'https://www.sec.gov/Archives/edgar/data/' + cikNum + '/' + noDash + '/' + accn + '-index.htm';
   }
 
@@ -483,14 +519,6 @@
       return '<th>FY ' + y + link + '</th>';
     }).join('');
 
-    var fyNote = document.getElementById('fy-note');
-    var fyItems = pickedYears
-      .filter(function (y) { return yearFilings[y]; })
-      .map(function (y) { return '<li><strong>FY ' + y + '</strong> ended ' + esc(yearFilings[y].end) + ' (10-K filed ' + esc(yearFilings[y].filed) + ')</li>'; })
-      .join('');
-    fyNote.innerHTML = '<strong>Fiscal year-end dates</strong> — figures below are as reported for the 12 months ending on each date. Each column header links to the source 10-K filing on SEC EDGAR.' +
-      (fyItems ? '<ul>' + fyItems + '</ul>' : '');
-
     /* Finds the annual (10-K, FY) entry for a single raw tag + year, picking
        the latest-filed value if a company restated/refiled that period. */
     function bestAnnualEntry(tag, y) {
@@ -506,28 +534,58 @@
       return { entry: m, unit: unitKey, tag: tag };
     }
 
+    /* Pick one scale (thousands/millions/billions) for the whole table,
+       based on the largest USD figure present — matching how the filing
+       itself would present the numbers (e.g. "$ in millions"). */
+    function pickScale(maxAbs) {
+      if (maxAbs >= 1e9) return { div: 1e9, suffix: 'Bn' };
+      if (maxAbs >= 1e6) return { div: 1e6, suffix: 'M' };
+      if (maxAbs >= 1e3) return { div: 1e3, suffix: 'K' };
+      return { div: 1, suffix: '' };
+    }
+
+    var rowSpecs = pickedStd.map(function (m) {
+      return { label: m.label, cells: pickedYears.map(function (y) {
+        var found = null;
+        for (var i = 0; i < m.tags.length && !found; i++) found = bestAnnualEntry(m.tags[i], y);
+        return found;
+      }) };
+    }).concat(pickedItems.map(function (it) {
+      return { label: it.label, cells: pickedYears.map(function (y) { return bestAnnualEntry(it.tag, y); }) };
+    }));
+
+    var maxUsdAbs = 0;
+    rowSpecs.forEach(function (row) {
+      row.cells.forEach(function (found) {
+        if (found && found.unit === 'USD' && typeof found.entry.val === 'number') {
+          maxUsdAbs = Math.max(maxUsdAbs, Math.abs(found.entry.val));
+        }
+      });
+    });
+    var scale = pickScale(maxUsdAbs);
+    var scaleNames = { 1e9: 'billions (Bn)', 1e6: 'millions (M)', 1e3: 'thousands (K)', 1: 'whole dollars' };
+
+    var fyNote = document.getElementById('fy-note');
+    var fyItems = pickedYears
+      .filter(function (y) { return yearFilings[y]; })
+      .map(function (y) { return '<li><strong>FY ' + y + '</strong> ended ' + esc(yearFilings[y].end) + ' (10-K filed ' + esc(yearFilings[y].filed) + ')</li>'; })
+      .join('');
+    var unitNote = '<strong>Units</strong> — dollar figures below are shown in ' + scaleNames[scale.div] +
+      ', matching the scale of the largest reported value (per-share and share-count figures are shown as reported, unscaled).';
+    fyNote.innerHTML = '<div style="margin-bottom:8px;">' + unitNote + '</div>' +
+      '<strong>Fiscal year-end dates</strong> — figures below are as reported for the 12 months ending on each date. Each column header links to the source 10-K filing on SEC EDGAR.' +
+      (fyItems ? '<ul>' + fyItems + '</ul>' : '');
+
     function cellHtml(found) {
       if (!found) return '<td class="cell-empty">—</td>';
       var m = found.entry;
       var title = 'us-gaap:' + found.tag + ' · ' + m.form + ' filed ' + m.filed + ' · accession ' + m.accn + ' · period ended ' + m.end;
-      return '<td><span class="cell-value" title="' + esc(title) + '">' + formatValue(m.val, found.unit) + '</span></td>';
+      return '<td><span class="cell-value" title="' + esc(title) + '">' + formatValue(m.val, found.unit, scale) + '</span></td>';
     }
 
-    var stdRows = pickedStd.map(function (m) {
-      var cells = pickedYears.map(function (y) {
-        var found = null;
-        for (var i = 0; i < m.tags.length && !found; i++) found = bestAnnualEntry(m.tags[i], y);
-        return cellHtml(found);
-      }).join('');
-      return '<tr><td>' + esc(m.label) + '</td>' + cells + '</tr>';
+    document.getElementById('table-body').innerHTML = rowSpecs.map(function (row) {
+      return '<tr><td>' + esc(row.label) + '</td>' + row.cells.map(cellHtml).join('') + '</tr>';
     }).join('');
-
-    var itemRows = pickedItems.map(function (it) {
-      var cells = pickedYears.map(function (y) { return cellHtml(bestAnnualEntry(it.tag, y)); }).join('');
-      return '<tr><td>' + esc(it.label) + '</td>' + cells + '</tr>';
-    }).join('');
-
-    document.getElementById('table-body').innerHTML = stdRows + itemRows;
 
     var stdDefs = pickedStd.map(function (m) {
       return '<div class="term-def"><dt>' + esc(m.label) + '</dt><dd>' + esc(m.description || 'No description available.') + '</dd></div>';
@@ -544,10 +602,14 @@
     document.getElementById('table-wrap').style.display = 'block';
   }
 
-  function formatValue(val, unit) {
+  function formatValue(val, unit, scale) {
     if (typeof val !== 'number') return esc(String(val));
-    if (unit === 'USD/shares') return val.toFixed(2);
+    if (unit === 'USD/shares') return '$' + val.toFixed(2);
     if (unit === 'shares' || unit === 'pure') return val.toLocaleString();
+    if (unit === 'USD' && scale) {
+      var scaled = (val / scale.div).toFixed(2);
+      return '$' + Number(scaled).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (scale.suffix ? ' ' + scale.suffix : '');
+    }
     return '$' + val.toLocaleString();
   }
 
