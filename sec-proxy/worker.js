@@ -10,7 +10,7 @@
  * Replace SEC_CONTACT below with a real contact email before deploying —
  * SEC blocks traffic from User-Agents that don't identify a requester.
  */
-const SEC_CONTACT = 'VerdictCat contact@example.com';
+const SEC_CONTACT = 'Saeed Alzeera saeedbankemail@gmail.com';
 
 const UPSTREAM_HOSTS = {
   data: 'https://data.sec.gov',
