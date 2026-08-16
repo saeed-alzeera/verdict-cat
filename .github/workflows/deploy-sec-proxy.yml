@@ -1,0 +1,26 @@
+name: Deploy SEC Proxy Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "sec-proxy/**"
+      - ".github/workflows/deploy-sec-proxy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-sec-proxy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: "sec-proxy"
