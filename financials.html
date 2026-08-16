@@ -256,25 +256,25 @@
       'SalesRevenueNet',
       'SalesRevenueGoodsNet',
       'SalesRevenueServicesNet',
-    ], description: 'Total money the company earned from selling its goods and services during the fiscal year, before subtracting any costs or expenses. Also called "net sales" or "top line."' },
+    ], formula: 'Reported directly on the income statement (sum of goods + services revenue, net of returns/allowances). No derivation — cross-check against the "Total revenue" / "Net sales" line.' },
     { key: 'costOfRevenue', label: 'Cost of Revenue', tags: [
       'CostOfGoodsAndServicesSold', 'CostOfRevenue', 'CostOfGoodsSold', 'CostOfServices',
-    ], description: 'The direct cost of producing the goods or services the company sold (materials, manufacturing, direct labor). Revenue minus this equals gross profit.' },
-    { key: 'grossProfit', label: 'Gross Profit', tags: ['GrossProfit'], description: 'Revenue minus cost of revenue. Shows how much money is left to cover operating expenses (R&D, marketing, admin) after paying for what was sold.' },
-    { key: 'operatingIncome', label: 'Operating Income', tags: ['OperatingIncomeLoss'], description: 'Profit from the company\'s core business operations, after operating expenses but before interest and taxes. Also called "operating profit" or EBIT-like measure.' },
-    { key: 'netIncome', label: 'Net Income', tags: ['NetIncomeLoss', 'ProfitLoss'], description: 'The company\'s total profit after ALL expenses, interest, and taxes are subtracted from revenue. Also called the "bottom line."' },
-    { key: 'epsBasic', label: 'EPS (Basic)', tags: ['EarningsPerShareBasic'], description: 'Net income divided by the average number of common shares outstanding during the year. Shows profit earned per share of stock.' },
-    { key: 'epsDiluted', label: 'EPS (Diluted)', tags: ['EarningsPerShareDiluted'], description: 'Same as basic EPS, but assumes all convertible securities (stock options, convertible bonds, etc.) are converted into shares — a more conservative, "worst case" per-share profit figure.' },
-    { key: 'rAndD', label: 'R&D Expense', tags: ['ResearchAndDevelopmentExpense'], description: 'Money spent developing new products, technology, or services. Reported as an operating expense, not capitalized as an asset.' },
-    { key: 'totalAssets', label: 'Total Assets', tags: ['Assets'], description: 'Everything the company owns that has value — cash, investments, inventory, property, equipment, patents, etc. — as of the fiscal year-end balance sheet date.' },
-    { key: 'totalLiabilities', label: 'Total Liabilities', tags: ['Liabilities'], description: 'Everything the company owes — debt, accounts payable, deferred revenue, accrued expenses, etc. — as of the fiscal year-end balance sheet date.' },
+    ], formula: 'Cost of Revenue = Revenue − Gross Profit' },
+    { key: 'grossProfit', label: 'Gross Profit', tags: ['GrossProfit'], formula: 'Gross Profit = Revenue − Cost of Revenue' },
+    { key: 'operatingIncome', label: 'Operating Income', tags: ['OperatingIncomeLoss'], formula: 'Operating Income = Gross Profit − Operating Expenses (R&D, SG&A, marketing, etc.)\n= Revenue − Cost of Revenue − Operating Expenses' },
+    { key: 'netIncome', label: 'Net Income', tags: ['NetIncomeLoss', 'ProfitLoss'], formula: 'Net Income = Operating Income + Non-operating Income/Expense − Interest Expense − Income Tax Expense' },
+    { key: 'epsBasic', label: 'EPS (Basic)', tags: ['EarningsPerShareBasic'], formula: 'EPS (Basic) = Net Income ÷ Weighted-Average Basic Shares Outstanding' },
+    { key: 'epsDiluted', label: 'EPS (Diluted)', tags: ['EarningsPerShareDiluted'], formula: 'EPS (Diluted) = Net Income ÷ Weighted-Average Diluted Shares Outstanding\n(diluted share count includes options, warrants, and convertible securities)' },
+    { key: 'rAndD', label: 'R&D Expense', tags: ['ResearchAndDevelopmentExpense'], formula: 'Reported directly as a line item within operating expenses. No derivation — cross-check against the "Research and development" line on the income statement.' },
+    { key: 'totalAssets', label: 'Total Assets', tags: ['Assets'], formula: 'Total Assets = Total Liabilities + Stockholders Equity\n(balance sheet identity; also = Current Assets + Non-current Assets)' },
+    { key: 'totalLiabilities', label: 'Total Liabilities', tags: ['Liabilities'], formula: 'Total Liabilities = Total Assets − Stockholders Equity' },
     { key: 'stockholdersEquity', label: 'Stockholders Equity', tags: [
       'StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
-    ], description: 'Total assets minus total liabilities. Represents the net worth of the company that would belong to shareholders if all assets were sold and all debts paid off.' },
+    ], formula: 'Stockholders Equity = Total Assets − Total Liabilities' },
     { key: 'cash', label: 'Cash & Equivalents', tags: [
       'CashAndCashEquivalentsAtCarryingValue', 'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
-    ], description: 'Cash on hand plus highly liquid short-term investments (like money market funds) that can be converted to cash within about 90 days.' },
-    { key: 'operatingCashFlow', label: 'Operating Cash Flow', tags: ['NetCashProvidedByUsedInOperatingActivities'], description: 'Actual cash generated (or used) by day-to-day business operations during the year. Unlike net income, this isn\'t affected by non-cash accounting items like depreciation.' },
+    ], formula: 'Reported directly on the balance sheet. No derivation — cross-check against "Cash and cash equivalents."' },
+    { key: 'operatingCashFlow', label: 'Operating Cash Flow', tags: ['NetCashProvidedByUsedInOperatingActivities'], formula: 'Operating Cash Flow = Net Income + Non-cash Adjustments (depreciation, amortization, stock comp, etc.) ± Changes in Working Capital\n(per the cash flow statement)' },
   ];
 
   document.getElementById('empty-msg').style.display = 'block';
@@ -583,12 +583,17 @@
       return '<td><span class="cell-value" title="' + esc(title) + '">' + formatValue(m.val, found.unit, scale) + '</span></td>';
     }
 
+    function rowHasScaledUsd(row) {
+      return row.cells.some(function (found) { return found && found.unit === 'USD'; });
+    }
+
     document.getElementById('table-body').innerHTML = rowSpecs.map(function (row) {
-      return '<tr><td>' + esc(row.label) + '</td>' + row.cells.map(cellHtml).join('') + '</tr>';
+      var labelSuffix = (scale.suffix && rowHasScaledUsd(row)) ? ' (' + scale.suffix + ')' : '';
+      return '<tr><td>' + esc(row.label + labelSuffix) + '</td>' + row.cells.map(cellHtml).join('') + '</tr>';
     }).join('');
 
     var stdDefs = pickedStd.map(function (m) {
-      return '<div class="term-def"><dt>' + esc(m.label) + '</dt><dd>' + esc(m.description || 'No description available.') + '</dd></div>';
+      return '<div class="term-def"><dt>' + esc(m.label) + '</dt><dd>' + esc(m.formula || m.description || 'No formula available.') + '</dd></div>';
     }).join('');
     var itemDefs = pickedItems.map(function (it) {
       var concept = gaap[it.tag] || {};
@@ -608,7 +613,7 @@
     if (unit === 'shares' || unit === 'pure') return val.toLocaleString();
     if (unit === 'USD' && scale) {
       var scaled = (val / scale.div).toFixed(2);
-      return '$' + Number(scaled).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (scale.suffix ? ' ' + scale.suffix : '');
+      return '$' + Number(scaled).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
     return '$' + val.toLocaleString();
   }
