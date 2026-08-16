@@ -169,9 +169,17 @@
     <div class="picker-list" id="year-list"></div>
   </div>
 
+  <div class="panel" id="std-panel" style="display:none;">
+    <div class="picker-head">
+      <label class="field-label" style="margin:0;">Standardized metrics</label>
+    </div>
+    <div class="sub" style="margin:-4px 0 8px;">Merges renamed/replaced XBRL tags (e.g. Apple's revenue moved from <code>Revenues</code> to <code>RevenueFromContractWithCustomerExcludingAssessedTax</code> in FY2018) so each row has values across all years.</div>
+    <div class="picker-list" id="std-metric-list"></div>
+  </div>
+
   <div class="panel" id="items-panel" style="display:none;">
     <div class="picker-head">
-      <label class="field-label" style="margin:0;">Line items</label>
+      <label class="field-label" style="margin:0;">Raw line items (advanced)</label>
     </div>
     <input class="field-input picker-search" id="item-search" type="text" placeholder="Filter line items…" oninput="renderItemList()" />
     <div class="picker-list" id="item-list"></div>
@@ -207,6 +215,43 @@
   var items = [];            // [{tag, label}]
   var selectedYears = {};
   var selectedItems = {};
+  var stdMetrics = [];       // standardized metrics with data available: [{key, label, tags}]
+  var selectedStdMetrics = {};
+
+  /* Canonical metrics mapped to the known us-gaap tags issuers have used for
+     them over time. XBRL tags get renamed/replaced across filings (e.g. the
+     2018 ASC 606 revenue-recognition update moved most issuers off `Revenues`
+     / `SalesRevenueNet` onto `RevenueFromContractWithCustomerExcludingAssessedTax`),
+     so a single raw tag only covers part of a company's history. For each
+     year we walk this list in order and use the first tag that has a value. */
+  var STANDARD_METRICS = [
+    { key: 'revenue', label: 'Total Revenue', tags: [
+      'RevenueFromContractWithCustomerExcludingAssessedTax',
+      'RevenueFromContractWithCustomerIncludingAssessedTax',
+      'Revenues',
+      'SalesRevenueNet',
+      'SalesRevenueGoodsNet',
+      'SalesRevenueServicesNet',
+    ] },
+    { key: 'costOfRevenue', label: 'Cost of Revenue', tags: [
+      'CostOfGoodsAndServicesSold', 'CostOfRevenue', 'CostOfGoodsSold', 'CostOfServices',
+    ] },
+    { key: 'grossProfit', label: 'Gross Profit', tags: ['GrossProfit'] },
+    { key: 'operatingIncome', label: 'Operating Income', tags: ['OperatingIncomeLoss'] },
+    { key: 'netIncome', label: 'Net Income', tags: ['NetIncomeLoss', 'ProfitLoss'] },
+    { key: 'epsBasic', label: 'EPS (Basic)', tags: ['EarningsPerShareBasic'] },
+    { key: 'epsDiluted', label: 'EPS (Diluted)', tags: ['EarningsPerShareDiluted'] },
+    { key: 'rAndD', label: 'R&D Expense', tags: ['ResearchAndDevelopmentExpense'] },
+    { key: 'totalAssets', label: 'Total Assets', tags: ['Assets'] },
+    { key: 'totalLiabilities', label: 'Total Liabilities', tags: ['Liabilities'] },
+    { key: 'stockholdersEquity', label: 'Stockholders Equity', tags: [
+      'StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+    ] },
+    { key: 'cash', label: 'Cash & Equivalents', tags: [
+      'CashAndCashEquivalentsAtCarryingValue', 'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
+    ] },
+    { key: 'operatingCashFlow', label: 'Operating Cash Flow', tags: ['NetCashProvidedByUsedInOperatingActivities'] },
+  ];
 
   document.getElementById('empty-msg').style.display = 'block';
 
@@ -291,14 +336,35 @@
     years = Object.keys(yearSet).map(Number).sort(function (a, b) { return b - a; });
     items = itemList.sort(function (a, b) { return a.label.localeCompare(b.label); });
 
+    stdMetrics = STANDARD_METRICS.filter(function (m) {
+      return m.tags.some(function (t) { return !!gaap[t]; });
+    });
+
     selectedYears = {};
     selectedItems = {};
+    selectedStdMetrics = {};
+    stdMetrics.forEach(function (m) { selectedStdMetrics[m.key] = true; });
 
     renderYearList();
+    renderStdMetricList();
     renderItemList();
     document.getElementById('picker-panel').style.display = years.length ? 'block' : 'none';
+    document.getElementById('std-panel').style.display = stdMetrics.length ? 'block' : 'none';
     document.getElementById('items-panel').style.display = items.length ? 'block' : 'none';
-    document.getElementById('build-row').style.display = (years.length && items.length) ? 'block' : 'none';
+    document.getElementById('build-row').style.display = (years.length && (stdMetrics.length || items.length)) ? 'block' : 'none';
+  }
+
+  function renderStdMetricList() {
+    var el = document.getElementById('std-metric-list');
+    if (!stdMetrics.length) { el.innerHTML = '<div class="picker-empty">No standardized metrics found.</div>'; return; }
+    el.innerHTML = stdMetrics.map(function (m) {
+      return '<label class="picker-item"><input type="checkbox" data-std="' + m.key + '" onchange="toggleStdMetric(\'' + m.key + '\', this.checked)"' +
+        (selectedStdMetrics[m.key] ? ' checked' : '') + ' /> ' + esc(m.label) + '</label>';
+    }).join('');
+  }
+
+  function toggleStdMetric(key, checked) {
+    if (checked) selectedStdMetrics[key] = true; else delete selectedStdMetrics[key];
   }
 
   function renderYearList() {
@@ -336,10 +402,11 @@
   /* ── Build table ── */
   function buildTable() {
     var pickedYears = years.filter(function (y) { return selectedYears[y]; });
+    var pickedStd = stdMetrics.filter(function (m) { return selectedStdMetrics[m.key]; });
     var pickedItems = items.filter(function (it) { return selectedItems[it.tag]; });
 
-    if (!pickedYears.length || !pickedItems.length) {
-      setStatus('error', 'Pick at least one fiscal year and one line item.');
+    if (!pickedYears.length || !(pickedStd.length || pickedItems.length)) {
+      setStatus('error', 'Pick at least one fiscal year and one metric or line item.');
       return;
     }
     setStatus(null);
@@ -349,26 +416,43 @@
     var head = document.getElementById('table-head');
     head.innerHTML = '<th>Line item</th>' + pickedYears.map(function (y) { return '<th>FY ' + y + '</th>'; }).join('');
 
-    var body = document.getElementById('table-body');
-    body.innerHTML = pickedItems.map(function (it) {
-      var concept = gaap[it.tag];
+    /* Finds the annual (10-K, FY) entry for a single raw tag + year, picking
+       the latest-filed value if a company restated/refiled that period. */
+    function bestAnnualEntry(tag, y) {
+      var concept = gaap[tag];
+      if (!concept) return null;
       var unitKey = Object.keys(concept.units || {})[0];
-      var entries = concept.units[unitKey] || [];
+      if (!unitKey) return null;
+      var matches = (concept.units[unitKey] || []).filter(function (u) {
+        return u.form === '10-K' && u.fp === 'FY' && u.fy === y;
+      }).sort(function (a, b) { return new Date(a.filed) - new Date(b.filed); });
+      if (!matches.length) return null;
+      var m = matches[matches.length - 1];
+      return { entry: m, unit: unitKey, tag: tag };
+    }
 
+    function cellHtml(found) {
+      if (!found) return '<td class="cell-empty">—</td>';
+      var m = found.entry;
+      var title = 'us-gaap:' + found.tag + ' · ' + m.form + ' filed ' + m.filed + ' · accession ' + m.accn + ' · period ended ' + m.end;
+      return '<td><span class="cell-value" title="' + esc(title) + '">' + formatValue(m.val, found.unit) + '</span></td>';
+    }
+
+    var stdRows = pickedStd.map(function (m) {
       var cells = pickedYears.map(function (y) {
-        var matches = entries.filter(function (u) {
-          return u.form === '10-K' && u.fp === 'FY' && u.fy === y;
-        }).sort(function (a, b) { return new Date(a.filed) - new Date(b.filed); });
-
-        if (!matches.length) return '<td class="cell-empty">—</td>';
-        var m = matches[0];
-        var title = m.form + ' filed ' + m.filed + ' · accession ' + m.accn + ' · period ended ' + m.end;
-        return '<td><span class="cell-value" title="' + esc(title) + '">' + formatValue(m.val, unitKey) + '</span></td>';
+        var found = null;
+        for (var i = 0; i < m.tags.length && !found; i++) found = bestAnnualEntry(m.tags[i], y);
+        return cellHtml(found);
       }).join('');
+      return '<tr><td>' + esc(m.label) + '</td>' + cells + '</tr>';
+    }).join('');
 
+    var itemRows = pickedItems.map(function (it) {
+      var cells = pickedYears.map(function (y) { return cellHtml(bestAnnualEntry(it.tag, y)); }).join('');
       return '<tr><td>' + esc(it.label) + '</td>' + cells + '</tr>';
     }).join('');
 
+    document.getElementById('table-body').innerHTML = stdRows + itemRows;
     document.getElementById('table-wrap').style.display = 'block';
   }
 
@@ -382,6 +466,7 @@
   function resetTable() {
     document.getElementById('table-wrap').style.display = 'none';
     document.getElementById('picker-panel').style.display = 'none';
+    document.getElementById('std-panel').style.display = 'none';
     document.getElementById('items-panel').style.display = 'none';
     document.getElementById('build-row').style.display = 'none';
     document.getElementById('company-info').style.display = 'none';
