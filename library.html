@@ -26,7 +26,7 @@
 
   html, body { min-height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
-  /* ââ Header ââ */
+  /* Ã¢ÂÂÃ¢ÂÂ Header Ã¢ÂÂÃ¢ÂÂ */
   header {
     padding: 28px 40px 22px;
     border-bottom: 1px solid var(--border);
@@ -84,7 +84,7 @@
   }
   .hdr-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-  /* ââ Book grid ââ */
+  /* Ã¢ÂÂÃ¢ÂÂ Book grid Ã¢ÂÂÃ¢ÂÂ */
   #grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -167,7 +167,7 @@
     font-size: 10px; font-weight: 500; color: #fff;
   }
 
-  /* ââ Setup modal ââ */
+  /* Ã¢ÂÂÃ¢ÂÂ Setup modal Ã¢ÂÂÃ¢ÂÂ */
   #setup-modal {
     position: fixed; inset: 0; z-index: 9999;
     background: rgba(0,0,0,0.7);
@@ -298,7 +298,7 @@
   #ul-cancel-btn:hover { border-color: var(--muted); color: var(--text); }
 
 
-  /* ââ Toast ââ */
+  /* Ã¢ÂÂÃ¢ÂÂ Toast Ã¢ÂÂÃ¢ÂÂ */
   #toast {
     position: fixed; bottom: 24px; left: 50%;
     transform: translateX(-50%) translateY(12px);
@@ -317,16 +317,16 @@
 <div id="setup-modal" style="display:none;">
   <div id="setup-box">
     <h2>Sync reading progress</h2>
-    <p class="setup-sub">Progress is saved to a private GitHub Gist — invisible to others, works on every device, survives browser resets.</p>
+    <p class="setup-sub">Progress is saved to a private GitHub Gist â invisible to others, works on every device, survives browser resets.</p>
     <ol class="setup-steps">
       <li>Open <a href="https://github.com/settings/tokens/new?scopes=repo,gist&description=verdict-cat" target="_blank">github.com/settings/tokens</a></li>
       <li>Generate a token with the <strong>repo</strong> and <strong>gist</strong> scopes</li>
       <li>Paste it below</li>
     </ol>
-    <input id="setup-pat" type="password" placeholder="ghp_…" autocomplete="off" />
+    <input id="setup-pat" type="password" placeholder="ghp_â¦" autocomplete="off" />
     <div id="setup-error"></div>
     <button id="setup-connect">Connect</button>
-    <button id="setup-skip">Skip — use this device only</button>
+    <button id="setup-skip">Skip â use this device only</button>
   </div>
 </div>
 
@@ -340,7 +340,7 @@
   </div>
   <button class="hdr-btn" id="disconnect-btn" style="display:none;">Disconnect</button>
   <div id="search-wrap">
-    <input type="text" id="search-input" placeholder="Search your library…" autocomplete="off" />
+    <input type="text" id="search-input" placeholder="Search your libraryâ¦" autocomplete="off" />
   </div>
 </header>
 
@@ -353,7 +353,7 @@
   <div id="upload-box">
     <div id="ul-cover-preview">&#128218;</div>
     <h2>Upload Book</h2>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:4px;">Metadata pulled from the epub — edit if needed.</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:4px;">Metadata pulled from the epub â edit if needed.</p>
     <label for="ul-title">Title</label>
     <input type="text" id="ul-title" placeholder="Book Title" />
     <label for="ul-author">Author</label>
@@ -367,7 +367,7 @@
 </div>
 
 <script>
-  // ââ Book catalogue ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  // Ã¢ÂÂÃ¢ÂÂ Book catalogue Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
   // Add new books here as they are uploaded.
   var BOOKS = [
     {
@@ -417,9 +417,15 @@
       title: "Welcome to Glorious Tuga",
       author: "Francesca Segal",
       cover: "books/covers/welcome-to-glorious-tuga-francesca-segal.jpeg"
+    },
+    {
+      slug: 'the-list-of-suspicious-things-jennie-z-library-sk-1lib-sk',
+      title: "The List of Suspicious Things",
+      author: "Godfrey, Jennie",
+      cover: "books/covers/the-list-of-suspicious-things-jennie-z-library-sk-1lib-sk.jpg"
     }
   ];
-  // âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  // Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
   function toast(msg) {
     var t = document.getElementById('toast');
@@ -432,7 +438,7 @@
     var dot   = document.getElementById('status-dot');
     var label = document.getElementById('status-label');
     dot.className = 'status-dot ' + (state === 'connected' ? 'connected' : state === 'syncing' ? 'syncing' : '');
-    label.textContent = state === 'connected' ? 'Synced' : state === 'syncing' ? 'Syncing…' : 'Not synced';
+    label.textContent = state === 'connected' ? 'Synced' : state === 'syncing' ? 'Syncingâ¦' : 'Not synced';
     document.getElementById('disconnect-btn').style.display = state === 'connected' ? '' : 'none';
   }
 
@@ -472,7 +478,7 @@
       menuBtn.type = 'button';
       menuBtn.className = 'card-menu-btn';
       menuBtn.setAttribute('aria-label', 'Book options');
-      menuBtn.textContent = '⋯';
+      menuBtn.textContent = 'â¯';
       menuBtn.addEventListener('click', function(book, coverDiv) {
         return function(e) {
           e.preventDefault();
@@ -501,7 +507,7 @@
 
   document.getElementById('search-input').addEventListener('input', renderCards);
 
-  // ââ Card options menu (delete) âââââââââââââââââââââââââââââââââââââââââââââ
+  // Ã¢Ã¢ Card options menu (delete) Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢Ã¢
   function closeAllCardMenus() {
     document.querySelectorAll('.card-menu').forEach(function(m) { m.remove(); });
     document.querySelectorAll('.card-menu-btn.active').forEach(function(b) { b.classList.remove('active'); });
@@ -529,7 +535,7 @@
     coverDiv.appendChild(menu);
   }
 
-  // ââ Setup modal âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  // Ã¢ÂÂÃ¢ÂÂ Setup modal Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
   function showSetup() {
     document.getElementById('setup-modal').style.display = 'flex';
     document.getElementById('setup-pat').focus();
@@ -546,7 +552,7 @@
     if (!pat) { errEl.textContent = 'Paste your token first.'; return; }
     errEl.textContent = '';
     btn.disabled = true;
-    btn.textContent = 'Connecting…';
+    btn.textContent = 'Connectingâ¦';
     try {
       var gistId = await Gist.connect(pat);
       Gist.save(pat, gistId);
@@ -564,7 +570,7 @@
     renderCards();
   });
 
-  // ââ Disconnect ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  // Ã¢ÂÂÃ¢ÂÂ Disconnect Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
   document.getElementById('disconnect-btn').addEventListener('click', function() {
     if (!confirm('Disconnect GitHub sync? Your local progress stays on this device.')) return;
     Gist.clear();
@@ -572,7 +578,7 @@
     renderCards();
   });
 
-  // ââ Sync on load ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  // Ã¢ÂÂÃ¢ÂÂ Sync on load Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
   async function syncFromGist() {
     setSyncStatus('syncing');
     await Gist.pull();
@@ -580,20 +586,20 @@
     renderCards();
   }
 
-  // ââ Init ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  // Ã¢ÂÂÃ¢ÂÂ Init Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
   if (Gist.isConnected()) {
     syncFromGist();
   } else {
     var existingPat = localStorage.getItem('verdict-cat-pat');
     if (existingPat) {
-      // PAT set from hub — auto-connect to Gist silently
+      // PAT set from hub â auto-connect to Gist silently
       renderCards();
       (async function() {
         try {
           var gistId = await Gist.connect(existingPat);
           Gist.save(existingPat, gistId);
           await syncFromGist();
-        } catch(e) { /* silent — wrong scopes or network issue */ }
+        } catch(e) { /* silent â wrong scopes or network issue */ }
       })();
     } else {
       var skippedBefore = sessionStorage.getItem('setup-skipped');
@@ -695,7 +701,7 @@
   async function deleteBook(book) {
     if (!getUploadPat()) { showSetup(); return; }
     if (!confirm('Delete "' + book.title + '" from the library? This removes it from GitHub for everyone.')) return;
-    toast('Deleting "' + book.title + '"…');
+    toast('Deleting "' + book.title + '"â¦');
     try {
       await patchFile('library.html', function(src) { return removeEntryFromLibrary(src, book.slug); }, 'Remove book from library: ' + book.title);
       await patchFile('reader.html', function(src) { return removeEntryFromReader(src, book.slug); }, 'Remove book from reader: ' + book.title);
@@ -727,7 +733,7 @@
     var data = await ghGet('/contents/' + filename + '?ref=' + BRANCH);
     var src = atob(data.content.replace(/\n/g, ''));
     var patched = patchFn(src);
-    if (patched === src) throw new Error('Could not patch ' + filename + ' — pattern not found.');
+    if (patched === src) throw new Error('Could not patch ' + filename + ' â pattern not found.');
     await ghPut('/contents/' + filename, {
       message: commitMsg,
       content: btoa(unescape(encodeURIComponent(patched))),
@@ -809,7 +815,7 @@
     document.getElementById('ul-cover-preview').innerHTML = '&#128218;';
     document.getElementById('ul-submit-btn').disabled = true;
     ulCoverB64 = null; ulCoverExt = null;
-    setUlStatus('working', 'Reading metadata…');
+    setUlStatus('working', 'Reading metadataâ¦');
     document.getElementById('upload-modal').style.display = 'flex';
     try {
       var meta = await readEpubMeta(file);
@@ -822,7 +828,7 @@
       }
       setUlStatus('', '');
     } catch(e) {
-      setUlStatus('err', 'Could not read metadata — fill in manually.');
+      setUlStatus('err', 'Could not read metadata â fill in manually.');
     }
     document.getElementById('ul-submit-btn').disabled = false;
   });
@@ -839,7 +845,7 @@
     btn.disabled = true;
     try {
       var totalSteps = ulCoverB64 ? 4 : 3;
-      setUlStatus('working', '1/' + totalSteps + '  Uploading epub…');
+      setUlStatus('working', '1/' + totalSteps + '  Uploading epubâ¦');
       var b64 = await toBase64(ulFile);
       var epubPath = 'books/' + slug + '.epub';
       var existingSha = null;
@@ -850,7 +856,7 @@
 
       var coverPath = null;
       if (ulCoverB64) {
-        setUlStatus('working', '2/' + totalSteps + '  Uploading cover…');
+        setUlStatus('working', '2/' + totalSteps + '  Uploading coverâ¦');
         coverPath = 'books/covers/' + slug + '.' + ulCoverExt;
         var coverSha = null;
         try { coverSha = (await ghGet('/contents/' + coverPath + '?ref=' + BRANCH)).sha; } catch(e) {}
@@ -859,7 +865,7 @@
         await ghPut('/contents/' + coverPath, coverBody);
       }
 
-      setUlStatus('working', (ulCoverB64 ? '3' : '2') + '/' + totalSteps + '  Updating library…');
+      setUlStatus('working', (ulCoverB64 ? '3' : '2') + '/' + totalSteps + '  Updating libraryâ¦');
       var coverValue = coverPath ? JSON.stringify(coverPath) : 'null';
       await patchFile('library.html', function(src) {
         var entry = "    {\n      slug: '" + slug + "',\n      title: " + JSON.stringify(title) + ",\n      author: " + JSON.stringify(author) + ",\n      cover: " + coverValue + "\n    }";
@@ -868,7 +874,7 @@
         });
       }, 'Register book in library: ' + title);
 
-      setUlStatus('working', (ulCoverB64 ? '4' : '3') + '/' + totalSteps + '  Updating reader…');
+      setUlStatus('working', (ulCoverB64 ? '4' : '3') + '/' + totalSteps + '  Updating readerâ¦');
       var rawUrl = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/' + epubPath;
       await patchFile('reader.html', function(src) {
         var entry = "    " + JSON.stringify(slug) + ": {\n      url: " + JSON.stringify(rawUrl) + ",\n      title: " + JSON.stringify(title) + ",\n      author: " + JSON.stringify(author) + "\n    }";
