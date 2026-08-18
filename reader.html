@@ -167,6 +167,7 @@
     transition: border-color 0.15s, color 0.15s;
   }
   .bar-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .bar-btn:disabled { opacity: 0.55; cursor: default; }
 
   #saved-badge {
     font-size: 11px;
@@ -333,6 +334,7 @@
   <span id="font-size-label">160%</span>
   <button class="bar-btn" id="font-inc">A+</button>
   <button class="bar-btn" id="theme-toggle">Light / Dark</button>
+  <button class="bar-btn" id="sync-btn" title="Sync reading progress now">Sync</button>
   <span id="saved-badge">Saved</span>
 </div>
 
@@ -388,7 +390,10 @@
   var gistIdleTimer   = null;
 
   function saveProgress(cfi) {
-    try { localStorage.setItem(storageKey(), cfi); } catch(e) {}
+    try {
+      localStorage.setItem(storageKey(), cfi);
+      Gist.touchProgress(storageKey(), Date.now());
+    } catch(e) {}
     var badge = document.getElementById('saved-badge');
     badge.classList.add('show');
     setTimeout(function() { badge.classList.remove('show'); }, 1200);
@@ -406,6 +411,12 @@
   }
 
   window.addEventListener('beforeunload', function() { Gist.push(); });
+  // beforeunload doesn't fire reliably on mobile (tab backgrounding, bfcache),
+  // so also flush whenever the page is hidden — the actual point a reader
+  // stops reading on a phone.
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'hidden') Gist.push();
+  });
 
   function showError(msg) {
     document.getElementById('loading').style.display = 'none';
@@ -439,11 +450,18 @@
       document.body.style.background = darkMode ? darkBg : '#f0f0f0';
     }
 
-    var savedCfi = loadProgress();
-    var lastKnownCfi = savedCfi || null;
-    var displayPromise = savedCfi ? rendition.display(savedCfi) : rendition.display();
+    var lastKnownCfi = loadProgress() || null;
 
-    displayPromise.then(function() {
+    // Pull the latest synced position before opening — otherwise a stale
+    // localStorage entry (e.g. from before progress made on another device)
+    // decides where the book opens, and reading elsewhere never "sticks".
+    var openPromise = (Gist.isConnected() ? Gist.pull() : Promise.resolve([])).then(function() {
+      var savedCfi = loadProgress();
+      lastKnownCfi = savedCfi || null;
+      return savedCfi ? rendition.display(savedCfi) : rendition.display();
+    });
+
+    openPromise.then(function() {
       document.getElementById('loading').style.display = 'none';
       rendition.themes.fontSize(fontSize + '%');
       document.getElementById('font-size-label').textContent = fontSize + '%';
@@ -629,6 +647,28 @@
     document.getElementById('theme-toggle').addEventListener('click', function() {
       darkMode = !darkMode;
       applyTheme();
+    });
+
+    document.getElementById('sync-btn').addEventListener('click', function() {
+      var btn = this;
+      if (!Gist.isConnected()) { alert('Connect GitHub sync from the Library page first.'); return; }
+      btn.disabled = true;
+      btn.textContent = 'Syncing…';
+      Gist.sync().then(function(changedKeys) {
+        var changedThisBook = changedKeys.indexOf(storageKey()) !== -1;
+        if (changedThisBook) {
+          var latestCfi = loadProgress();
+          if (latestCfi && latestCfi !== lastKnownCfi) {
+            lastKnownCfi = latestCfi;
+            rendition.display(latestCfi);
+          }
+        }
+        btn.textContent = changedThisBook ? 'Synced ↻' : 'Synced';
+        setTimeout(function() { btn.textContent = 'Sync'; btn.disabled = false; }, 1600);
+      }).catch(function() {
+        btn.textContent = 'Sync failed';
+        setTimeout(function() { btn.textContent = 'Sync'; btn.disabled = false; }, 1600);
+      });
     });
   }
 
