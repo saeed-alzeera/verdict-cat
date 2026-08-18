@@ -379,14 +379,34 @@
     }
   }
 
+  // GitHub's Contents API returns/accepts base64 of the raw UTF-8 bytes.
+  // atob()/btoa() only round-trip Latin-1 binary strings, so decoding
+  // straight into JS text (and re-encoding it the same way) silently
+  // mangles every non-ASCII character — and does so a little more each
+  // time a file gets patched. Go through TextDecoder/TextEncoder instead
+  // so multi-byte characters survive the round trip.
+  function utf8FromBase64(b64) {
+    var binary = atob(b64.replace(/\n/g, ''));
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+
+  function base64FromUtf8(str) {
+    var bytes = new TextEncoder().encode(str);
+    var binary = '';
+    for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary);
+  }
+
   async function patchFile(filename, patchFn, commitMsg) {
     var data = await ghGet('/contents/' + filename + '?ref=' + BRANCH);
-    var src = atob(data.content.replace(/\n/g, ''));
+    var src = utf8FromBase64(data.content);
     var patched = patchFn(src);
     if (patched === src) throw new Error('Could not patch ' + filename + ' — pattern not found.');
     await ghPut('/contents/' + filename, {
       message: commitMsg,
-      content: btoa(unescape(encodeURIComponent(patched))),
+      content: base64FromUtf8(patched),
       sha: data.sha,
       branch: BRANCH
     });
@@ -419,7 +439,7 @@
     }
     try {
       var data = await ghGet('/contents/library.html?ref=' + BRANCH);
-      var src = atob(data.content.replace(/\n/g, ''));
+      var src = utf8FromBase64(data.content);
       var m = src.match(/var BOOKS = \[([\s\S]*?)\];/);
       if (!m) throw new Error('Could not parse book list.');
       var books = [];
