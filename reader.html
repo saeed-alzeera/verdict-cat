@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0f1117" />
 <title>Reader</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg" />
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
@@ -22,6 +23,9 @@
     --muted: #8b9099;
     --accent: #5b9bd5;
     --bar-h: 52px;
+    --yellow-bg: #f4ecd8;
+    --yellow-surface: #ece2c8;
+    --yellow-text: #3b2f1e;
   }
 
   html, body {
@@ -30,6 +34,8 @@
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
   #topbar {
@@ -165,6 +171,7 @@
     padding: 6px 14px;
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
+    touch-action: manipulation;
   }
   .bar-btn:hover { border-color: var(--accent); color: var(--accent); }
   .bar-btn:disabled { opacity: 0.55; cursor: default; }
@@ -250,6 +257,10 @@
 
   #tap-zone { display: none; }
 
+  #mobile-custom-btn { display: none; }
+  #custom-overlay { display: none; }
+  #custom-panel { display: none; }
+
   /* ── Mobile reader mode ──────────────────────────────────────────────────── */
   @media (max-width: 768px) {
     html, body { background: #000 !important; }
@@ -259,9 +270,12 @@
       position: fixed;
       inset: 0;
       z-index: 10;
+      touch-action: manipulation;
     }
 
     #prev-btn, #next-btn { display: none !important; }
+
+    #topbar, #bottombar { display: none !important; }
 
     #viewer-wrap {
       top: 0 !important;
@@ -270,30 +284,120 @@
       bottom: 0 !important;
     }
 
-    #toc-panel { top: 0 !important; bottom: 0 !important; }
+    #toc-panel { top: 0 !important; bottom: 0 !important; z-index: 120; }
 
-    /* Top bar: hidden above viewport by default, slides down on reveal */
-    #topbar {
-      transform: translateY(-100%);
-      transition: transform 0.22s ease;
-      background: rgba(0, 0, 0, 0.93) !important;
-      border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+    #mobile-custom-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      position: fixed;
+      top: max(10px, env(safe-area-inset-top));
+      right: 10px;
+      z-index: 110;
+      background: rgba(20, 20, 20, 0.85);
+      color: var(--text);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 20px;
+      padding: 8px 14px;
+      font-size: 12px;
+      cursor: pointer;
       backdrop-filter: blur(10px);
+      touch-action: manipulation;
     }
-    #topbar.mob-ui-visible { transform: translateY(0); }
 
-    /* Bottom bar: repositioned below topbar, hidden above viewport by default */
-    #bottombar {
-      top: var(--bar-h);
-      bottom: auto;
-      transform: translateY(-200%);
-      transition: transform 0.22s ease;
-      background: rgba(0, 0, 0, 0.93) !important;
-      border-top: none !important;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-      backdrop-filter: blur(10px);
+    #custom-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 130;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
     }
-    #bottombar.mob-ui-visible { transform: translateY(0); }
+    #custom-overlay.show { display: block; opacity: 1; pointer-events: auto; }
+
+    #custom-panel {
+      display: block;
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      max-height: 82vh;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      border-radius: 16px 16px 0 0;
+      z-index: 140;
+      padding: 14px 18px calc(18px + env(safe-area-inset-bottom));
+      transform: translateY(100%);
+      transition: transform 0.25s ease;
+      overflow-y: auto;
+      will-change: transform;
+    }
+    #custom-panel.open { transform: translateY(0); }
+
+    #custom-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    #custom-panel-header h3 { font-size: 15px; font-weight: 600; }
+    #panel-back {
+      font-size: 12px;
+      color: var(--muted);
+      text-decoration: none;
+    }
+    #custom-panel-close {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 4px;
+      touch-action: manipulation;
+    }
+    #panel-progress {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .panel-section { margin-bottom: 16px; }
+    .panel-section h4 {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .panel-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .panel-opt-btn {
+      flex: 1;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 9px 8px;
+      cursor: pointer;
+      touch-action: manipulation;
+      text-align: center;
+    }
+    .panel-opt-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(91,155,213,0.12);
+    }
+    .theme-opt[data-theme="yellow"].active {
+      border-color: #c9a227;
+      color: #c9a227;
+      background: rgba(201,162,39,0.14);
+    }
   }
 </style>
 </head>
@@ -341,6 +445,57 @@
 <div id="toc-panel">
   <h3>Contents</h3>
   <ul id="toc-list"></ul>
+</div>
+
+<button id="mobile-custom-btn" title="Customization">&#9881; Customization</button>
+<div id="custom-overlay"></div>
+<div id="custom-panel">
+  <div id="custom-panel-header">
+    <a id="panel-back" href="library.html">&#8592; Library</a>
+    <h3>Customization</h3>
+    <button id="custom-panel-close" title="Close">&#10005;</button>
+  </div>
+  <div id="panel-progress"><span id="m-progress-label">—</span><span id="m-chapter-time"></span></div>
+
+  <div class="panel-section">
+    <h4>Font Size</h4>
+    <div class="panel-row">
+      <button class="panel-opt-btn" id="m-font-dec">A&#8722;</button>
+      <span id="m-font-size-label">160%</span>
+      <button class="panel-opt-btn" id="m-font-inc">A+</button>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <h4>Reading Mode</h4>
+    <div class="panel-row">
+      <button class="panel-opt-btn readmode-opt" data-mode="paginated">Flip Book</button>
+      <button class="panel-opt-btn readmode-opt" data-mode="scrolled">Continuous Scroll</button>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <h4>Table of Contents</h4>
+    <div class="panel-row">
+      <button class="panel-opt-btn" id="m-toc-toggle">Open Contents</button>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <h4>Theme</h4>
+    <div class="panel-row">
+      <button class="panel-opt-btn theme-opt" data-theme="light">Light</button>
+      <button class="panel-opt-btn theme-opt" data-theme="dark">Dark</button>
+      <button class="panel-opt-btn theme-opt" data-theme="yellow">Yellow</button>
+    </div>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-row">
+      <button class="panel-opt-btn" id="m-sync-btn">Sync</button>
+      <span id="m-saved-badge" style="font-size:11px;color:var(--muted);opacity:0;transition:opacity 0.4s;">Saved</span>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -397,6 +552,9 @@
     var badge = document.getElementById('saved-badge');
     badge.classList.add('show');
     setTimeout(function() { badge.classList.remove('show'); }, 1200);
+    var mBadge = document.getElementById('m-saved-badge');
+    mBadge.style.opacity = '1';
+    setTimeout(function() { mBadge.style.opacity = '0'; }, 1200);
   }
 
   function loadProgress() {
@@ -434,8 +592,15 @@
     var book = ePub(bookMeta.url);
     var rendition = book.renderTo('viewer', { width: '100%', height: '100%', spread: isMobile ? 'none' : 'always' });
     var fontSize = isMobile ? 140 : 160;
-    var darkMode = true;
     var chapterWordCounts = {};
+
+    var THEME_PALETTES = {
+      dark:   { bg: isMobile ? '#000000' : '#0f1117', color: '#e8eaed', appBg: isMobile ? '#000000' : '#0f1117' },
+      light:  { bg: '#fafafa', color: '#1a1a1a', appBg: '#f0f0f0' },
+      yellow: { bg: '#f4ecd8', color: '#3b2f1e', appBg: '#ece2c8' }
+    };
+    var theme = 'dark';
+    var readMode = 'paginated';
 
     function countWordsInDoc(doc) {
       var text = doc.body ? (doc.body.innerText || doc.body.textContent || '') : '';
@@ -443,11 +608,33 @@
     }
 
     function applyTheme() {
-      var darkBg = isMobile ? '#000000' : '#0f1117';
-      rendition.themes.override('background', darkMode ? darkBg : '#fafafa');
-      rendition.themes.override('color',      darkMode ? '#e8eaed' : '#1a1a1a');
+      var p = THEME_PALETTES[theme];
+      rendition.themes.override('background', p.bg);
+      rendition.themes.override('color', p.color);
       rendition.themes.override('line-height', '1.7');
-      document.body.style.background = darkMode ? darkBg : '#f0f0f0';
+      document.body.style.background = p.appBg;
+      var metaTheme = document.querySelector('meta[name="theme-color"]');
+      if (metaTheme) metaTheme.setAttribute('content', p.appBg);
+      document.querySelectorAll('.theme-opt').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.theme === theme);
+      });
+    }
+
+    function setTheme(t) {
+      theme = t;
+      applyTheme();
+    }
+
+    function applyReadMode() {
+      rendition.flow(readMode === 'scrolled' ? 'scrolled-doc' : 'paginated');
+      document.querySelectorAll('.readmode-opt').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.mode === readMode);
+      });
+    }
+
+    function setReadMode(mode) {
+      readMode = mode;
+      applyReadMode();
     }
 
     var lastKnownCfi = loadProgress() || null;
@@ -465,12 +652,15 @@
       document.getElementById('loading').style.display = 'none';
       rendition.themes.fontSize(fontSize + '%');
       document.getElementById('font-size-label').textContent = fontSize + '%';
+      document.getElementById('m-font-size-label').textContent = fontSize + '%';
       applyTheme();
+      if (isMobile) applyReadMode();
     }).catch(function() {
       // Saved CFI might be stale; fall back to beginning
       rendition.display().then(function() {
         document.getElementById('loading').style.display = 'none';
         applyTheme();
+        if (isMobile) applyReadMode();
       }).catch(function(err) {
         showError('Failed to render book: ' + (err && err.message));
       });
@@ -481,6 +671,7 @@
       if (pct !== undefined && !isNaN(pct) && pct > 0) {
         document.getElementById('progress-fill').style.width = (pct * 100).toFixed(1) + '%';
         document.getElementById('progress-label').textContent = Math.round(pct * 100) + '%';
+        document.getElementById('m-progress-label').textContent = Math.round(pct * 100) + '% read';
       }
     }
 
@@ -511,8 +702,9 @@
           if (totalWords > 0) {
             var wordsLeft = Math.round(totalWords * (1 - posInChapter));
             var minsLeft = Math.ceil(wordsLeft / 250);
-            document.getElementById('chapter-time').textContent =
-              minsLeft <= 1 ? '< 1 min left' : minsLeft + ' min left';
+            var timeText = minsLeft <= 1 ? '< 1 min left' : minsLeft + ' min left';
+            document.getElementById('chapter-time').textContent = timeText;
+            document.getElementById('m-chapter-time').textContent = ' · ' + timeText;
           }
         }
       } catch(e) {}
@@ -625,7 +817,7 @@
         if (Math.abs(dx) > 20 || Math.abs(dy) > 20) return;
         if (Date.now() - tzStart.t >= 500) return;
         if (tzStart.y < window.innerHeight * 0.15) {
-          toggleMobileControls();
+          openCustomPanel();
         } else if (tzStart.x < window.innerWidth / 2) {
           rendition.prev();
         } else {
@@ -634,23 +826,25 @@
       });
     }
 
-    document.getElementById('font-inc').addEventListener('click', function() {
+    function incFont() {
       fontSize = Math.min(fontSize + 10, 200);
       rendition.themes.fontSize(fontSize + '%');
       document.getElementById('font-size-label').textContent = fontSize + '%';
-    });
-    document.getElementById('font-dec').addEventListener('click', function() {
+      document.getElementById('m-font-size-label').textContent = fontSize + '%';
+    }
+    function decFont() {
       fontSize = Math.max(fontSize - 10, 60);
       rendition.themes.fontSize(fontSize + '%');
       document.getElementById('font-size-label').textContent = fontSize + '%';
-    });
+      document.getElementById('m-font-size-label').textContent = fontSize + '%';
+    }
+    document.getElementById('font-inc').addEventListener('click', incFont);
+    document.getElementById('font-dec').addEventListener('click', decFont);
     document.getElementById('theme-toggle').addEventListener('click', function() {
-      darkMode = !darkMode;
-      applyTheme();
+      setTheme(theme === 'dark' ? 'light' : 'dark');
     });
 
-    document.getElementById('sync-btn').addEventListener('click', function() {
-      var btn = this;
+    function runSync(btn) {
       if (!Gist.isConnected()) { alert('Connect GitHub sync from the Library page first.'); return; }
       btn.disabled = true;
       btn.textContent = 'Syncing…';
@@ -669,29 +863,37 @@
         btn.textContent = 'Sync failed';
         setTimeout(function() { btn.textContent = 'Sync'; btn.disabled = false; }, 1600);
       });
+    }
+
+    document.getElementById('sync-btn').addEventListener('click', function() { runSync(this); });
+
+    function openCustomPanel() {
+      document.getElementById('custom-panel').classList.add('open');
+      document.getElementById('custom-overlay').classList.add('show');
+    }
+    function closeCustomPanel() {
+      document.getElementById('custom-panel').classList.remove('open');
+      document.getElementById('custom-overlay').classList.remove('show');
+    }
+    document.getElementById('mobile-custom-btn').addEventListener('click', openCustomPanel);
+    document.getElementById('custom-panel-close').addEventListener('click', closeCustomPanel);
+    document.getElementById('custom-overlay').addEventListener('click', closeCustomPanel);
+
+    document.getElementById('m-font-inc').addEventListener('click', incFont);
+    document.getElementById('m-font-dec').addEventListener('click', decFont);
+    document.getElementById('m-sync-btn').addEventListener('click', function() { runSync(this); });
+    document.getElementById('m-toc-toggle').addEventListener('click', function() {
+      closeCustomPanel();
+      document.getElementById('toc-panel').classList.toggle('open');
+    });
+    document.querySelectorAll('.theme-opt').forEach(function(btn) {
+      btn.addEventListener('click', function() { setTheme(btn.dataset.theme); });
+    });
+    document.querySelectorAll('.readmode-opt').forEach(function(btn) {
+      btn.addEventListener('click', function() { setReadMode(btn.dataset.mode); });
     });
   }
 
-
-  // ---- Mobile controls reveal ----
-  var mobUiTimer = null;
-  window.toggleMobileControls = function() {
-    var topbar = document.getElementById('topbar');
-    var bottombar = document.getElementById('bottombar');
-    var visible = topbar.classList.contains('mob-ui-visible');
-    clearTimeout(mobUiTimer);
-    if (visible) {
-      topbar.classList.remove('mob-ui-visible');
-      bottombar.classList.remove('mob-ui-visible');
-    } else {
-      topbar.classList.add('mob-ui-visible');
-      bottombar.classList.add('mob-ui-visible');
-      mobUiTimer = setTimeout(function() {
-        topbar.classList.remove('mob-ui-visible');
-        bottombar.classList.remove('mob-ui-visible');
-      }, 3000);
-    }
-  };
   document.getElementById('toc-toggle').addEventListener('click', function() {
     document.getElementById('toc-panel').classList.toggle('open');
   });
