@@ -147,8 +147,11 @@
   <div class="header-actions">
     <button class="btn" id="rescan-btn" onclick="rescan()" style="display:none;">Rescan</button>
     <button class="btn btn-primary" id="connect-btn" onclick="connectFolder()">Connect Folder</button>
+    <button class="btn" id="select-files-btn" onclick="triggerFilePicker()">Select Files</button>
   </div>
 </header>
+
+<input type="file" id="file-input" multiple accept=".run" style="display:none;" onchange="onFilesSelected(event)" />
 
 <main>
   <div id="status-msg"></div>
@@ -156,11 +159,13 @@
   <div id="connect-card">
     <div style="font-size:32px;">🗂️</div>
     <p>
-      Grant access to your Slay the Spire 2 <code>saves\history</code> folder once.
-      Your browser remembers the grant, so this page re-reads the folder automatically
-      every time you open it &mdash; nothing is uploaded anywhere, all parsing happens locally in your browser.
+      Grant access to your Slay the Spire 2 <code>saves\history</code> folder once, or just drop in the
+      <code>.run</code> files you want to analyze. Your browser remembers a folder grant and re-reads it
+      automatically every time you open this page &mdash; nothing is uploaded anywhere, all parsing happens
+      locally in your browser.
     </p>
     <button class="btn btn-primary" onclick="connectFolder()">Connect Folder</button>
+    <button class="btn" onclick="triggerFilePicker()">Select Files&hellip;</button>
   </div>
 
   <div id="dashboard" style="display:none;">
@@ -387,6 +392,53 @@ async function scanAndRender(dirHandle) {
     renderAll();
   } catch (e) {
     setStatus('error', 'Scan failed: ' + e.message);
+  }
+}
+
+function triggerFilePicker() {
+  document.getElementById('file-input').click();
+}
+
+async function onFilesSelected(event) {
+  var fileList = Array.prototype.slice.call(event.target.files || []).filter(function (f) {
+    return /\.run$/i.test(f.name);
+  });
+  event.target.value = '';
+  if (!fileList.length) {
+    setStatus('warn', 'No .run files were in that selection.');
+    return;
+  }
+  document.getElementById('connect-card').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  await parseFilesAndRender(fileList, fileList.length + ' file' + (fileList.length === 1 ? '' : 's') + ' selected');
+}
+
+async function parseFilesAndRender(files, sourceLabel) {
+  setStatus('loading', 'Parsing 0 / ' + files.length + '…');
+  try {
+    var parsed = [];
+    for (var i = 0; i < files.length; i++) {
+      setStatus('loading', 'Parsing run ' + (i + 1) + ' / ' + files.length + '…');
+      try {
+        var text = await files[i].text();
+        var raw = JSON.parse(text);
+        parsed.push(summarizeRun(raw, files[i].name));
+      } catch (e) { /* skip unreadable / mid-run save files */ }
+    }
+    if (!parsed.length) {
+      setStatus('warn', 'None of the selected files could be parsed as run files.');
+      return;
+    }
+    runs = parsed;
+    localStorage.setItem(LS_SUMMARIES, JSON.stringify(runs));
+    localStorage.setItem(LS_SYNCED_AT, String(Date.now()));
+    document.getElementById('sync-note').textContent = 'Synced ' + new Date().toLocaleString();
+    document.getElementById('header-sub').textContent = runs.length + ' runs loaded from ' + sourceLabel;
+    setStatus('ok', 'Dataset up to date — ' + runs.length + ' runs.');
+    setTimeout(function () { setStatus(null, ''); }, 4000);
+    renderAll();
+  } catch (e) {
+    setStatus('error', 'Parse failed: ' + e.message);
   }
 }
 
