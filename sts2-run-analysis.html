@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>StS2 Run Analysis</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
+<link rel="shortcut icon" href="favicon.ico" />
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #1a1d23;
+    --panel-alt: #1e2128;
+    --row-alt: #181b21;
+    --ink: #e8eaed;
+    --muted: #8b9099;
+    --line: #2e3238;
+    --accent: #5b9bd5;
+    --warn: #e8a730;
+    --green: #4caf82;
+    --red: #e05c5c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.45; -webkit-text-size-adjust: 100%; }
+
+  header {
+    padding: 16px 16px 10px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg); border-bottom: 1px solid var(--line);
+  }
+  #hub-back {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 13px; color: var(--muted);
+    text-decoration: none; padding: 6px 10px;
+    border: 1px solid var(--line); border-radius: 8px;
+    white-space: nowrap; flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  #hub-back:hover { color: var(--ink); border-color: var(--muted); }
+  #header-text { flex: 1; min-width: 200px; }
+  h1 { font-size: 18px; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .header-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .btn {
+    font: inherit; padding: 7px 14px;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); color: var(--muted);
+    cursor: pointer; font-size: 13px;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { color: var(--ink); border-color: var(--muted); }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { opacity: 0.88; color: #fff; border-color: var(--accent); }
+
+  main { padding: 16px 16px 80px; max-width: 980px; margin: 0 auto; }
+
+  #status-msg {
+    margin: 0 0 14px; padding: 11px 14px; border-radius: 8px;
+    font-size: 13px; display: none;
+  }
+  #status-msg.loading { background: var(--panel); border: 1px solid var(--line); color: var(--muted); display: block; }
+  #status-msg.error   { background: rgba(224,92,92,0.1); border: 1px solid var(--red); color: var(--red); display: block; }
+  #status-msg.warn    { background: rgba(232,167,48,0.1); border: 1px solid var(--warn); color: var(--warn); display: block; }
+  #status-msg.ok      { background: rgba(76,175,130,0.1); border: 1px solid var(--green); color: var(--green); display: block; }
+
+  #connect-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 28px; text-align: center; margin-bottom: 16px;
+  }
+  #connect-card p { color: var(--muted); font-size: 13px; margin: 8px 0 18px; }
+  #connect-card code { background: var(--panel-alt); padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+
+  .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  .filter-bar select {
+    font: inherit; font-size: 13px; padding: 7px 10px;
+    background: var(--panel); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px;
+  }
+  .filter-bar .spacer { flex: 1; }
+  #sync-note { font-size: 12px; color: var(--muted); }
+
+  .stat-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px; margin-bottom: 20px;
+  }
+  .stat-tile {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .stat-tile .v { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .stat-tile .l { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .stat-tile .v.green { color: var(--green); }
+  .stat-tile .v.red { color: var(--red); }
+
+  .section { margin-bottom: 26px; }
+  .section h2 { font-size: 15px; font-weight: 600; margin: 0 0 10px; letter-spacing: -0.01em; }
+  .section .note { font-size: 12px; color: var(--muted); margin: -4px 0 10px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; font-size: 13px; }
+  .bar-row .label { width: 150px; flex-shrink: 0; color: var(--muted); }
+  .bar-row .track { flex: 1; height: 8px; background: var(--panel-alt); border-radius: 4px; overflow: hidden; }
+  .bar-row .fill { height: 100%; background: var(--accent); border-radius: 4px; }
+  .bar-row .fill.green { background: var(--green); }
+  .bar-row .fill.red { background: var(--red); }
+  .bar-row .val { width: 54px; flex-shrink: 0; text-align: right; font-variant-numeric: tabular-nums; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: none; }
+  .delta-pos { color: var(--green); }
+  .delta-neg { color: var(--red); }
+
+  #hp-chart { width: 100%; height: 160px; display: block; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  .findings { list-style: none; margin: 0; padding: 0; }
+  .findings li {
+    padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px;
+    margin-bottom: 8px; font-size: 13px; background: var(--panel-alt);
+  }
+  .findings li b { color: var(--ink); }
+
+  #run-list-wrap { overflow-x: auto; }
+  #empty-state { color: var(--muted); font-size: 13px; text-align: center; padding: 40px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <a id="hub-back" href="index.html">&larr; Hub</a>
+  <div id="header-text">
+    <h1>StS2 Run Analysis</h1>
+    <div class="sub" id="header-sub">Not connected to a save folder yet</div>
+  </div>
+  <div class="header-actions">
+    <button class="btn" id="rescan-btn" onclick="rescan()" style="display:none;">Rescan</button>
+    <button class="btn btn-primary" id="connect-btn" onclick="connectFolder()">Connect Folder</button>
+  </div>
+</header>
+
+<main>
+  <div id="status-msg"></div>
+
+  <div id="connect-card">
+    <div style="font-size:32px;">🗂️</div>
+    <p>
+      Grant access to your Slay the Spire 2 <code>saves\history</code> folder once.
+      Your browser remembers the grant, so this page re-reads the folder automatically
+      every time you open it &mdash; nothing is uploaded anywhere, all parsing happens locally in your browser.
+    </p>
+    <button class="btn btn-primary" onclick="connectFolder()">Connect Folder</button>
+  </div>
+
+  <div id="dashboard" style="display:none;">
+    <div class="filter-bar">
+      <select id="filter-mode" onchange="renderAll()">
+        <option value="all">All runs</option>
+        <option value="solo">Solo only</option>
+        <option value="multiplayer">Multiplayer only</option>
+      </select>
+      <select id="filter-char" onchange="renderAll()">
+        <option value="all">All characters</option>
+      </select>
+      <select id="self-id" onchange="onSelfChange()"></select>
+      <div class="spacer"></div>
+      <span id="sync-note"></span>
+    </div>
+
+    <div id="empty-state" style="display:none;">No .run files found in the connected folder.</div>
+
+    <div id="content" style="display:none;">
+      <div class="stat-grid" id="stat-grid"></div>
+
+      <div class="section">
+        <h2>HP% trajectory (win vs. loss)</h2>
+        <div class="note">Average HP as % of max HP, by position through the run (deciles of nodes visited).</div>
+        <div class="panel">
+          <svg id="hp-chart" viewBox="0 0 600 160" preserveAspectRatio="none"></svg>
+          <div class="legend">
+            <span><i class="dot" style="background:var(--green)"></i>Wins</span>
+            <span><i class="dot" style="background:var(--red)"></i>Losses</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Card pick habits</h2>
+        <div class="note">
+          "Defensive" is a heuristic based on card name keywords (Defend/Block/Ward/Shield/Guard/Barrier/Armor/Parry/Deflect) &mdash;
+          StS2 doesn't expose card type in the save file, so treat this as directional, not exact.
+        </div>
+        <div class="panel" id="card-habits"></div>
+      </div>
+
+      <div class="section">
+        <h2>Path &amp; rest-site choices</h2>
+        <div class="panel" id="path-habits"></div>
+      </div>
+
+      <div class="section">
+        <h2>Wins vs. losses, by metric</h2>
+        <div class="panel">
+          <table id="compare-table">
+            <thead><tr><th>Metric</th><th class="num">Wins avg</th><th class="num">Losses avg</th><th class="num">Delta</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Notable findings</h2>
+        <ul class="findings" id="findings-list"></ul>
+      </div>
+
+      <div class="section">
+        <h2>Runs</h2>
+        <div class="panel" id="run-list-wrap">
+          <table id="run-table">
+            <thead><tr>
+              <th>Date</th><th>Character</th><th>Mode</th><th>Result</th>
+              <th class="num">Asc.</th><th class="num">Nodes</th><th class="num">Min HP%</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  if (localStorage.getItem('hub_auth') !== '1') {
+    window.location.replace('index.html');
+  }
+})();
+
+var LS_SUMMARIES = 'sts2-run-summaries';
+var LS_SELF_ID   = 'sts2-self-id';
+var LS_SYNCED_AT = 'sts2-synced-at';
+var DB_NAME = 'sts2-run-analysis';
+var STORE   = 'handles';
+var DEFENSIVE_RE = /DEFEND|BLOCK|WARD|SHIELD|GUARD|BARRIER|ARMOR|PARRY|DEFLECT/i;
+
+var runs = [];
+
+/* ── IndexedDB handle storage ── */
+function idbOpen() {
+  return new Promise(function (resolve, reject) {
+    var req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = function () { req.result.createObjectStore(STORE); };
+    req.onsuccess = function () { resolve(req.result); };
+    req.onerror = function () { reject(req.error); };
+  });
+}
+function idbGet(key) {
+  return idbOpen().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(STORE, 'readonly');
+      var req = tx.objectStore(STORE).get(key);
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error); };
+    });
+  });
+}
+function idbSet(key, val) {
+  return idbOpen().then(function (db) {
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(val, key);
+      tx.oncomplete = function () { resolve(); };
+      tx.onerror = function () { reject(tx.error); };
+    });
+  });
+}
+
+function setStatus(type, msg) {
+  var el = document.getElementById('status-msg');
+  el.className = type;
+  el.textContent = msg;
+  if (!type) el.style.display = 'none';
+}
+
+/* ── Connect / autofetch ── */
+async function connectFolder() {
+  if (!window.showDirectoryPicker) {
+    setStatus('error', 'This browser does not support the File System Access API. Use a Chromium-based browser (Chrome, Edge) on desktop.');
+    return;
+  }
+  try {
+    var handle = await window.showDirectoryPicker({ id: 'sts2-history', mode: 'read' });
+    await idbSet('dir', handle);
+    document.getElementById('connect-card').style.display = 'none';
+    document.getElementById('connect-btn').textContent = 'Reconnect Folder';
+    document.getElementById('rescan-btn').style.display = '';
+    await scanAndRender(handle);
+  } catch (e) {
+    if (e.name !== 'AbortError') setStatus('error', 'Could not open folder: ' + e.message);
+  }
+}
+
+async function tryAutoConnect() {
+  var handle;
+  try { handle = await idbGet('dir'); } catch (e) { handle = null; }
+  if (!handle) {
+    loadCachedOnly();
+    return;
+  }
+  document.getElementById('connect-card').style.display = 'none';
+  document.getElementById('connect-btn').textContent = 'Reconnect Folder';
+  document.getElementById('rescan-btn').style.display = '';
+
+  var perm;
+  try { perm = await handle.queryPermission({ mode: 'read' }); } catch (e) { perm = 'prompt'; }
+  if (perm === 'granted') {
+    await scanAndRender(handle);
+    return;
+  }
+  loadCachedOnly();
+  setStatus('warn', 'Folder access needs to be re-confirmed. Click "Reconnect Folder" to resume auto-syncing.');
+}
+
+async function rescan() {
+  var handle = await idbGet('dir');
+  if (!handle) { connectFolder(); return; }
+  var perm = await handle.queryPermission({ mode: 'read' });
+  if (perm !== 'granted') {
+    perm = await handle.requestPermission({ mode: 'read' });
+    if (perm !== 'granted') { setStatus('error', 'Permission denied.'); return; }
+  }
+  await scanAndRender(handle);
+}
+
+function loadCachedOnly() {
+  var raw = localStorage.getItem(LS_SUMMARIES);
+  if (!raw) return;
+  try { runs = JSON.parse(raw); } catch (e) { runs = []; }
+  if (runs.length) {
+    document.getElementById('dashboard').style.display = 'block';
+    var syncedAt = localStorage.getItem(LS_SYNCED_AT);
+    document.getElementById('sync-note').textContent = syncedAt ? 'Cached from ' + new Date(+syncedAt).toLocaleString() : '';
+    document.getElementById('header-sub').textContent = runs.length + ' runs (cached)';
+    renderAll();
+  }
+}
+
+async function scanAndRender(dirHandle) {
+  setStatus('loading', 'Scanning save folder…');
+  document.getElementById('dashboard').style.display = 'block';
+  try {
+    var files = [];
+    await collectRunFiles(dirHandle, files, 0);
+    if (!files.length) {
+      setStatus('warn', 'Connected, but no .run files were found in that folder.');
+      document.getElementById('header-sub').textContent = 'Connected — 0 runs found';
+      return;
+    }
+    var parsed = [];
+    for (var i = 0; i < files.length; i++) {
+      setStatus('loading', 'Parsing run ' + (i + 1) + ' / ' + files.length + '…');
+      try {
+        var file = await files[i].getFile();
+        var text = await file.text();
+        var raw = JSON.parse(text);
+        parsed.push(summarizeRun(raw, files[i].name));
+      } catch (e) { /* skip unreadable / mid-run save files */ }
+    }
+    runs = parsed;
+    localStorage.setItem(LS_SUMMARIES, JSON.stringify(runs));
+    localStorage.setItem(LS_SYNCED_AT, String(Date.now()));
+    document.getElementById('sync-note').textContent = 'Synced ' + new Date().toLocaleString();
+    document.getElementById('header-sub').textContent = runs.length + ' runs loaded from ' + dirHandle.name;
+    setStatus('ok', 'Dataset up to date — ' + runs.length + ' runs.');
+    setTimeout(function () { setStatus(null, ''); }, 4000);
+    renderAll();
+  } catch (e) {
+    setStatus('error', 'Scan failed: ' + e.message);
+  }
+}
+
+async function collectRunFiles(dirHandle, out, depth) {
+  if (depth > 4) return;
+  for await (var entry of dirHandle.values()) {
+    if (entry.kind === 'file' && /\.run$/i.test(entry.name)) {
+      out.push(entry);
+    } else if (entry.kind === 'directory') {
+      await collectRunFiles(entry, out, depth + 1);
+    }
+  }
+}
+
+/* ── Parsing ── */
+function flatten(mapPointHistory) {
+  var out = [];
+  (mapPointHistory || []).forEach(function (chunk) { (chunk || []).forEach(function (n) { out.push(n); }); });
+  return out;
+}
+
+function summarizeRun(raw, fileName) {
+  var nodes = flatten(raw.map_point_history);
+  var players = raw.players || [];
+  var mode = players.length > 1 ? 'multiplayer' : 'solo';
+
+  var selfId = detectSelfId(players);
+  var selfPlayer = players.find(function (p) { return String(p.id) === String(selfId); });
+
+  var floors = [];
+  var eliteCount = 0, restCount = 0, shopCount = 0, treasureCount = 0, monsterCount = 0, unknownCount = 0, eventCount = 0, bossCount = 0;
+  var cardsOffered = 0, cardsPicked = 0, defPicked = 0, defOffered = 0, offSkipped = 0, defSkipped = 0;
+  var restHeal = 0, restSmith = 0;
+  var potionsPicked = 0, potionsUsed = 0, potionsDiscarded = 0, relicsPicked = 0;
+
+  nodes.forEach(function (node, idx) {
+    var room = (node.rooms && node.rooms[0]) || {};
+    switch (node.map_point_type) {
+      case 'elite': eliteCount++; break;
+      case 'rest_site': restCount++; break;
+      case 'shop': shopCount++; break;
+      case 'treasure': treasureCount++; break;
+      case 'monster': monsterCount++; break;
+      case 'unknown': unknownCount++; break;
+      default: unknownCount++;
+    }
+    if (room.room_type === 'boss') bossCount++;
+    if (room.room_type === 'event') eventCount++;
+
+    var stat = (node.player_stats || []).find(function (p) { return String(p.player_id) === String(selfId); });
+    if (!stat) return;
+
+    if (typeof stat.max_hp === 'number' && stat.max_hp > 0) {
+      floors.push({ idx: idx, hpPct: Math.max(0, Math.min(1, stat.current_hp / stat.max_hp)) });
+    }
+
+    (stat.card_choices || []).forEach(function (c) {
+      var id = c.card && c.card.id ? c.card.id : '';
+      var isDef = DEFENSIVE_RE.test(id);
+      cardsOffered++;
+      if (isDef) defOffered++;
+      if (c.was_picked) {
+        cardsPicked++;
+        if (isDef) defPicked++;
+      } else {
+        if (isDef) defSkipped++; else offSkipped++;
+      }
+    });
+
+    (stat.rest_site_choices || []).forEach(function (c) {
+      if (c === 'HEAL') restHeal++;
+      else if (c === 'SMITH') restSmith++;
+    });
+
+    (stat.potion_choices || []).forEach(function (c) { if (c.was_picked) potionsPicked++; });
+    (stat.potion_used || []).forEach(function () { potionsUsed++; });
+    (stat.potion_discarded || []).forEach(function () { potionsDiscarded++; });
+    (stat.relic_choices || []).forEach(function (c) { if (c.was_picked) relicsPicked++; });
+  });
+
+  var hpPcts = floors.map(function (f) { return f.hpPct; });
+  var minHp = hpPcts.length ? Math.min.apply(null, hpPcts) : null;
+  var avgHp = hpPcts.length ? hpPcts.reduce(function (a, b) { return a + b; }, 0) / hpPcts.length : null;
+  var below30 = hpPcts.filter(function (h) { return h < 0.3; }).length;
+
+  return {
+    file: fileName,
+    win: !!raw.win,
+    abandoned: !!raw.was_abandoned,
+    ascension: raw.ascension,
+    seed: raw.seed,
+    startTime: raw.start_time,
+    runTimeSec: raw.run_time,
+    character: selfPlayer ? selfPlayer.character : null,
+    playerCount: players.length,
+    mode: mode,
+    selfId: selfId,
+    nodeCount: nodes.length,
+    hpTrajectory: floors,
+    minHpPct: minHp,
+    avgHpPct: avgHp,
+    floorsBelow30: below30,
+    eliteCount: eliteCount, restCount: restCount, shopCount: shopCount,
+    treasureCount: treasureCount, monsterCount: monsterCount, unknownCount: unknownCount,
+    eventCount: eventCount, bossCount: bossCount,
+    cardsOffered: cardsOffered, cardsPicked: cardsPicked,
+    defPicked: defPicked, defOffered: defOffered,
+    offSkipped: offSkipped, defSkipped: defSkipped,
+    restHeal: restHeal, restSmith: restSmith,
+    potionsPicked: potionsPicked, potionsUsed: potionsUsed, potionsDiscarded: potionsDiscarded,
+    relicsPicked: relicsPicked
+  };
+}
+
+function detectSelfId(players) {
+  var override = localStorage.getItem(LS_SELF_ID);
+  if (override && players.some(function (p) { return String(p.id) === override; })) return override;
+  return players.length ? players[0].id : null;
+}
+
+/* ── Rendering ── */
+function currentFilters() {
+  return {
+    mode: document.getElementById('filter-mode').value,
+    character: document.getElementById('filter-char').value
+  };
+}
+
+function filteredRuns() {
+  var f = currentFilters();
+  return runs.filter(function (r) {
+    if (f.mode !== 'all' && r.mode !== f.mode) return false;
+    if (f.character !== 'all' && r.character !== f.character) return false;
+    return true;
+  });
+}
+
+function pct(n) { return n == null || isNaN(n) ? '—' : (n * 100).toFixed(0) + '%'; }
+function avg(arr) { return arr.length ? arr.reduce(function (a, b) { return a + b; }, 0) / arr.length : null; }
+
+function renderAll() {
+  document.getElementById('empty-state').style.display = runs.length ? 'none' : 'block';
+  document.getElementById('content').style.display = runs.length ? 'block' : 'none';
+  if (!runs.length) return;
+
+  populateSelectors();
+  var list = filteredRuns();
+
+  renderStats(list);
+  renderHpChart(list);
+  renderCardHabits(list);
+  renderPathHabits(list);
+  renderCompareTable(list);
+  renderFindings(list);
+  renderRunTable(list);
+}
+
+function populateSelectors() {
+  var charSel = document.getElementById('filter-char');
+  var chars = Array.from(new Set(runs.map(function (r) { return r.character; }).filter(Boolean))).sort();
+  var current = charSel.value;
+  charSel.innerHTML = '<option value="all">All characters</option>' +
+    chars.map(function (c) { return '<option value="' + c + '">' + c.replace('CHARACTER.', '') + '</option>'; }).join('');
+  if (chars.indexOf(current) !== -1) charSel.value = current;
+
+  var idSel = document.getElementById('self-id');
+  var ids = Array.from(new Set(runs.map(function (r) { return String(r.selfId); }).filter(Boolean)));
+  var storedId = localStorage.getItem(LS_SELF_ID) || (runs[0] && String(runs[0].selfId));
+  idSel.innerHTML = ids.map(function (id) { return '<option value="' + id + '">Player ' + id + '</option>'; }).join('');
+  if (storedId) idSel.value = storedId;
+}
+
+function onSelfChange() {
+  var idSel = document.getElementById('self-id');
+  localStorage.setItem(LS_SELF_ID, idSel.value);
+  rescan();
+}
+
+function renderStats(list) {
+  var wins = list.filter(function (r) { return r.win; });
+  var winRate = list.length ? wins.length / list.length : 0;
+  var avgFloors = avg(list.map(function (r) { return r.nodeCount; }));
+  var avgRunTime = avg(list.map(function (r) { return r.runTimeSec; }).filter(function (x) { return x != null; }));
+  var soloCount = list.filter(function (r) { return r.mode === 'solo'; }).length;
+  var multiCount = list.length - soloCount;
+
+  var tiles = [
+    { v: list.length, l: 'Runs (filtered)' },
+    { v: pct(winRate), l: 'Win rate', cls: winRate >= 0.5 ? 'green' : 'red' },
+    { v: avgFloors ? avgFloors.toFixed(1) : '—', l: 'Avg nodes reached' },
+    { v: avgRunTime ? Math.round(avgRunTime / 60) + 'm' : '—', l: 'Avg run length' },
+    { v: soloCount, l: 'Solo runs' },
+    { v: multiCount, l: 'Multiplayer runs' }
+  ];
+  document.getElementById('stat-grid').innerHTML = tiles.map(function (t) {
+    return '<div class="stat-tile"><div class="v' + (t.cls ? ' ' + t.cls : '') + '">' + t.v + '</div><div class="l">' + t.l + '</div></div>';
+  }).join('');
+}
+
+function renderHpChart(list) {
+  var svg = document.getElementById('hp-chart');
+  var buckets = 10;
+  function seriesFor(subset) {
+    var sums = new Array(buckets).fill(0), counts = new Array(buckets).fill(0);
+    subset.forEach(function (r) {
+      var n = r.hpTrajectory.length;
+      if (!n) return;
+      r.hpTrajectory.forEach(function (f, i) {
+        var b = Math.min(buckets - 1, Math.floor((i / n) * buckets));
+        sums[b] += f.hpPct; counts[b]++;
+      });
+    });
+    return sums.map(function (s, i) { return counts[i] ? s / counts[i] : null; });
+  }
+  var wins = seriesFor(list.filter(function (r) { return r.win; }));
+  var losses = seriesFor(list.filter(function (r) { return !r.win; }));
+
+  function path(series, color) {
+    var pts = [];
+    series.forEach(function (v, i) {
+      if (v == null) return;
+      var x = (i / (buckets - 1)) * 600;
+      var y = 150 - v * 140;
+      pts.push(x + ',' + y);
+    });
+    if (!pts.length) return '';
+    return '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + color + '" stroke-width="2.5" />';
+  }
+
+  var gridLines = '';
+  [0, 0.5, 1].forEach(function (frac) {
+    var y = 150 - frac * 140;
+    gridLines += '<line x1="0" y1="' + y + '" x2="600" y2="' + y + '" stroke="#2e3238" stroke-width="1" />' +
+      '<text x="4" y="' + (y - 3) + '" fill="#8b9099" font-size="10">' + Math.round(frac * 100) + '%</text>';
+  });
+
+  svg.innerHTML = gridLines + path(losses, '#e05c5c') + path(wins, '#4caf82');
+}
+
+function renderCardHabits(list) {
+  var offered = list.reduce(function (a, r) { return a + r.cardsOffered; }, 0);
+  var picked = list.reduce(function (a, r) { return a + r.cardsPicked; }, 0);
+  var defPicked = list.reduce(function (a, r) { return a + r.defPicked; }, 0);
+  var defOffered = list.reduce(function (a, r) { return a + r.defOffered; }, 0);
+  var defSkipped = list.reduce(function (a, r) { return a + r.defSkipped; }, 0);
+  var offSkipped = list.reduce(function (a, r) { return a + r.offSkipped; }, 0);
+  var offPicked = picked - defPicked;
+
+  var defPickRateOfDefOffered = defOffered ? defPicked / defOffered : null;
+  var offPickRateOfOffOffered = (offered - defOffered) ? offPicked / (offered - defOffered) : null;
+  var pickRatio = picked ? defPicked / picked : null;
+
+  function row(label, value, max, cls) {
+    var w = max ? Math.round((value / max) * 100) : 0;
+    return '<div class="bar-row"><div class="label">' + label + '</div><div class="track"><div class="fill ' + (cls || '') + '" style="width:' + w + '%"></div></div><div class="val">' + pct(value) + '</div></div>';
+  }
+
+  var html = '';
+  html += row('Defensive cards, of all picks', pickRatio, 1);
+  html += row('Pick rate when a defensive card is offered', defPickRateOfDefOffered, 1, 'green');
+  html += row('Pick rate when a non-defensive card is offered', offPickRateOfOffOffered, 1);
+  html += '<table style="margin-top:12px;"><tbody>' +
+    '<tr><td>Defensive cards picked</td><td class="num">' + defPicked + '</td></tr>' +
+    '<tr><td>Defensive cards skipped</td><td class="num">' + defSkipped + '</td></tr>' +
+    '<tr><td>Non-defensive cards picked</td><td class="num">' + offPicked + '</td></tr>' +
+    '<tr><td>Non-defensive cards skipped</td><td class="num">' + offSkipped + '</td></tr>' +
+    '</tbody></table>';
+  document.getElementById('card-habits').innerHTML = html;
+}
+
+function renderPathHabits(list) {
+  var elite = list.reduce(function (a, r) { return a + r.eliteCount; }, 0);
+  var rest = list.reduce(function (a, r) { return a + r.restCount; }, 0);
+  var shop = list.reduce(function (a, r) { return a + r.shopCount; }, 0);
+  var restHeal = list.reduce(function (a, r) { return a + r.restHeal; }, 0);
+  var restSmith = list.reduce(function (a, r) { return a + r.restSmith; }, 0);
+  var totalNodes = list.reduce(function (a, r) { return a + r.nodeCount; }, 0);
+  var potionsUsed = list.reduce(function (a, r) { return a + r.potionsUsed; }, 0);
+  var potionsPicked = list.reduce(function (a, r) { return a + r.potionsPicked; }, 0);
+
+  function row(label, value, max) {
+    var w = max ? Math.round((value / max) * 100) : 0;
+    return '<div class="bar-row"><div class="label">' + label + '</div><div class="track"><div class="fill" style="width:' + w + '%"></div></div><div class="val">' + value + '</div></div>';
+  }
+
+  var html = '';
+  html += row('Elite nodes / run', (elite / (list.length || 1)).toFixed(1), 5);
+  html += row('Rest sites / run', (rest / (list.length || 1)).toFixed(1), 5);
+  html += row('Shop visits / run', (shop / (list.length || 1)).toFixed(1), 5);
+  html += '<table style="margin-top:12px;"><tbody>' +
+    '<tr><td>Rest site: heal</td><td class="num">' + restHeal + ' (' + pct(restHeal / (restHeal + restSmith || 1)) + ')</td></tr>' +
+    '<tr><td>Rest site: upgrade (smith)</td><td class="num">' + restSmith + ' (' + pct(restSmith / (restHeal + restSmith || 1)) + ')</td></tr>' +
+    '<tr><td>Potions picked</td><td class="num">' + potionsPicked + '</td></tr>' +
+    '<tr><td>Potions used</td><td class="num">' + potionsUsed + '</td></tr>' +
+    '<tr><td>Total nodes visited</td><td class="num">' + totalNodes + '</td></tr>' +
+    '</tbody></table>';
+  document.getElementById('path-habits').innerHTML = html;
+}
+
+function metricAvg(list, fn) { return avg(list.map(fn).filter(function (v) { return v != null && !isNaN(v); })); }
+
+function renderCompareTable(list) {
+  var wins = list.filter(function (r) { return r.win; });
+  var losses = list.filter(function (r) { return !r.win; });
+
+  var metrics = [
+    { label: 'Avg HP%', fmt: pct, fn: function (r) { return r.avgHpPct; } },
+    { label: 'Min HP%', fmt: pct, fn: function (r) { return r.minHpPct; } },
+    { label: 'Floors below 30% HP', fmt: function (v) { return v == null ? '—' : v.toFixed(1); }, fn: function (r) { return r.floorsBelow30; } },
+    { label: 'Defensive pick rate', fmt: pct, fn: function (r) { return r.cardsPicked ? r.defPicked / r.cardsPicked : null; } },
+    { label: 'Rest-site heal rate', fmt: pct, fn: function (r) { return (r.restHeal + r.restSmith) ? r.restHeal / (r.restHeal + r.restSmith) : null; } },
+    { label: 'Elite nodes / run', fmt: function (v) { return v == null ? '—' : v.toFixed(1); }, fn: function (r) { return r.eliteCount; } },
+    { label: 'Nodes reached', fmt: function (v) { return v == null ? '—' : v.toFixed(1); }, fn: function (r) { return r.nodeCount; } }
+  ];
+
+  var rows = metrics.map(function (m) {
+    var w = metricAvg(wins, m.fn), l = metricAvg(losses, m.fn);
+    var delta = (w != null && l != null) ? w - l : null;
+    var deltaCls = delta == null ? '' : (delta >= 0 ? 'delta-pos' : 'delta-neg');
+    var deltaStr = delta == null ? '—' : (delta >= 0 ? '+' : '') + m.fmt(delta).replace('—', '0');
+    return '<tr><td>' + m.label + '</td><td class="num">' + m.fmt(w) + '</td><td class="num">' + m.fmt(l) + '</td><td class="num ' + deltaCls + '">' + deltaStr + '</td></tr>';
+  });
+  document.querySelector('#compare-table tbody').innerHTML = rows.join('');
+}
+
+function renderFindings(list) {
+  var wins = list.filter(function (r) { return r.win; });
+  var losses = list.filter(function (r) { return !r.win; });
+  var findings = [];
+
+  if (list.length < 15) {
+    findings.push('Only ' + list.length + ' runs match the current filter &mdash; treat these findings as low-confidence.');
+  }
+
+  var defRateWins = metricAvg(wins, function (r) { return r.cardsPicked ? r.defPicked / r.cardsPicked : null; });
+  var defRateLosses = metricAvg(losses, function (r) { return r.cardsPicked ? r.defPicked / r.cardsPicked : null; });
+  if (defRateWins != null && defRateLosses != null && wins.length >= 3 && losses.length >= 3) {
+    var diff = (defRateLosses - defRateWins) * 100;
+    if (Math.abs(diff) >= 3) {
+      findings.push('In losses, ' + Math.abs(diff).toFixed(0) + '% ' + (diff > 0 ? 'more' : 'fewer') +
+        ' of picked cards are defensive-keyword cards compared to wins (' + pct(defRateLosses) + ' vs ' + pct(defRateWins) + ').');
+    }
+  }
+
+  var hpWins = metricAvg(wins, function (r) { return r.avgHpPct; });
+  var hpLosses = metricAvg(losses, function (r) { return r.avgHpPct; });
+  if (hpWins != null && hpLosses != null) {
+    findings.push('Average HP% is ' + pct(hpWins) + ' in wins vs. ' + pct(hpLosses) + ' in losses.');
+  }
+
+  var eliteWins = metricAvg(wins, function (r) { return r.eliteCount; });
+  var eliteLosses = metricAvg(losses, function (r) { return r.eliteCount; });
+  if (eliteWins != null && eliteLosses != null) {
+    findings.push('Elites fought per run: ' + eliteWins.toFixed(1) + ' in wins vs. ' + eliteLosses.toFixed(1) + ' in losses.');
+  }
+
+  var soloRuns = list.filter(function (r) { return r.mode === 'solo'; });
+  var multiRuns = list.filter(function (r) { return r.mode === 'multiplayer'; });
+  if (soloRuns.length >= 3 && multiRuns.length >= 3) {
+    var soloWr = soloRuns.filter(function (r) { return r.win; }).length / soloRuns.length;
+    var multiWr = multiRuns.filter(function (r) { return r.win; }).length / multiRuns.length;
+    findings.push('Win rate is ' + pct(soloWr) + ' solo vs. ' + pct(multiWr) + ' multiplayer (' + soloRuns.length + ' vs ' + multiRuns.length + ' runs).');
+  }
+
+  document.getElementById('findings-list').innerHTML = findings.length
+    ? findings.map(function (f) { return '<li>' + f + '</li>'; }).join('')
+    : '<li>Not enough data yet to surface findings for this filter.</li>';
+}
+
+function renderRunTable(list) {
+  var sorted = list.slice().sort(function (a, b) { return (b.startTime || 0) - (a.startTime || 0); });
+  var rows = sorted.map(function (r) {
+    var date = r.startTime ? new Date(r.startTime * 1000).toLocaleDateString() : '—';
+    var result = r.abandoned ? 'Abandoned' : (r.win ? 'Win' : 'Loss');
+    return '<tr>' +
+      '<td>' + date + '</td>' +
+      '<td>' + (r.character || '—').replace('CHARACTER.', '') + '</td>' +
+      '<td>' + r.mode + '</td>' +
+      '<td class="' + (r.win ? 'delta-pos' : 'delta-neg') + '">' + result + '</td>' +
+      '<td class="num">' + r.ascension + '</td>' +
+      '<td class="num">' + r.nodeCount + '</td>' +
+      '<td class="num">' + pct(r.minHpPct) + '</td>' +
+      '</tr>';
+  });
+  document.querySelector('#run-table tbody').innerHTML = rows.join('');
+}
+
+tryAutoConnect();
+</script>
+</body>
+</html>
