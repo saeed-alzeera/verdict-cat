@@ -453,6 +453,14 @@ function displayNameFor(wbName) {
   return { name: wbName, flagged: awkward };
 }
 
+// The World Bank isn't a source for Taiwan (not a member economy in its API),
+// so it's added by hand here. Indicators sourced from "wb" will simply have
+// no data for it; the bundled IMF_DATA (GDP, growth, population, inflation,
+// unemployment) already covers TWN.
+const MANUAL_COUNTRIES = [
+  { iso3: "TWN", iso2: "TW", wbName: "Taiwan", displayName: "Taiwan", flagged: false }
+];
+
 async function loadCountries() {
   setStatus("Loading country list…");
   const url = "https://api.worldbank.org/v2/country?format=json&per_page=400";
@@ -465,8 +473,13 @@ async function loadCountries() {
       const { name, flagged } = displayNameFor(c.name);
       iso3ToIso2[c.id] = c.iso2Code;
       return { iso3: c.id, wbName: c.name, displayName: name, flagged };
-    })
-    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    });
+  MANUAL_COUNTRIES.forEach((c) => {
+    if (countries.some((existing) => existing.iso3 === c.iso3)) return;
+    iso3ToIso2[c.iso3] = c.iso2;
+    countries.push({ iso3: c.iso3, wbName: c.wbName, displayName: c.displayName, flagged: c.flagged });
+  });
+  countries.sort((a, b) => a.displayName.localeCompare(b.displayName));
   return countries;
 }
 
