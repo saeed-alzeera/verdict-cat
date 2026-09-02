@@ -168,7 +168,9 @@
   .mini-btn.danger { color: var(--warn); }
   .region-empty { color: var(--muted); font-size: 13px; padding: 6px 2px; }
   .region-results { margin-top: 14px; }
-  .region-results-title { font-size: 15px; margin: 0 0 10px; }
+  .region-results-header { display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 10px; }
+  .region-results-title { font-size: 15px; margin: 0; }
   .region-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 10px; margin-bottom: 10px; }
   .region-metric { background: var(--panel-alt); border: 1px solid var(--line); border-radius: 8px;
@@ -290,6 +292,7 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="gist.js"></script>
 <script>
 "use strict";
@@ -674,6 +677,7 @@ async function initNumbers() {
 let allCountries = [];
 let regions = [];
 let regionModalSelected = new Set();
+let lastRegionAnalysis = null;
 
 const REGION_PREFIX = "vc-region:";
 const REGION_TOMB_PREFIX = "vc-region-tomb:";
@@ -797,6 +801,7 @@ async function removeRegion(id) {
   deleteRegionLocal(id);
   refreshRegionsUI();
   document.getElementById("region-results").innerHTML = "";
+  lastRegionAnalysis = null;
   await maybeSyncRegionsPush();
 }
 
@@ -807,7 +812,7 @@ async function analyzeRegion() {
   const regionId = document.getElementById("region-select").value;
   const region = regions.find((r) => r.id === regionId);
   const resultsEl = document.getElementById("region-results");
-  if (!region) { resultsEl.innerHTML = ""; return; }
+  if (!region) { resultsEl.innerHTML = ""; lastRegionAnalysis = null; return; }
 
   resultsEl.innerHTML = '<div class="loader">Analyzing region…</div>';
 
@@ -852,8 +857,13 @@ async function analyzeRegion() {
 
   const missing = rows.filter((r) => r.gdp === null).map((r) => r.name);
 
+  lastRegionAnalysis = { region, rows, missing };
+
   resultsEl.innerHTML = `
-    <h3 class="region-results-title">${region.name}</h3>
+    <div class="region-results-header">
+      <h3 class="region-results-title">${region.name}</h3>
+      <button id="region-export-btn" class="mini-btn" onclick="exportRegionToExcel()">Export to Excel</button>
+    </div>
     <div class="region-metrics">
       <div class="region-metric"><div class="rm-label">GDP of region</div><div class="rm-value">${totalGdp ? fmtUSD(totalGdp) : "N/A"}</div></div>
       <div class="region-metric"><div class="rm-label">GDP growth (weighted)</div><div class="rm-value">${weightedGrowth !== null ? fmtPct(weightedGrowth) : "N/A"}</div></div>
@@ -863,6 +873,77 @@ async function analyzeRegion() {
     ${missing.length ? `<div class="region-note">Excluded from GDP-weighted metrics (no GDP data): ${missing.join(", ")}</div>` : ""}
     <div class="region-members">${rows.map((r) => `<span class="region-chip">${r.name}${r.gdpYear ? " · " + r.gdpYear : ""}</span>`).join("")}</div>
   `;
+}
+
+// Builds an .xlsx of the last region analysis where every rollup metric is a
+// live formula (not a baked-in value), so the math can be checked/edited in
+// Excel. Mirrors the weighting logic above: helper columns null out a
+// country's GDP contribution to a metric's weight whenever that metric's own
+// value is missing for that country, exactly like the growthRows/inflRows
+// filters do in JS.
+function exportRegionToExcel() {
+  if (!lastRegionAnalysis || typeof XLSX === "undefined") return;
+  const { region, rows, missing } = lastRegionAnalysis;
+
+  const aoa = [
+    ["Region", region.name],
+    ["Generated", new Date().toISOString().slice(0, 10)],
+    [],
+    ["ISO3", "Country", "GDP (USD bn)", "GDP Year", "GDP Growth (% YoY)",
+     "Population (millions)", "Inflation (% YoY)",
+     "GDP if growth data avail.", "GDP × Growth",
+     "GDP if inflation data avail.", "GDP × Inflation"]
+  ];
+  const headerRowIdx = aoa.length - 1;
+
+  const firstDataRowIdx = aoa.length;
+  rows.forEach((r) => {
+    aoa.push([
+      r.iso3, r.name,
+      r.gdp !== null ? r.gdp : "",
+      r.gdpYear !== null ? r.gdpYear : "",
+      r.growth !== null ? r.growth : "",
+      r.pop !== null ? r.pop : "",
+      r.infl !== null ? r.infl : "",
+      "", "", "", ""
+    ]);
+  });
+  const lastDataRowIdx = aoa.length - 1;
+
+  aoa.push([]);
+  aoa.push(["Region summary (GDP-weighted rollup)"]);
+  const totalGdpRowIdx = aoa.length; aoa.push(["Total GDP (USD bn)"]);
+  const weightedGrowthRowIdx = aoa.length; aoa.push(["GDP-weighted GDP growth (% YoY)"]);
+  const totalPopRowIdx = aoa.length; aoa.push(["Total population (millions)"]);
+  const weightedInflRowIdx = aoa.length; aoa.push(["GDP-weighted inflation (% YoY)"]);
+  if (missing.length) aoa.push(["Excluded from GDP-weighted metrics (no GDP data)", missing.join(", ")]);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const R = (idx) => idx + 1; // 0-indexed row -> 1-indexed Excel row number
+
+  for (let i = firstDataRowIdx; i <= lastDataRowIdx; i++) {
+    const row = R(i);
+    ws[`H${row}`] = { t: "n", f: `IF(E${row}="","",C${row})` };
+    ws[`I${row}`] = { t: "n", f: `IF(E${row}="","",C${row}*E${row})` };
+    ws[`J${row}`] = { t: "n", f: `IF(G${row}="","",C${row})` };
+    ws[`K${row}`] = { t: "n", f: `IF(G${row}="","",C${row}*G${row})` };
+  }
+
+  const firstDataRow = R(firstDataRowIdx), lastDataRow = R(lastDataRowIdx);
+  ws[`B${R(totalGdpRowIdx)}`] = { t: "n", f: `SUM(C${firstDataRow}:C${lastDataRow})` };
+  ws[`B${R(weightedGrowthRowIdx)}`] = { t: "n", f: `IF(SUM(H${firstDataRow}:H${lastDataRow})=0,"",SUM(I${firstDataRow}:I${lastDataRow})/SUM(H${firstDataRow}:H${lastDataRow}))` };
+  ws[`B${R(totalPopRowIdx)}`] = { t: "n", f: `SUM(F${firstDataRow}:F${lastDataRow})` };
+  ws[`B${R(weightedInflRowIdx)}`] = { t: "n", f: `IF(SUM(J${firstDataRow}:J${lastDataRow})=0,"",SUM(K${firstDataRow}:K${lastDataRow})/SUM(J${firstDataRow}:J${lastDataRow}))` };
+
+  ws["!cols"] = [
+    { wch: 7 }, { wch: 24 }, { wch: 13 }, { wch: 9 }, { wch: 16 },
+    { wch: 16 }, { wch: 13 }, { wch: 16 }, { wch: 14 }, { wch: 16 }, { wch: 14 }
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Region");
+  const filename = `${region.name.replace(/[^a-z0-9]+/gi, "_")}_region_export.xlsx`;
+  XLSX.writeFile(wb, filename);
 }
 
 function updateRegionSyncStatus(state) {
