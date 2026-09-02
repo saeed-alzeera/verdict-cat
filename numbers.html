@@ -128,6 +128,57 @@
     font-size: 15px; font-weight: 500; cursor: pointer;
   }
   #num-auth-btn:hover { opacity: 0.88; }
+
+  .modal-overlay { position: fixed; inset: 0; z-index: 9998; background: rgba(0,0,0,0.5);
+    display: none; align-items: center; justify-content: center; padding: 16px; }
+  .modal-overlay.open { display: flex; }
+  .modal-box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px 22px; width: 100%; max-width: 420px; max-height: 86vh; overflow-y: auto;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3); }
+  .modal-box h2 { font-size: 17px; margin: 0 0 4px; }
+  .modal-box .modal-sub { font-size: 12px; color: var(--muted); margin: 0 0 14px; line-height: 1.5; }
+  .modal-box input[type=text], .modal-box input[type=password], .modal-box input[type=search] {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px;
+    font-size: 14px; background: var(--bg); color: var(--ink); margin-bottom: 10px; outline: none; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+  .modal-error { color: var(--warn); font-size: 12px; min-height: 16px; }
+  .country-checklist { max-height: 260px; overflow-y: auto; border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px; margin-bottom: 4px; }
+  .region-country-item { display: flex; align-items: center; gap: 8px; padding: 6px 4px;
+    font-size: 13px; border-radius: 6px; cursor: pointer; }
+  .region-country-item:hover { background: var(--panel-alt); }
+  .region-country-item input { margin: 0; }
+
+  .regions-section { margin-top: 20px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px; }
+  .regions-section h2 { font-size: 15px; margin: 0 0 10px; }
+  .region-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .region-toolbar select { flex: 1 1 200px; min-width: 0; }
+  .region-sync-row { display: flex; align-items: center; gap: 8px; font-size: 12px;
+    color: var(--muted); margin-bottom: 12px; flex-wrap: wrap; }
+  .link-btn { background: none; border: none; color: var(--accent); font-size: 12px;
+    padding: 0; cursor: pointer; min-height: unset; text-decoration: underline; }
+  .region-manage-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+  .region-item { display: flex; align-items: center; gap: 10px; font-size: 13px;
+    padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-alt); }
+  .region-item-name { font-weight: 600; flex: 1; }
+  .region-item-count { color: var(--muted); font-size: 12px; }
+  .mini-btn { font-size: 12px; padding: 4px 9px; min-height: unset; background: var(--panel);
+    color: var(--accent); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+  .mini-btn.danger { color: var(--warn); }
+  .region-empty { color: var(--muted); font-size: 13px; padding: 6px 2px; }
+  .region-results { margin-top: 14px; }
+  .region-results-title { font-size: 15px; margin: 0 0 10px; }
+  .region-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px; margin-bottom: 10px; }
+  .region-metric { background: var(--panel-alt); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; }
+  .rm-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 4px; }
+  .rm-value { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .region-note { font-size: 12px; color: var(--warn); margin-bottom: 10px; }
+  .region-members { display: flex; flex-wrap: wrap; gap: 6px; }
+  .region-chip { font-size: 11px; color: var(--muted); background: var(--panel-alt);
+    border: 1px solid var(--line); border-radius: 12px; padding: 3px 9px; }
 </style>
 </head>
 <body>
@@ -187,8 +238,59 @@
       <button class="copy-btn" onclick="copySourcesLine(EXPORT_LINE_2, this)">Copy sources</button>
     </div>
   </section>
+
+  <section class="regions-section" aria-label="Custom regions">
+    <h2>Custom Regions</h2>
+    <div class="region-sync-row">
+      <span id="region-sync-status">Not connected</span>
+      <button id="region-sync-connect-link" class="link-btn">Connect sync</button>
+      <button id="region-sync-disconnect-link" class="link-btn" style="display:none;">Disconnect</button>
+    </div>
+    <div class="region-toolbar">
+      <select id="region-select"><option value="">— Select region —</option></select>
+      <button id="analyze-region-btn" disabled>Analyze Region</button>
+      <button id="new-region-btn">+ New Region</button>
+    </div>
+    <div id="region-manage-list" class="region-manage-list"></div>
+    <div id="region-results" class="region-results"></div>
+  </section>
 </main>
 
+<div id="region-modal" class="modal-overlay">
+  <div class="modal-box">
+    <h2 id="region-modal-title">Define region</h2>
+    <p class="modal-sub">Name your region and select its member countries.</p>
+    <input type="hidden" id="region-edit-id" />
+    <input type="text" id="region-name-input" placeholder="Region name (e.g. Gulf Cooperation Council)" />
+    <input type="text" id="region-country-search" placeholder="Search countries…" />
+    <div id="region-country-list" class="country-checklist"></div>
+    <div id="region-modal-error" class="modal-error"></div>
+    <div class="modal-actions">
+      <button id="region-modal-cancel" class="mini-btn">Cancel</button>
+      <button id="region-modal-save">Save region</button>
+    </div>
+  </div>
+</div>
+
+<div id="region-sync-modal" class="modal-overlay">
+  <div class="modal-box">
+    <h2>Sync regions</h2>
+    <p class="modal-sub">Regions are saved to a private GitHub Gist, so they persist across devices. If you've already connected sync elsewhere in this app (e.g. Library), regions will sync automatically using that same connection — no need to reconnect here.</p>
+    <ol style="font-size:12px;color:var(--muted);padding-left:18px;margin:0 0 12px;line-height:1.6;">
+      <li>Open <a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=verdict-cat" target="_blank" rel="noopener noreferrer">github.com/settings/tokens</a></li>
+      <li>Generate a token with the <strong>gist</strong> scope</li>
+      <li>Paste it below</li>
+    </ol>
+    <input type="password" id="region-sync-pat" placeholder="ghp_…" autocomplete="off" />
+    <div id="region-sync-error" class="modal-error"></div>
+    <div class="modal-actions">
+      <button id="region-sync-cancel" class="mini-btn">Cancel</button>
+      <button id="region-sync-connect-confirm">Connect</button>
+    </div>
+  </div>
+</div>
+
+<script src="gist.js"></script>
 <script>
 "use strict";
 
@@ -541,8 +643,9 @@ async function loadCountryData(iso3) {
 }
 
 async function initNumbers() {
+  let countries = [];
   try {
-    const countries = await loadCountries();
+    countries = await loadCountries();
     populateCountrySelect(countries);
     const flaggedCount = countries.filter((c) => c.flagged).length;
     setStatus(`Ready — ${countries.length} countries loaded` +
@@ -561,6 +664,279 @@ async function initNumbers() {
     const iso3 = countryEl.value;
     if (iso3) loadCountryData(iso3);
   });
+
+  allCountries = countries;
+  initRegions();
+}
+
+// ── Custom Regions ──────────────────────────────────────────────────────────
+
+let allCountries = [];
+let regions = [];
+let regionModalSelected = new Set();
+
+const REGION_PREFIX = "vc-region:";
+const REGION_TOMB_PREFIX = "vc-region-tomb:";
+
+function newRegionId() {
+  return "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function loadRegionsFromStorage() {
+  const list = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.indexOf(REGION_PREFIX) === 0) {
+      try { list.push(JSON.parse(localStorage.getItem(k))); } catch (e) {}
+    }
+  }
+  list.sort((a, b) => a.name.localeCompare(b.name));
+  return list;
+}
+
+function persistRegion(region) {
+  localStorage.setItem(REGION_PREFIX + region.id, JSON.stringify(region));
+  localStorage.removeItem(REGION_TOMB_PREFIX + region.id);
+}
+
+function deleteRegionLocal(id) {
+  localStorage.removeItem(REGION_PREFIX + id);
+  localStorage.setItem(REGION_TOMB_PREFIX + id, String(Date.now()));
+}
+
+async function maybeSyncRegionsPush() {
+  if (window.Gist && Gist.isConnected()) {
+    try { await Gist.pushRegions(); } catch (e) {}
+  }
+}
+
+function refreshRegionsUI() {
+  regions = loadRegionsFromStorage();
+  renderRegionSelect();
+  renderRegionManageList();
+}
+
+function renderRegionSelect() {
+  const sel = document.getElementById("region-select");
+  const prevValue = sel.value;
+  sel.innerHTML = '<option value="">— Select region —</option>' +
+    regions.map((r) => `<option value="${r.id}">${r.name} (${r.countryCodes.length})</option>`).join("");
+  if (regions.some((r) => r.id === prevValue)) sel.value = prevValue;
+  document.getElementById("analyze-region-btn").disabled = regions.length === 0;
+}
+
+function renderRegionManageList() {
+  const el = document.getElementById("region-manage-list");
+  if (!regions.length) {
+    el.innerHTML = '<div class="region-empty">No custom regions yet — click “+ New Region” to define one.</div>';
+    return;
+  }
+  el.innerHTML = regions.map((r) => `
+    <div class="region-item">
+      <span class="region-item-name">${r.name}</span>
+      <span class="region-item-count">${r.countryCodes.length} countries</span>
+      <button class="mini-btn" onclick="openRegionModal('${r.id}')">Edit</button>
+      <button class="mini-btn danger" onclick="removeRegion('${r.id}')">Delete</button>
+    </div>
+  `).join("");
+}
+
+function renderRegionCountryChecklist(filterText) {
+  const container = document.getElementById("region-country-list");
+  const f = (filterText || "").toLowerCase();
+  container.innerHTML = allCountries
+    .filter((c) => !f || c.displayName.toLowerCase().includes(f) || c.iso3.toLowerCase().includes(f))
+    .map((c) => `
+      <label class="region-country-item">
+        <input type="checkbox" value="${c.iso3}" ${regionModalSelected.has(c.iso3) ? "checked" : ""} />
+        <span>${c.displayName}</span>
+      </label>
+    `).join("");
+}
+
+function openRegionModal(existingId) {
+  const existing = existingId ? regions.find((r) => r.id === existingId) : null;
+  document.getElementById("region-modal-title").textContent = existing ? "Edit region" : "Define region";
+  document.getElementById("region-edit-id").value = existing ? existing.id : "";
+  document.getElementById("region-name-input").value = existing ? existing.name : "";
+  document.getElementById("region-country-search").value = "";
+  document.getElementById("region-modal-error").textContent = "";
+  regionModalSelected = new Set(existing ? existing.countryCodes : []);
+  renderRegionCountryChecklist("");
+  document.getElementById("region-modal").classList.add("open");
+  document.getElementById("region-name-input").focus();
+}
+
+function closeRegionModal() {
+  document.getElementById("region-modal").classList.remove("open");
+}
+
+async function saveRegionFromModal() {
+  const name = document.getElementById("region-name-input").value.trim();
+  const editId = document.getElementById("region-edit-id").value;
+  const errorEl = document.getElementById("region-modal-error");
+  if (!name) { errorEl.textContent = "Region name is required."; return; }
+  if (regionModalSelected.size < 1) { errorEl.textContent = "Select at least one country."; return; }
+  errorEl.textContent = "";
+  const region = {
+    id: editId || newRegionId(),
+    name,
+    countryCodes: Array.from(regionModalSelected),
+    updatedAt: Date.now()
+  };
+  persistRegion(region);
+  closeRegionModal();
+  refreshRegionsUI();
+  await maybeSyncRegionsPush();
+}
+
+async function removeRegion(id) {
+  const r = regions.find((x) => x.id === id);
+  if (!r) return;
+  if (!confirm(`Delete region "${r.name}"? This cannot be undone.`)) return;
+  deleteRegionLocal(id);
+  refreshRegionsUI();
+  document.getElementById("region-results").innerHTML = "";
+  await maybeSyncRegionsPush();
+}
+
+// GDP-weighted region rollup: GDP sums; growth and inflation are GDP-weighted
+// averages of member countries (countries missing GDP or the given indicator
+// for their latest available year are excluded from that metric and reweighted).
+async function analyzeRegion() {
+  const regionId = document.getElementById("region-select").value;
+  const region = regions.find((r) => r.id === regionId);
+  const resultsEl = document.getElementById("region-results");
+  if (!region) { resultsEl.innerHTML = ""; return; }
+
+  resultsEl.innerHTML = '<div class="loader">Analyzing region…</div>';
+
+  const rows = await Promise.all(region.countryCodes.map(async (iso3) => {
+    const country = allCountries.find((c) => c.iso3 === iso3);
+    const [gdpSeries, growthSeries, popSeries, inflSeries] = await Promise.all([
+      fetchIMF(iso3, "NGDPD"),
+      fetchIMF(iso3, "NGDP_RPCH"),
+      fetchIMF(iso3, "LP"),
+      fetchIMF(iso3, "PCPIPCH")
+    ]);
+    const gdp = latestPoint(gdpSeries);
+    const growth = latestPoint(growthSeries);
+    const pop = latestPoint(popSeries);
+    const infl = latestPoint(inflSeries);
+    return {
+      iso3,
+      name: country ? country.displayName : iso3,
+      gdp: gdp ? gdp.value : null,
+      gdpYear: gdp ? gdp.year : null,
+      growth: growth ? growth.value : null,
+      pop: pop ? pop.value : null,
+      infl: infl ? infl.value : null
+    };
+  }));
+
+  const withGdp = rows.filter((r) => r.gdp !== null);
+  const totalGdp = withGdp.reduce((s, r) => s + r.gdp, 0);
+  const totalPop = rows.filter((r) => r.pop !== null).reduce((s, r) => s + r.pop, 0);
+
+  const growthRows = withGdp.filter((r) => r.growth !== null);
+  const growthWeight = growthRows.reduce((s, r) => s + r.gdp, 0);
+  const weightedGrowth = growthWeight > 0
+    ? growthRows.reduce((s, r) => s + r.gdp * r.growth, 0) / growthWeight
+    : null;
+
+  const inflRows = withGdp.filter((r) => r.infl !== null);
+  const inflWeight = inflRows.reduce((s, r) => s + r.gdp, 0);
+  const weightedInfl = inflWeight > 0
+    ? inflRows.reduce((s, r) => s + r.gdp * r.infl, 0) / inflWeight
+    : null;
+
+  const missing = rows.filter((r) => r.gdp === null).map((r) => r.name);
+
+  resultsEl.innerHTML = `
+    <h3 class="region-results-title">${region.name}</h3>
+    <div class="region-metrics">
+      <div class="region-metric"><div class="rm-label">GDP of region</div><div class="rm-value">${totalGdp ? fmtUSD(totalGdp) : "N/A"}</div></div>
+      <div class="region-metric"><div class="rm-label">GDP growth (weighted)</div><div class="rm-value">${weightedGrowth !== null ? fmtPct(weightedGrowth) : "N/A"}</div></div>
+      <div class="region-metric"><div class="rm-label">Population</div><div class="rm-value">${totalPop ? fmtMn(totalPop) : "N/A"}</div></div>
+      <div class="region-metric"><div class="rm-label">Inflation (weighted)</div><div class="rm-value">${weightedInfl !== null ? fmtPct(weightedInfl) : "N/A"}</div></div>
+    </div>
+    ${missing.length ? `<div class="region-note">Excluded from GDP-weighted metrics (no GDP data): ${missing.join(", ")}</div>` : ""}
+    <div class="region-members">${rows.map((r) => `<span class="region-chip">${r.name}${r.gdpYear ? " · " + r.gdpYear : ""}</span>`).join("")}</div>
+  `;
+}
+
+function updateRegionSyncStatus(state) {
+  const el = document.getElementById("region-sync-status");
+  const connected = window.Gist && Gist.isConnected();
+  const s = state || (connected ? "connected" : "none");
+  el.textContent = s === "syncing" ? "Syncing…" : (connected ? "Synced ✓" : "Not connected");
+  document.getElementById("region-sync-connect-link").style.display = connected ? "none" : "";
+  document.getElementById("region-sync-disconnect-link").style.display = connected ? "" : "none";
+}
+
+async function syncRegionsUI() {
+  if (!(window.Gist && Gist.isConnected())) return;
+  updateRegionSyncStatus("syncing");
+  await Gist.syncRegions();
+  refreshRegionsUI();
+  updateRegionSyncStatus();
+}
+
+function initRegions() {
+  refreshRegionsUI();
+  updateRegionSyncStatus();
+
+  document.getElementById("new-region-btn").addEventListener("click", () => openRegionModal(null));
+  document.getElementById("region-modal-cancel").addEventListener("click", closeRegionModal);
+  document.getElementById("region-modal-save").addEventListener("click", saveRegionFromModal);
+  document.getElementById("analyze-region-btn").addEventListener("click", analyzeRegion);
+
+  document.getElementById("region-country-list").addEventListener("change", (e) => {
+    if (e.target.matches('input[type="checkbox"]')) {
+      const iso3 = e.target.value;
+      if (e.target.checked) regionModalSelected.add(iso3); else regionModalSelected.delete(iso3);
+    }
+  });
+  document.getElementById("region-country-search").addEventListener("input", (e) => {
+    renderRegionCountryChecklist(e.target.value);
+  });
+
+  document.getElementById("region-sync-connect-link").addEventListener("click", () => {
+    document.getElementById("region-sync-modal").classList.add("open");
+  });
+  document.getElementById("region-sync-cancel").addEventListener("click", () => {
+    document.getElementById("region-sync-modal").classList.remove("open");
+  });
+  document.getElementById("region-sync-connect-confirm").addEventListener("click", async () => {
+    const pat = document.getElementById("region-sync-pat").value.trim();
+    const errEl = document.getElementById("region-sync-error");
+    if (!pat) { errEl.textContent = "Token required."; return; }
+    errEl.textContent = "Connecting…";
+    try {
+      const gistId = await Gist.connect(pat);
+      Gist.save(pat, gistId);
+      document.getElementById("region-sync-modal").classList.remove("open");
+      document.getElementById("region-sync-pat").value = "";
+      await syncRegionsUI();
+    } catch (e) {
+      errEl.textContent = e.message || "Connection failed.";
+    }
+  });
+  document.getElementById("region-sync-disconnect-link").addEventListener("click", () => {
+    if (!confirm("Disconnect region sync? Regions stay on this device.")) return;
+    Gist.clear();
+    updateRegionSyncStatus();
+  });
+
+  document.querySelectorAll(".modal-overlay").forEach((overlay) => {
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) overlay.classList.remove("open");
+    });
+  });
+
+  if (window.Gist && Gist.isConnected()) {
+    syncRegionsUI();
+  }
 }
 
 (function() {

@@ -6,6 +6,12 @@
   var API       = 'https://api.github.com';
   var TS_SUFFIX = ':ts';
 
+  // Custom regions (numbers.html) live in the same gist as a second file,
+  // reusing the same PAT/gist-id connection.
+  var GIST_FILE_REGIONS   = 'verdict-cat-regions.json';
+  var LS_REGION_PREFIX    = 'vc-region:';
+  var LS_REGION_TOMB_PREFIX = 'vc-region-tomb:';
+
   function h(pat) {
     return { 'Authorization': 'token ' + pat, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' };
   }
@@ -115,6 +121,93 @@
     sync: async function() {
       await w.Gist.push();
       return await w.Gist.pull();
+    },
+
+    // ── Custom regions (numbers.html) ─────────────────────────────────────
+    // Each region lives at localStorage['vc-region:<id>'] = {id,name,countryCodes,updatedAt}.
+    // A deleted region leaves a tombstone at 'vc-region-tomb:<id>' = deletedAt,
+    // so pull() knows not to resurrect it from a remote that hasn't seen the delete yet.
+
+    // Pull remote regions and merge into localStorage (remote wins only when newer
+    // than both the local region and any local deletion tombstone for that id).
+    pullRegions: async function() {
+      var changed = false;
+      var c = w.Gist.credentials();
+      if (!c.pat || !c.gistId) return changed;
+      try {
+        var resp = await fetch(API + '/gists/' + c.gistId, { headers: h(c.pat) });
+        if (!resp.ok) return changed;
+        var data = await resp.json();
+        var file = data.files[GIST_FILE_REGIONS];
+        var remote = file ? JSON.parse(file.content || '{}') : {};
+        var remoteRegions = remote.regions || {};
+        var remoteDeletions = remote.deletions || {};
+
+        Object.keys(remoteRegions).forEach(function(id) {
+          var r = remoteRegions[id];
+          var localKey = LS_REGION_PREFIX + id;
+          var tombKey = LS_REGION_TOMB_PREFIX + id;
+          var localTs = 0;
+          var localRaw = localStorage.getItem(localKey);
+          if (localRaw) { try { localTs = JSON.parse(localRaw).updatedAt || 0; } catch(e) {} }
+          var tombTs = parseInt(localStorage.getItem(tombKey) || '0', 10);
+          if (r.updatedAt > localTs && r.updatedAt > tombTs) {
+            localStorage.setItem(localKey, JSON.stringify({ id: id, name: r.name, countryCodes: r.countryCodes, updatedAt: r.updatedAt }));
+            localStorage.removeItem(tombKey);
+            changed = true;
+          }
+        });
+        Object.keys(remoteDeletions).forEach(function(id) {
+          var ts = remoteDeletions[id];
+          var localKey = LS_REGION_PREFIX + id;
+          var localRaw = localStorage.getItem(localKey);
+          var localTs = 0;
+          if (localRaw) { try { localTs = JSON.parse(localRaw).updatedAt || 0; } catch(e) {} }
+          if (ts > localTs) {
+            localStorage.removeItem(localKey);
+            localStorage.setItem(LS_REGION_TOMB_PREFIX + id, String(ts));
+            changed = true;
+          }
+        });
+      } catch(e) {}
+      return changed;
+    },
+
+    // Push all local regions + deletion tombstones to the gist (silent fail).
+    pushRegions: async function() {
+      var c = w.Gist.credentials();
+      if (!c.pat || !c.gistId) return false;
+      try {
+        var regions = {};
+        var deletions = {};
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (!k) continue;
+          if (k.indexOf(LS_REGION_PREFIX) === 0) {
+            var id = k.slice(LS_REGION_PREFIX.length);
+            try {
+              var r = JSON.parse(localStorage.getItem(k));
+              regions[id] = { name: r.name, countryCodes: r.countryCodes, updatedAt: r.updatedAt };
+            } catch(e) {}
+          } else if (k.indexOf(LS_REGION_TOMB_PREFIX) === 0) {
+            var did = k.slice(LS_REGION_TOMB_PREFIX.length);
+            deletions[did] = parseInt(localStorage.getItem(k) || '0', 10);
+          }
+        }
+        var resp = await fetch(API + '/gists/' + c.gistId, {
+          method: 'PATCH', headers: h(c.pat),
+          body: JSON.stringify({ files: { [GIST_FILE_REGIONS]: { content: JSON.stringify({ regions: regions, deletions: deletions }, null, 2) } } })
+        });
+        return resp.ok;
+      } catch(e) { return false; }
+    },
+
+    // Pull first so a stale local push can't clobber another device's newer
+    // region, then push local state back (so this device's own edits sync out).
+    syncRegions: async function() {
+      var changed = await w.Gist.pullRegions();
+      await w.Gist.pushRegions();
+      return changed;
     }
   };
 })(window);
