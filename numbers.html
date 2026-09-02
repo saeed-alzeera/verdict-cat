@@ -181,6 +181,10 @@
   .region-members { display: flex; flex-wrap: wrap; gap: 6px; }
   .region-chip { font-size: 11px; color: var(--muted); background: var(--panel-alt);
     border: 1px solid var(--line); border-radius: 12px; padding: 3px 9px; }
+  .region-sources { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .region-sources-label { font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.03em; margin-bottom: 6px; }
+  .region-sources-list { display: flex; flex-direction: column; gap: 4px; }
 </style>
 </head>
 <body>
@@ -388,6 +392,13 @@ const fmtMn  = (n) => `${fmt1(n)} Mn`;
 const iso3ToIso2 = {};
 const wbUrl = (code, iso3) => `https://data.worldbank.org/indicator/${code}?locations=${iso3ToIso2[iso3] || iso3}`;
 const imfUrl = (code, iso3) => `https://www.imf.org/external/datamapper/${code}@WEO/${iso3}`;
+
+const REGION_SOURCES = [
+  { label: "IMF WEO · GDP current prices (NGDPD)", url: "https://www.imf.org/external/datamapper/NGDPD@WEO" },
+  { label: "IMF WEO · Real GDP growth (NGDP_RPCH)", url: "https://www.imf.org/external/datamapper/NGDP_RPCH@WEO" },
+  { label: "IMF WEO · Population (LP)", url: "https://www.imf.org/external/datamapper/LP@WEO" },
+  { label: "IMF WEO · Inflation, average CPI (PCPIPCH)", url: "https://www.imf.org/external/datamapper/PCPIPCH@WEO" },
+];
 
 const INDICATORS = [
   { name: "Land area", unit: "km²",
@@ -885,6 +896,12 @@ async function analyzeRegion() {
     </div>
     ${missing.length ? `<div class="region-note">Excluded from GDP-weighted metrics (no GDP data): ${missing.join(", ")}</div>` : ""}
     <div class="region-members">${rows.map((r) => `<span class="region-chip">${r.name}${r.gdpYear ? " · " + r.gdpYear : ""}</span>`).join("")}</div>
+    <div class="region-sources">
+      <div class="region-sources-label">Sources</div>
+      <div class="region-sources-list">
+        ${REGION_SOURCES.map((s) => `<a class="source" href="${s.url}" target="_blank" rel="noopener noreferrer">${s.label}</a>`).join("")}
+      </div>
+    </div>
   `;
 }
 
