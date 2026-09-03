@@ -94,22 +94,39 @@
       return changed;
     },
 
-    // Push all local progress to gist (silent fail — localStorage is always the fast path)
+    // Push local progress to gist, merged against whatever is already there —
+    // a local key only overwrites the remote entry when its timestamp is at
+    // least as new, mirroring the guard pull() uses. Without this, a stale
+    // local copy (e.g. from a slow/failed pull) would blindly overwrite
+    // newer progress synced from another device (silent fail — localStorage
+    // is always the fast path).
     push: async function() {
       var c = w.Gist.credentials();
       if (!c.pat || !c.gistId) return false;
       try {
-        var progress = {};
+        var local = {};
         for (var i = 0; i < localStorage.length; i++) {
           var k = localStorage.key(i);
           if (k && k.startsWith('epub-progress:') && !k.endsWith(TS_SUFFIX)) {
             var ts = parseInt(localStorage.getItem(tsKey(k)) || '0', 10) || Date.now();
-            progress[k] = { cfi: localStorage.getItem(k), ts: ts };
+            local[k] = { cfi: localStorage.getItem(k), ts: ts };
           }
         }
+        var getResp = await fetch(API + '/gists/' + c.gistId, { headers: h(c.pat) });
+        var remote = {};
+        if (getResp.ok) {
+          var data = await getResp.json();
+          try { remote = JSON.parse((data.files[GIST_FILE] || {}).content || '{}'); } catch(e) {}
+        }
+        var merged = Object.assign({}, remote);
+        Object.keys(local).forEach(function(k) {
+          var remoteEntry = remote[k];
+          var remoteTs = (remoteEntry && typeof remoteEntry === 'object' && remoteEntry.ts) ? remoteEntry.ts : 0;
+          if (local[k].ts >= remoteTs) merged[k] = local[k];
+        });
         var resp = await fetch(API + '/gists/' + c.gistId, {
           method: 'PATCH', headers: h(c.pat),
-          body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(progress, null, 2) } } })
+          body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(merged, null, 2) } } })
         });
         return resp.ok;
       } catch(e) { return false; }
