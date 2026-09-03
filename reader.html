@@ -700,10 +700,23 @@
       }
     }
 
-    // Save progress on every page turn; push to Gist on chapter change or after 30s idle
+    // The very first 'relocated' event fires from the restorative
+    // rendition.display(savedCfi) call above, not from the reader actually
+    // turning a page. Saving progress there would re-stamp a possibly-stale
+    // CFI with a brand-new "now" timestamp, letting it masquerade as the
+    // most recent progress and clobber newer progress synced from elsewhere
+    // the next time this device pushes (e.g. on click-away).
+    var isInitialRelocate = true;
+
+    // Save progress on every real page turn; push to Gist on chapter change or after 30s idle
     rendition.on('relocated', function(loc) {
       if (!loc || !loc.start) return;
       lastKnownCfi = loc.start.cfi;
+      if (isInitialRelocate) {
+        isInitialRelocate = false;
+        updateProgressBar(loc.start.cfi);
+        return;
+      }
       saveProgress(loc.start.cfi);
       var chapterChanged = loc.start.href !== lastGistChapter;
       if (chapterChanged) lastGistChapter = loc.start.href;
