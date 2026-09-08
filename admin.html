@@ -287,8 +287,14 @@
   }
 
   // ── GitHub API helpers ────────────────────────────────────────────────────
+  // GitHub's Contents API GET responses carry Cache-Control headers that let
+  // the browser (and intermediate caches) serve a stale sha for a file that
+  // was just modified — the follow-up PUT then gets rejected with a 409
+  // ("does not match") because the sha it sent is no longer current.
+  // cache: 'no-store' forces every read to hit GitHub directly.
   async function ghGet(path) {
     var r = await fetch('https://api.github.com/repos/' + REPO + path, {
+      cache: 'no-store',
       headers: { Authorization: 'Bearer ' + getPat(), Accept: 'application/vnd.github+json' }
     });
     if (!r.ok) throw new Error('GitHub ' + r.status + ': ' + (await r.text()));
@@ -298,6 +304,7 @@
   async function ghPut(path, body) {
     var r = await fetch('https://api.github.com/repos/' + REPO + path, {
       method: 'PUT',
+      cache: 'no-store',
       headers: {
         Authorization: 'Bearer ' + getPat(),
         Accept: 'application/vnd.github+json',
@@ -305,7 +312,12 @@
       },
       body: JSON.stringify(body)
     });
-    if (!r.ok) throw new Error('GitHub ' + r.status + ': ' + (await r.text()));
+    if (!r.ok) {
+      var text = await r.text();
+      var err = new Error('GitHub ' + r.status + ': ' + text);
+      err.status = r.status;
+      throw err;
+    }
     return r.json();
   }
 
@@ -400,16 +412,28 @@
   }
 
   async function patchFile(filename, patchFn, commitMsg) {
-    var data = await ghGet('/contents/' + filename + '?ref=' + BRANCH);
-    var src = utf8FromBase64(data.content);
-    var patched = patchFn(src);
-    if (patched === src) throw new Error('Could not patch ' + filename + ' — pattern not found.');
-    await ghPut('/contents/' + filename, {
-      message: commitMsg,
-      content: base64FromUtf8(patched),
-      sha: data.sha,
-      branch: BRANCH
-    });
+    // A 409 here means the sha we read is already stale (a stale cache read,
+    // or someone else writing the same file concurrently). Re-reading the
+    // file and re-applying the patch against its current content, then
+    // retrying the PUT once, clears both cases.
+    for (var attempt = 0; attempt < 2; attempt++) {
+      var data = await ghGet('/contents/' + filename + '?ref=' + BRANCH);
+      var src = utf8FromBase64(data.content);
+      var patched = patchFn(src);
+      if (patched === src) throw new Error('Could not patch ' + filename + ' — pattern not found.');
+      try {
+        await ghPut('/contents/' + filename, {
+          message: commitMsg,
+          content: base64FromUtf8(patched),
+          sha: data.sha,
+          branch: BRANCH
+        });
+        return;
+      } catch (err) {
+        if (err.status === 409 && attempt === 0) continue;
+        throw err;
+      }
+    }
   }
 
   function toBase64(file) {
