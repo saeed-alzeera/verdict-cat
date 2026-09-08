@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Texas Hold 'Em</title>
+<title>Texas</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg" />
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
@@ -60,7 +60,7 @@
 
 <header>
   <a class="back" href="index.html">&larr; Home</a>
-  <h1>Texas Hold 'Em</h1>
+  <h1>Texas</h1>
   <div class="sub">Due-diligence profiles</div>
 </header>
 
@@ -83,7 +83,7 @@
     PROFILES.slice().reverse().forEach(function(p) {
       var a = document.createElement('a');
       a.className = 'profile-card';
-      a.href = 'texas-holdem/profile.html?n=' + encodeURIComponent(p.n);
+      a.href = 'texas/profile.html?n=' + encodeURIComponent(p.n);
       a.innerHTML = '<div class="num">Profile #' + p.n + '</div><div class="title">' + p.title + '</div>';
       list.appendChild(a);
     });
