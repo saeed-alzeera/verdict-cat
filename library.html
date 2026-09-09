@@ -10,6 +10,7 @@
 <link rel="shortcut icon" href="favicon.ico" />
 <script src="gist.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="ebook-convert.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -347,13 +348,13 @@
 <div id="grid"></div>
 <div id="toast"></div>
 
-<input type="file" id="ul-epub-input" accept=".epub" style="display:none;" />
+<input type="file" id="ul-epub-input" accept=".epub,.fb2,.mobi" style="display:none;" />
 
 <div id="upload-modal" style="display:none;">
   <div id="upload-box">
     <div id="ul-cover-preview">&#128218;</div>
     <h2>Upload Book</h2>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:4px;">Metadata pulled from the epub — edit if needed.</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:4px;">Metadata pulled from the book — edit if needed. epub, fb2 and non-DRM mobi are supported.</p>
     <label for="ul-title">Title</label>
     <input type="text" id="ul-title" placeholder="Book Title" />
     <label for="ul-author">Author</label>
@@ -874,18 +875,31 @@
   document.getElementById('ul-epub-input').addEventListener('change', async function() {
     var file = this.files[0];
     if (!file) return;
-    ulFile = file;
-    var slug = file.name.replace(/\.epub$/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/, '');
+    if (!window.EbookConvert || !window.EbookConvert.isSupported(file.name)) {
+      alert('Unsupported file type. Please choose an .epub, .fb2 or .mobi file (.azw3 is not supported).');
+      this.value = '';
+      return;
+    }
+    var slug = file.name.replace(/\.[^.]+$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/, '');
     document.getElementById('ul-title').value = '';
     document.getElementById('ul-author').value = '';
     document.getElementById('ul-slug').value = slug;
     document.getElementById('ul-cover-preview').innerHTML = '&#128218;';
     document.getElementById('ul-submit-btn').disabled = true;
     ulCoverB64 = null; ulCoverExt = null;
-    setUlStatus('working', 'Reading metadata…');
+    var needsConversion = window.EbookConvert.needsConversion(file.name);
+    setUlStatus('working', needsConversion ? 'Converting to epub…' : 'Reading metadata…');
     document.getElementById('upload-modal').style.display = 'flex';
     try {
-      var meta = await readEpubMeta(file);
+      ulFile = await window.EbookConvert.convert(file);
+    } catch (e) {
+      setUlStatus('err', e.message || 'Conversion failed.');
+      document.getElementById('ul-submit-btn').disabled = false;
+      return;
+    }
+    if (needsConversion) setUlStatus('working', 'Reading metadata…');
+    try {
+      var meta = await readEpubMeta(ulFile);
       if (meta.title)  document.getElementById('ul-title').value  = meta.title;
       if (meta.author) document.getElementById('ul-author').value = meta.author;
       if (meta.cover) {
