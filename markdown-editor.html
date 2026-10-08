@@ -61,17 +61,39 @@
   }
   .btn:hover { border-color: var(--accent); color: var(--accent); }
 
+  #topbar { gap: 10px; }
+  #title-input {
+    flex: 1; min-width: 0; background: none; border: 1px solid transparent; border-radius: 6px;
+    color: var(--text); font-size: 15px; font-weight: 600; padding: 4px 8px; outline: none;
+  }
+  #title-input:hover, #title-input:focus { border-color: var(--border); }
+  .btn.danger:hover { border-color: #e06c6c; color: #e06c6c; }
+
+  #docs-menu { position: relative; }
+  #docs-panel {
+    display: none; position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
+    width: 300px; max-width: calc(100vw - 20px); max-height: 70vh;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.45); flex-direction: column; overflow: hidden;
+  }
+  #docs-panel.open { display: flex; }
+  #new-btn { margin: 8px; padding: 7px; }
+  #doc-list { overflow-y: auto; padding: 0 6px 6px; }
+  .doc-item { padding: 8px 10px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+  .doc-item:hover { background: var(--bg); }
+  .doc-item.active { background: var(--bg); border-color: var(--accent); }
+  .doc-item .t { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .doc-item .d { font-size: 11px; color: var(--muted); }
+  #doc-empty { padding: 10px; font-size: 12px; color: var(--muted); }
+
   #editor-wrap { padding: 16px; }
   #editor { border-radius: 8px; }
 
-  #md-lock { position: fixed; inset: 0; z-index: 9999; background: var(--bg); display: flex; align-items: center; justify-content: center; }
-  #md-lock-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 36px 40px; width: 320px; max-width: calc(100vw - 32px); text-align: center; }
-  #md-lock-box h2 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
-  #md-lock-box p { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
-  #md-pass { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; outline: none; margin-bottom: 10px; background: var(--bg); color: var(--text); }
-  #md-error { color: #e8a730; font-size: 13px; min-height: 18px; margin-bottom: 10px; }
-  #md-unlock { width: 100%; padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; }
-  #md-back { display: inline-block; margin-top: 14px; color: var(--muted); font-size: 13px; text-decoration: none; }
+  @media (max-width: 700px) {
+    #topbar { padding: 0 10px; overflow-x: auto; }
+    #editor-wrap { padding: 8px; }
+    #docs-panel { position: fixed; top: var(--bar-h); left: 10px; }
+  }
 </style>
 </head>
 <body>
@@ -89,38 +111,181 @@
 
 <div id="topbar">
   <a href="index.html">&#8592; Hub</a>
-  <h1>Markdown Editor</h1>
-  <span id="save-status">Autosaved locally</span>
+  <div id="docs-menu">
+    <button class="btn" id="docs-btn" aria-haspopup="true" aria-expanded="false">Documents &#9662;</button>
+    <div id="docs-panel">
+      <button class="btn" id="new-btn">+ New document</button>
+      <div id="doc-list"></div>
+    </div>
+  </div>
+  <input id="title-input" type="text" placeholder="Untitled" maxlength="120" aria-label="Document title" />
+  <span id="save-status">Saved locally</span>
+  <button class="btn" id="sync-btn">Connect sync</button>
+  <button class="btn" id="disc-btn" style="display:none;">Disconnect</button>
   <button class="btn" id="download-btn">Download .md</button>
+  <button class="btn danger" id="delete-btn">Delete</button>
 </div>
 
 <div id="editor-wrap">
   <div id="editor"><textarea style="display:none;"></textarea></div>
 </div>
 
+<script src="gist.js"></script>
 <script src="editor-md/jquery.min.js"></script>
 <script src="editor-md/editormd.min.js"></script>
 <script src="editor-md/languages/en.js"></script>
 <script>
-  var STORAGE_KEY = 'verdict-cat-markdown-editor';
-  var editor;
+  var LEGACY_KEY = 'verdict-cat-markdown-editor';
+  var CURRENT_KEY = 'vc-md-current';
+  var editor, ready = false, cur = null, syncing = false;
+  var $status = document.getElementById('save-status');
+  var $title = document.getElementById('title-input');
 
-  function load() {
-    try { return localStorage.getItem(STORAGE_KEY) || ''; } catch (e) { return ''; }
+  function norm(s) { return (s || '').replace(/\r\n/g, '\n'); }
+  function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function derivedTitle(body) {
+    var line = norm(body).split('\n').filter(function (l) { return l.trim(); })[0];
+    return (line && line.replace(/^#+\s*/, '').trim().slice(0, 60)) || 'Untitled';
   }
+  function displayTitle(d) { return d.title || derivedTitle(d.body); }
+  function setStatus(t) { $status.textContent = t; }
+  function idleStatus() { setStatus(Gist.isConnected() ? 'Synced' : 'Saved locally'); }
 
-  function save() {
+  // ── Documents ─────────────────────────────────────────────────────────────
+  function migrateLegacy() {
     try {
-      localStorage.setItem(STORAGE_KEY, editor.getMarkdown());
-      document.getElementById('save-status').textContent = 'Saved';
+      var legacy = localStorage.getItem(LEGACY_KEY);
+      if (legacy && legacy.trim() && Gist.docs.list().length === 0) {
+        var d = Gist.docs.put({ id: newId(), title: '', body: norm(legacy), updatedAt: Date.now() });
+        localStorage.setItem(CURRENT_KEY, d.id);
+      }
     } catch (e) {}
   }
 
+  function renderList() {
+    var list = document.getElementById('doc-list');
+    list.innerHTML = '';
+    var docs = Gist.docs.list();
+    if (!docs.length) {
+      var e = document.createElement('div');
+      e.id = 'doc-empty';
+      e.textContent = 'No documents yet. Start typing to create one.';
+      list.appendChild(e);
+    }
+    docs.forEach(function (d) {
+      var el = document.createElement('div');
+      el.className = 'doc-item' + (d.id === cur ? ' active' : '');
+      var t = document.createElement('div'); t.className = 't'; t.textContent = displayTitle(d);
+      var dt = document.createElement('div'); dt.className = 'd'; dt.textContent = new Date(d.updatedAt).toLocaleString();
+      el.appendChild(t); el.appendChild(dt);
+      el.addEventListener('click', function () { flushSave(); openDoc(d.id); closeDocs(); });
+      list.appendChild(el);
+    });
+  }
+
+  function openDoc(id) {
+    var d = id && Gist.docs.get(id);
+    cur = d ? d.id : null;
+    try { if (cur) localStorage.setItem(CURRENT_KEY, cur); else localStorage.removeItem(CURRENT_KEY); } catch (e) {}
+    if (ready) editor.setMarkdown(d ? d.body : '');
+    $title.value = d ? d.title : '';
+    $title.placeholder = d ? derivedTitle(d.body) : 'Untitled';
+    renderList();
+  }
+
+  function saveCurrent() {
+    if (!ready) return;
+    var body = norm(editor.getMarkdown());
+    var d = cur && Gist.docs.get(cur);
+    if (!d) {
+      if (!body.trim()) return;
+      d = { id: newId(), title: $title.value.trim(), body: '' };
+      cur = d.id;
+    }
+    if (norm(d.body) === body) { idleStatus(); return; }
+    d.body = body;
+    d.updatedAt = Date.now();
+    try {
+      Gist.docs.put(d);
+      localStorage.setItem(CURRENT_KEY, cur);
+    } catch (e) { setStatus('Save failed (storage full?)'); return; }
+    $title.placeholder = derivedTitle(body);
+    setStatus('Saved locally');
+    renderList();
+    scheduleSync();
+  }
+
+  function flushSave() {
+    clearTimeout(editor && editor._saveTimer);
+    saveCurrent();
+  }
+
+  // ── Sync ──────────────────────────────────────────────────────────────────
+  var syncTimer;
+  function scheduleSync() {
+    if (!Gist.isConnected()) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(sync, 3000);
+  }
+
+  async function sync() {
+    if (!Gist.isConnected() || syncing || !ready) return;
+    syncing = true;
+    clearTimeout(syncTimer);
+    flushSave();
+    setStatus('Syncing…');
+    var res = await Gist.syncDocs();
+    syncing = false;
+    if (!res.ok) { setStatus('Sync failed'); return; }
+    var openId = cur;
+    if (!openId || res.changed.indexOf(openId) !== -1) {
+      var stillThere = openId && Gist.docs.get(openId);
+      if (stillThere && norm(stillThere.body) !== norm(editor.getMarkdown())) openDoc(openId);
+      else if (!stillThere) openDoc((Gist.docs.list()[0] || {}).id);
+    }
+    if (cur === null && Gist.docs.list().length) openDoc(Gist.docs.list()[0].id);
+    renderList();
+    setStatus('Synced');
+  }
+
+  function updateConnectUI() {
+    var on = Gist.isConnected();
+    document.getElementById('sync-btn').textContent = on ? 'Sync now' : 'Connect sync';
+    document.getElementById('disc-btn').style.display = on ? '' : 'none';
+    idleStatus();
+  }
+
+  document.getElementById('sync-btn').addEventListener('click', async function () {
+    if (Gist.isConnected()) { sync(); return; }
+    var pat = (prompt('Paste a GitHub personal access token with the "gist" scope to sync across devices:') || '').trim();
+    if (!pat) return;
+    setStatus('Connecting…');
+    try {
+      var gistId = await Gist.connect(pat);
+      Gist.save(pat, gistId);
+      updateConnectUI();
+      sync();
+    } catch (err) {
+      setStatus(err.message || 'Connection failed');
+    }
+  });
+
+  document.getElementById('disc-btn').addEventListener('click', function () {
+    if (!confirm('Disconnect GitHub sync? Your documents stay on this device.')) return;
+    Gist.clear();
+    updateConnectUI();
+  });
+
+  // ── Editor ────────────────────────────────────────────────────────────────
   function fitHeight() {
     return Math.max(400, window.innerHeight - 52 - 32);
   }
 
   function initEditor() {
+    migrateLegacy();
+    var startId = null;
+    try { startId = localStorage.getItem(CURRENT_KEY); } catch (e) {}
+    var start = (startId && Gist.docs.get(startId)) || Gist.docs.list()[0] || null;
     editor = editormd('editor', {
       width: '100%',
       height: fitHeight(),
@@ -128,20 +293,96 @@
       theme: 'dark',
       previewTheme: 'dark',
       editorTheme: 'pastel-on-dark',
-      markdown: load(),
+      markdown: start ? start.body : '',
       placeholder: 'Start writing Markdown…',
       codeFold: true,
       saveHTMLToTextarea: true,
       searchReplace: true,
       toolbarAutoFixed: false,
+      onload: function () {
+        ready = true;
+        openDoc(start ? start.id : null);
+        updateConnectUI();
+        sync();
+      },
       onchange: function () {
-        document.getElementById('save-status').textContent = 'Saving…';
+        if (!ready) return;
+        setStatus('Saving…');
         clearTimeout(editor._saveTimer);
-        editor._saveTimer = setTimeout(save, 400);
+        editor._saveTimer = setTimeout(saveCurrent, 400);
       }
     });
+    renderList();
   }
 
+  $title.addEventListener('input', function () {
+    var d = cur && Gist.docs.get(cur);
+    if (!d) return;
+    d.title = $title.value.trim();
+    d.updatedAt = Date.now();
+    try { Gist.docs.put(d); } catch (e) {}
+    renderList();
+    setStatus('Saved locally');
+    scheduleSync();
+  });
+
+  document.getElementById('new-btn').addEventListener('click', function () {
+    if (!ready) return;
+    flushSave();
+    var d = Gist.docs.put({ id: newId(), title: '', body: '', updatedAt: Date.now() });
+    openDoc(d.id);
+    closeDocs();
+    scheduleSync();
+  });
+
+  document.getElementById('delete-btn').addEventListener('click', function () {
+    var d = cur && Gist.docs.get(cur);
+    if (!d || !confirm('Delete "' + displayTitle(d) + '"? This also removes it from your other devices.')) return;
+    clearTimeout(editor._saveTimer);
+    Gist.docs.remove(d.id);
+    openDoc((Gist.docs.list()[0] || {}).id);
+    scheduleSync();
+  });
+
+  function closeDocs() {
+    document.getElementById('docs-panel').classList.remove('open');
+    document.getElementById('docs-btn').setAttribute('aria-expanded', 'false');
+  }
+  document.getElementById('docs-btn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    var open = document.getElementById('docs-panel').classList.toggle('open');
+    this.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.addEventListener('click', function (e) {
+    if (!document.getElementById('docs-menu').contains(e.target)) closeDocs();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeDocs(); });
+
+  document.getElementById('download-btn').addEventListener('click', function () {
+    if (!editor) return;
+    var d = cur && Gist.docs.get(cur);
+    var name = (d ? displayTitle(d) : 'document').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'document';
+    var blob = new Blob([editor.getMarkdown()], { type: 'text/markdown' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name + '.md';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  // Flush on leave/hide so the last keystrokes aren't lost to the debounce;
+  // pull again when the tab comes back so other devices' edits show up.
+  document.addEventListener('visibilitychange', function () {
+    if (!ready) return;
+    if (document.visibilityState === 'hidden') { flushSave(); Gist.pushDocs(); }
+    else sync();
+  });
+  window.addEventListener('beforeunload', function () { if (ready) { flushSave(); Gist.pushDocs(); } });
+  window.addEventListener('resize', function () {
+    if (editor && editor.setHeight) editor.setHeight(fitHeight());
+  });
+
+  // ── Password gate (unchanged) ─────────────────────────────────────────────
   function unlock() {
     if (document.getElementById('md-pass').value !== 'Password') {
       document.getElementById('md-error').textContent = 'Incorrect password.';
@@ -160,20 +401,6 @@
     var ok = false;
     try { ok = sessionStorage.getItem('md_auth') === '1'; } catch (e) {}
     if (ok) { document.getElementById('md-lock').style.display = 'none'; initEditor(); }
-  });
-
-  window.addEventListener('resize', function () {
-    if (editor && editor.setHeight) editor.setHeight(fitHeight());
-  });
-
-  document.getElementById('download-btn').addEventListener('click', function () {
-    if (!editor) return;
-    var blob = new Blob([editor.getMarkdown()], { type: 'text/markdown' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'document.md';
-    a.click();
-    URL.revokeObjectURL(a.href);
   });
 </script>
 </body>

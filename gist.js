@@ -12,6 +12,22 @@
   var LS_REGION_PREFIX    = 'vc-region:';
   var LS_REGION_TOMB_PREFIX = 'vc-region-tomb:';
 
+  // Markdown documents (markdown-editor.html): one gist file per document.
+  var GIST_FILE_MD_INDEX  = 'verdict-cat-markdown-index.json';
+  var LS_DOC_PREFIX       = 'vc-md-doc:';
+  var LS_DOC_TOMB_PREFIX  = 'vc-md-tomb:';
+
+  function docFile(id) { return 'md-' + id + '.md'; }
+
+  // Gist responses truncate large files; fall back to the raw URL for those.
+  async function fileText(f) {
+    if (f.truncated && f.raw_url) {
+      var r = await fetch(f.raw_url);
+      if (r.ok) return await r.text();
+    }
+    return f.content || '';
+  }
+
   function h(pat) {
     return { 'Authorization': 'token ' + pat, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' };
   }
@@ -225,6 +241,146 @@
       var changed = await w.Gist.pullRegions();
       await w.Gist.pushRegions();
       return changed;
+    },
+
+    // ── Markdown documents (markdown-editor.html) ─────────────────────────
+    // Each document lives at localStorage['vc-md-doc:<id>'] = {id,title,body,updatedAt}.
+    // In the gist, every document's body is its own file (md-<id>.md) so it
+    // stays readable on GitHub, and a small index file holds title/updatedAt
+    // per id plus deletion tombstones. Merge rule is the same as regions:
+    // the newer updatedAt wins, and a deletion beats any older edit.
+    docs: {
+      list: function() {
+        var out = [];
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (k && k.indexOf(LS_DOC_PREFIX) === 0) {
+            try { out.push(JSON.parse(localStorage.getItem(k))); } catch(e) {}
+          }
+        }
+        return out.sort(function(a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
+      },
+      get: function(id) {
+        try { return JSON.parse(localStorage.getItem(LS_DOC_PREFIX + id)); } catch(e) { return null; }
+      },
+      // Callers set updatedAt when the user actually edits; pull() passes the
+      // remote timestamp through unchanged.
+      put: function(doc) {
+        var d = { id: doc.id, title: doc.title || '', body: doc.body || '', updatedAt: doc.updatedAt || Date.now() };
+        localStorage.setItem(LS_DOC_PREFIX + d.id, JSON.stringify(d));
+        localStorage.removeItem(LS_DOC_TOMB_PREFIX + d.id);
+        return d;
+      },
+      remove: function(id) {
+        localStorage.removeItem(LS_DOC_PREFIX + id);
+        localStorage.setItem(LS_DOC_TOMB_PREFIX + id, String(Date.now()));
+      }
+    },
+
+    // Merge remote documents into localStorage. Returns {ok, changed:[ids]}.
+    pullDocs: async function() {
+      var res = { ok: false, changed: [] };
+      var c = w.Gist.credentials();
+      if (!c.pat || !c.gistId) return res;
+      try {
+        var resp = await fetch(API + '/gists/' + c.gistId, { headers: h(c.pat) });
+        if (!resp.ok) return res;
+        var data = await resp.json();
+        var idx = data.files[GIST_FILE_MD_INDEX]
+          ? JSON.parse(await fileText(data.files[GIST_FILE_MD_INDEX]) || '{}') : {};
+        var rdocs = idx.docs || {};
+        var rdel = idx.deletions || {};
+
+        for (var id in rdocs) {
+          var m = rdocs[id];
+          var tombTs = parseInt(localStorage.getItem(LS_DOC_TOMB_PREFIX + id) || '0', 10);
+          var cur = w.Gist.docs.get(id);
+          if (!(m.updatedAt > (cur ? cur.updatedAt : 0) && m.updatedAt > tombTs)) continue;
+          var f = data.files[docFile(id)];
+          if (!f) continue;
+          var body = await fileText(f);
+          body = body.replace(/\r\n/g, '\n');
+          if (body === '\n') body = '';
+          // Re-check after the await: a local edit made meanwhile must win.
+          cur = w.Gist.docs.get(id);
+          if (cur && cur.updatedAt >= m.updatedAt) continue;
+          w.Gist.docs.put({ id: id, title: m.title, body: body, updatedAt: m.updatedAt });
+          res.changed.push(id);
+        }
+        for (var did in rdel) {
+          var ts = rdel[did];
+          var local = w.Gist.docs.get(did);
+          if (ts > (local ? local.updatedAt : 0)) {
+            var oldTomb = parseInt(localStorage.getItem(LS_DOC_TOMB_PREFIX + did) || '0', 10);
+            localStorage.removeItem(LS_DOC_PREFIX + did);
+            localStorage.setItem(LS_DOC_TOMB_PREFIX + did, String(Math.max(ts, oldTomb)));
+            if (local) res.changed.push(did);
+          }
+        }
+        res.ok = true;
+      } catch(e) {}
+      return res;
+    },
+
+    // Push local documents + tombstones. Only files whose local copy is newer
+    // than the remote index entry are uploaded; remote-only docs are left alone.
+    pushDocs: async function() {
+      var c = w.Gist.credentials();
+      if (!c.pat || !c.gistId) return false;
+      try {
+        var getResp = await fetch(API + '/gists/' + c.gistId, { headers: h(c.pat) });
+        if (!getResp.ok) return false;
+        var data = await getResp.json();
+        var idx = data.files[GIST_FILE_MD_INDEX]
+          ? JSON.parse(await fileText(data.files[GIST_FILE_MD_INDEX]) || '{}') : {};
+        var rdocs = idx.docs || {};
+        var rdel = idx.deletions || {};
+        var ndocs = Object.assign({}, rdocs);
+        var ndel = Object.assign({}, rdel);
+        var files = {};
+
+        w.Gist.docs.list().forEach(function(d) {
+          var rts = rdocs[d.id] ? rdocs[d.id].updatedAt : 0;
+          if (d.updatedAt <= (ndel[d.id] || 0)) return;
+          var fname = docFile(d.id);
+          if (d.updatedAt > rts || (d.updatedAt === rts && !data.files[fname])) {
+            files[fname] = { content: d.body || '\n' };
+            ndocs[d.id] = { title: d.title || '', updatedAt: d.updatedAt };
+          }
+        });
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (k && k.indexOf(LS_DOC_TOMB_PREFIX) === 0) {
+            var tid = k.slice(LS_DOC_TOMB_PREFIX.length);
+            var tts = parseInt(localStorage.getItem(k) || '0', 10);
+            if (tts > (ndel[tid] || 0)) ndel[tid] = tts;
+          }
+        }
+        // Drop any doc a deletion supersedes, and its file.
+        Object.keys(ndocs).forEach(function(id) {
+          if ((ndel[id] || 0) > ndocs[id].updatedAt) {
+            delete ndocs[id];
+            if (data.files[docFile(id)]) files[docFile(id)] = null;
+          }
+        });
+
+        var next = JSON.stringify({ docs: ndocs, deletions: ndel });
+        if (Object.keys(files).length === 0 && next === JSON.stringify({ docs: rdocs, deletions: rdel })) return true;
+        files[GIST_FILE_MD_INDEX] = { content: JSON.stringify({ docs: ndocs, deletions: ndel }, null, 2) };
+        var resp = await fetch(API + '/gists/' + c.gistId, {
+          method: 'PATCH', headers: h(c.pat), body: JSON.stringify({ files: files })
+        });
+        return resp.ok;
+      } catch(e) { return false; }
+    },
+
+    // Pull first so a stale local push can't clobber another device's newer
+    // edit, then push local changes out. Returns {ok, changed:[ids]}.
+    syncDocs: async function() {
+      var res = await w.Gist.pullDocs();
+      if (!res.ok) return res;
+      res.ok = await w.Gist.pushDocs();
+      return res;
     }
   };
 })(window);
