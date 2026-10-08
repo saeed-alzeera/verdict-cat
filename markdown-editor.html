@@ -69,41 +69,31 @@
   #title-input:hover, #title-input:focus { border-color: var(--border); }
   .btn.danger:hover { border-color: #e06c6c; color: #e06c6c; }
 
-  #main { display: flex; height: calc(100% - var(--bar-h)); }
-  #sidebar {
-    width: 230px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border);
-    display: flex; flex-direction: column; overflow: hidden;
+  #docs-menu { position: relative; }
+  #docs-panel {
+    display: none; position: absolute; top: calc(100% + 8px); left: 0; z-index: 60;
+    width: 300px; max-width: calc(100vw - 20px); max-height: 70vh;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.45); flex-direction: column; overflow: hidden;
   }
-  #sidebar-head { padding: 12px; border-bottom: 1px solid var(--border); }
-  #new-btn { width: 100%; padding: 7px; }
-  #doc-list { overflow-y: auto; flex: 1; padding: 6px; }
+  #docs-panel.open { display: flex; }
+  #new-btn { margin: 8px; padding: 7px; }
+  #doc-list { overflow-y: auto; padding: 0 6px 6px; }
   .doc-item { padding: 8px 10px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
   .doc-item:hover { background: var(--bg); }
   .doc-item.active { background: var(--bg); border-color: var(--accent); }
   .doc-item .t { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .doc-item .d { font-size: 11px; color: var(--muted); }
-  #doc-empty { padding: 14px 10px; font-size: 12px; color: var(--muted); }
-  #docs-btn { display: none; }
+  #doc-empty { padding: 10px; font-size: 12px; color: var(--muted); }
 
-  #editor-wrap { padding: 16px; flex: 1; min-width: 0; overflow: auto; }
+  #editor-wrap { padding: 16px; }
   #editor { border-radius: 8px; }
 
   @media (max-width: 700px) {
-    #docs-btn { display: inline-block; }
-    #sidebar { position: fixed; top: var(--bar-h); bottom: 0; left: 0; z-index: 50; display: none; }
-    #sidebar.open { display: flex; }
-    #topbar { padding: 0 10px; }
+    #topbar { padding: 0 10px; overflow-x: auto; }
     #editor-wrap { padding: 8px; }
+    #docs-panel { position: fixed; top: var(--bar-h); left: 10px; }
   }
-
-  #md-lock { position: fixed; inset: 0; z-index: 9999; background: var(--bg); display: flex; align-items: center; justify-content: center; }
-  #md-lock-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 36px 40px; width: 320px; max-width: calc(100vw - 32px); text-align: center; }
-  #md-lock-box h2 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
-  #md-lock-box p { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
-  #md-pass { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; outline: none; margin-bottom: 10px; background: var(--bg); color: var(--text); }
-  #md-error { color: #e8a730; font-size: 13px; min-height: 18px; margin-bottom: 10px; }
-  #md-unlock { width: 100%; padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; }
-  #md-back { display: inline-block; margin-top: 14px; color: var(--muted); font-size: 13px; text-decoration: none; }
 </style>
 </head>
 <body>
@@ -121,7 +111,13 @@
 
 <div id="topbar">
   <a href="index.html">&#8592; Hub</a>
-  <button class="btn" id="docs-btn">Docs</button>
+  <div id="docs-menu">
+    <button class="btn" id="docs-btn" aria-haspopup="true" aria-expanded="false">Documents &#9662;</button>
+    <div id="docs-panel">
+      <button class="btn" id="new-btn">+ New document</button>
+      <div id="doc-list"></div>
+    </div>
+  </div>
   <input id="title-input" type="text" placeholder="Untitled" maxlength="120" aria-label="Document title" />
   <span id="save-status">Saved locally</span>
   <button class="btn" id="sync-btn">Connect sync</button>
@@ -130,14 +126,8 @@
   <button class="btn danger" id="delete-btn">Delete</button>
 </div>
 
-<div id="main">
-  <aside id="sidebar">
-    <div id="sidebar-head"><button class="btn" id="new-btn">+ New document</button></div>
-    <div id="doc-list"></div>
-  </aside>
-  <div id="editor-wrap">
-    <div id="editor"><textarea style="display:none;"></textarea></div>
-  </div>
+<div id="editor-wrap">
+  <div id="editor"><textarea style="display:none;"></textarea></div>
 </div>
 
 <script src="gist.js"></script>
@@ -188,7 +178,7 @@
       var t = document.createElement('div'); t.className = 't'; t.textContent = displayTitle(d);
       var dt = document.createElement('div'); dt.className = 'd'; dt.textContent = new Date(d.updatedAt).toLocaleString();
       el.appendChild(t); el.appendChild(dt);
-      el.addEventListener('click', function () { flushSave(); openDoc(d.id); document.getElementById('sidebar').classList.remove('open'); });
+      el.addEventListener('click', function () { flushSave(); openDoc(d.id); closeDocs(); });
       list.appendChild(el);
     });
   }
@@ -341,7 +331,7 @@
     flushSave();
     var d = Gist.docs.put({ id: newId(), title: '', body: '', updatedAt: Date.now() });
     openDoc(d.id);
-    document.getElementById('sidebar').classList.remove('open');
+    closeDocs();
     scheduleSync();
   });
 
@@ -354,9 +344,19 @@
     scheduleSync();
   });
 
-  document.getElementById('docs-btn').addEventListener('click', function () {
-    document.getElementById('sidebar').classList.toggle('open');
+  function closeDocs() {
+    document.getElementById('docs-panel').classList.remove('open');
+    document.getElementById('docs-btn').setAttribute('aria-expanded', 'false');
+  }
+  document.getElementById('docs-btn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    var open = document.getElementById('docs-panel').classList.toggle('open');
+    this.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
+  document.addEventListener('click', function (e) {
+    if (!document.getElementById('docs-menu').contains(e.target)) closeDocs();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeDocs(); });
 
   document.getElementById('download-btn').addEventListener('click', function () {
     if (!editor) return;
