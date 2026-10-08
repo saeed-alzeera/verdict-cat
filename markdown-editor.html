@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
 <link rel="shortcut icon" href="favicon.ico" />
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/editor.md@1.5.0/css/editormd.min.css" />
+<link rel="stylesheet" href="editor-md/css/editormd.min.css" />
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -78,8 +78,8 @@
   <div id="editor"><textarea style="display:none;"></textarea></div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/editor.md@1.5.0/editormd.min.js"></script>
+<script src="editor-md/jquery.min.js"></script>
+<script src="editor-md/editormd.min.js"></script>
 <script>
   var STORAGE_KEY = 'verdict-cat-markdown-editor';
   var editor;
@@ -103,7 +103,7 @@
     editor = editormd('editor', {
       width: '100%',
       height: fitHeight(),
-      path: 'https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/',
+      path: 'editor-md/lib/',
       theme: 'dark',
       previewTheme: 'dark',
       editorTheme: 'pastel-on-dark',
