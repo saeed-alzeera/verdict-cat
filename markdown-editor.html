@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Markdown Editor</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
+<link rel="shortcut icon" href="favicon.ico" />
+<link rel="stylesheet" href="editor-md/css/editormd.min.css" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d23;
+    --border: #2e3238;
+    --text: #e8eaed;
+    --muted: #8b9099;
+    --accent: #5b9bd5;
+    --bar-h: 52px;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  #topbar {
+    height: var(--bar-h);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 16px;
+  }
+  #topbar a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 13px;
+    transition: color 0.15s;
+  }
+  #topbar a:hover { color: var(--accent); }
+  #topbar h1 { font-size: 15px; font-weight: 600; flex: 1; }
+  #save-status { font-size: 12px; color: var(--muted); }
+  .btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  #editor-wrap { padding: 16px; }
+  #editor { border-radius: 8px; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <a href="index.html">&#8592; Hub</a>
+  <h1>Markdown Editor</h1>
+  <span id="save-status">Autosaved locally</span>
+  <button class="btn" id="download-btn">Download .md</button>
+</div>
+
+<div id="editor-wrap">
+  <div id="editor"><textarea style="display:none;"></textarea></div>
+</div>
+
+<script src="editor-md/jquery.min.js"></script>
+<script src="editor-md/editormd.min.js"></script>
+<script>
+  var STORAGE_KEY = 'verdict-cat-markdown-editor';
+  var editor;
+
+  function load() {
+    try { return localStorage.getItem(STORAGE_KEY) || ''; } catch (e) { return ''; }
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, editor.getMarkdown());
+      document.getElementById('save-status').textContent = 'Saved';
+    } catch (e) {}
+  }
+
+  function fitHeight() {
+    return Math.max(400, window.innerHeight - 52 - 32);
+  }
+
+  $(function () {
+    editor = editormd('editor', {
+      width: '100%',
+      height: fitHeight(),
+      path: 'editor-md/lib/',
+      theme: 'dark',
+      previewTheme: 'dark',
+      editorTheme: 'pastel-on-dark',
+      markdown: load(),
+      placeholder: 'Start writing Markdown…',
+      codeFold: true,
+      saveHTMLToTextarea: true,
+      searchReplace: true,
+      toolbarAutoFixed: false,
+      onchange: function () {
+        document.getElementById('save-status').textContent = 'Saving…';
+        clearTimeout(editor._saveTimer);
+        editor._saveTimer = setTimeout(save, 400);
+      }
+    });
+  });
+
+  window.addEventListener('resize', function () {
+    if (editor && editor.setHeight) editor.setHeight(fitHeight());
+  });
+
+  document.getElementById('download-btn').addEventListener('click', function () {
+    if (!editor) return;
+    var blob = new Blob([editor.getMarkdown()], { type: 'text/markdown' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'document.md';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+</script>
+</body>
+</html>
