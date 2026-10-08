@@ -63,9 +63,29 @@
 
   #editor-wrap { padding: 16px; }
   #editor { border-radius: 8px; }
+
+  #md-lock { position: fixed; inset: 0; z-index: 9999; background: var(--bg); display: flex; align-items: center; justify-content: center; }
+  #md-lock-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 36px 40px; width: 320px; max-width: calc(100vw - 32px); text-align: center; }
+  #md-lock-box h2 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+  #md-lock-box p { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+  #md-pass { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; outline: none; margin-bottom: 10px; background: var(--bg); color: var(--text); }
+  #md-error { color: #e8a730; font-size: 13px; min-height: 18px; margin-bottom: 10px; }
+  #md-unlock { width: 100%; padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; }
+  #md-back { display: inline-block; margin-top: 14px; color: var(--muted); font-size: 13px; text-decoration: none; }
 </style>
 </head>
 <body>
+
+<div id="md-lock">
+  <div id="md-lock-box">
+    <h2>Markdown Editor</h2>
+    <p>Enter password to continue</p>
+    <input id="md-pass" type="password" placeholder="Password" autofocus />
+    <div id="md-error"></div>
+    <button id="md-unlock">Unlock</button><br />
+    <a id="md-back" href="index.html">&#8592; Hub</a>
+  </div>
+</div>
 
 <div id="topbar">
   <a href="index.html">&#8592; Hub</a>
@@ -99,7 +119,7 @@
     return Math.max(400, window.innerHeight - 52 - 32);
   }
 
-  $(function () {
+  function initEditor() {
     editor = editormd('editor', {
       width: '100%',
       height: fitHeight(),
@@ -119,6 +139,26 @@
         editor._saveTimer = setTimeout(save, 400);
       }
     });
+  }
+
+  function unlock() {
+    if (document.getElementById('md-pass').value !== 'Password') {
+      document.getElementById('md-error').textContent = 'Incorrect password.';
+      document.getElementById('md-pass').value = '';
+      return;
+    }
+    try { sessionStorage.setItem('md_auth', '1'); } catch (e) {}
+    document.getElementById('md-lock').style.display = 'none';
+    initEditor();
+  }
+
+  document.getElementById('md-unlock').addEventListener('click', unlock);
+  document.getElementById('md-pass').addEventListener('keydown', function (e) { if (e.key === 'Enter') unlock(); });
+
+  $(function () {
+    var ok = false;
+    try { ok = sessionStorage.getItem('md_auth') === '1'; } catch (e) {}
+    if (ok) { document.getElementById('md-lock').style.display = 'none'; initEditor(); }
   });
 
   window.addEventListener('resize', function () {
