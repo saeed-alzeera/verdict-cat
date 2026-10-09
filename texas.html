@@ -8,6 +8,8 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
 <link rel="shortcut icon" href="favicon.ico" />
+<link rel="stylesheet" href="site.css" />
+<script src="site.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -31,10 +33,10 @@
     gap: 12px;
     flex-wrap: wrap;
   }
-  header a.back { color: var(--muted); text-decoration: none; font-size: 13px; }
+  header a.back { color: var(--muted); text-decoration: none; font-size: 0.8125rem; }
   header a.back:hover { color: var(--text); }
-  header h1 { font-family: Georgia, 'Times New Roman', serif; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; }
-  header .sub { font-size: 13px; color: var(--muted); flex: 1; }
+  header h1 { font-size: 1.625rem; font-weight: 700; letter-spacing: -0.02em; }
+  header .sub { font-size: 0.8125rem; color: var(--muted); flex: 1; }
 
   main { max-width: 640px; margin: 0 auto; padding: 32px 20px 60px; }
 
@@ -49,17 +51,19 @@
     color: var(--text);
     transition: border-color 0.15s, background 0.15s;
   }
-  .profile-card:hover { border-color: var(--accent); background: var(--card-hover); }
-  .profile-card .num { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
-  .profile-card .title { font-size: 16px; font-weight: 600; margin-top: 4px; }
+  @media (hover: hover) { .profile-card:hover { border-color: var(--accent); background: var(--card-hover); } }
+  .profile-card { animation: rise 0.45s cubic-bezier(0.32, 0.72, 0, 1) both; animation-delay: calc(var(--i, 0) * 45ms); }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+  .profile-card .num { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+  .profile-card .title { font-size: 1rem; font-weight: 600; margin-top: 4px; }
 
-  .empty { color: var(--muted); font-size: 14px; padding: 20px 0; }
+  .empty { color: var(--muted); font-size: 0.875rem; padding: 20px 0; }
 </style>
 </head>
 <body>
 
-<header>
-  <a class="back" href="index.html">&larr; Home</a>
+<header class="vc-sticky">
+  <a class="back" href="reso.html">&larr; Reso</a>
   <h1>Texas</h1>
   <div class="sub">Due-diligence profiles</div>
 </header>
@@ -83,9 +87,10 @@
     var list = document.getElementById('profile-list');
     var empty = document.getElementById('empty-msg');
     if (!PROFILES.length) { empty.hidden = false; return; }
-    PROFILES.slice().reverse().forEach(function(p) {
+    PROFILES.slice().reverse().forEach(function(p, i) {
       var a = document.createElement('a');
-      a.className = 'profile-card';
+      a.className = 'profile-card vc-pressable';
+      a.style.setProperty('--i', i);
       a.href = 'texas/profile.html?n=' + encodeURIComponent(p.n);
       a.innerHTML = '<div class="num">Profile #' + p.n + '</div><div class="title">' + p.title + '</div>';
       list.appendChild(a);
