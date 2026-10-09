@@ -12,6 +12,8 @@
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
 <script src="gist.js"></script>
+<link rel="stylesheet" href="site.css" />
+<script src="site.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -55,7 +57,7 @@
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--muted);
     text-decoration: none;
     padding: 5px 10px;
@@ -69,7 +71,7 @@
 
   #book-title {
     flex: 1;
-    font-size: 14px;
+    font-size: 0.875rem;
     font-weight: 500;
     color: var(--text);
     white-space: nowrap;
@@ -81,13 +83,13 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--muted);
     flex-shrink: 0;
   }
 
   #chapter-time {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--muted);
     white-space: nowrap;
     padding-left: 4px;
@@ -95,7 +97,7 @@
   }
 
   #font-size-label {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--muted);
     min-width: 32px;
     text-align: center;
@@ -137,7 +139,7 @@
     border: 1px solid var(--border);
     border-radius: 50%;
     color: var(--text);
-    font-size: 18px;
+    font-size: 1.125rem;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -167,7 +169,7 @@
     border: 1px solid var(--border);
     border-radius: 6px;
     color: var(--text);
-    font-size: 12px;
+    font-size: 0.75rem;
     padding: 6px 14px;
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
@@ -177,7 +179,7 @@
   .bar-btn:disabled { opacity: 0.55; cursor: default; }
 
   #saved-badge {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--muted);
     opacity: 0;
     transition: opacity 0.4s;
@@ -200,7 +202,7 @@
   }
   #toc-panel.open { transform: translateX(0); }
   #toc-panel h3 {
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -211,7 +213,7 @@
   #toc-list li a {
     display: block;
     padding: 7px 16px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: var(--text);
     text-decoration: none;
     transition: background 0.12s;
@@ -239,7 +241,7 @@
     animation: spin 0.8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-  #loading-text { font-size: 13px; color: var(--muted); }
+  #loading-text { font-size: 0.8125rem; color: var(--muted); }
 
   #error-msg {
     position: fixed;
@@ -252,11 +254,15 @@
     gap: 10px;
     z-index: 200;
   }
-  #error-msg p { font-size: 14px; color: var(--muted); text-align: center; padding: 0 24px; }
-  #error-msg a { color: var(--accent); text-decoration: none; font-size: 13px; }
+  #error-msg p { font-size: 0.875rem; color: var(--muted); text-align: center; padding: 0 24px; }
+  #error-msg a { color: var(--accent); text-decoration: none; font-size: 0.8125rem; }
 
   #tap-zone { display: none; }
 
+  @media (prefers-reduced-transparency: reduce) {
+    #mobile-custom-btn { background: #141414 !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+    #custom-overlay { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background: rgba(0,0,0,0.75) !important; }
+  }
   #mobile-custom-btn { display: none; }
   #custom-overlay { display: none; }
   #custom-panel { display: none; }
@@ -299,7 +305,7 @@
       border: 1px solid rgba(255, 255, 255, 0.14);
       border-radius: 20px;
       padding: 8px 14px;
-      font-size: 12px;
+      font-size: 0.75rem;
       cursor: pointer;
       backdrop-filter: blur(10px);
       touch-action: manipulation;
@@ -312,6 +318,8 @@
       z-index: 130;
       opacity: 0;
       pointer-events: none;
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
       transition: opacity 0.2s ease;
     }
     #custom-overlay.show { display: block; opacity: 1; pointer-events: auto; }
@@ -327,11 +335,25 @@
       z-index: 140;
       padding: 14px 18px calc(18px + env(safe-area-inset-bottom));
       transform: translateY(100%);
-      transition: transform 0.25s ease;
       overflow-y: auto;
+      touch-action: pan-y;
       will-change: transform;
     }
-    #custom-panel.open { transform: translateY(0); }
+    #custom-panel-grab {
+      padding: 2px 0 12px;
+      margin-top: -6px;
+      cursor: grab;
+      touch-action: none;
+    }
+    #custom-panel-grab::before {
+      content: "";
+      display: block;
+      width: 36px; height: 4px;
+      margin: 6px auto 0;
+      border-radius: 2px;
+      background: var(--border);
+    }
+    #custom-panel.dragging #custom-panel-grab { cursor: grabbing; }
 
     #custom-panel-header {
       display: flex;
@@ -339,9 +361,9 @@
       justify-content: space-between;
       margin-bottom: 10px;
     }
-    #custom-panel-header h3 { font-size: 15px; font-weight: 600; }
+    #custom-panel-header h3 { font-size: 0.9375rem; font-weight: 600; }
     #panel-back {
-      font-size: 12px;
+      font-size: 0.75rem;
       color: var(--muted);
       text-decoration: none;
     }
@@ -349,21 +371,21 @@
       background: none;
       border: none;
       color: var(--muted);
-      font-size: 18px;
+      font-size: 1.125rem;
       line-height: 1;
       cursor: pointer;
       padding: 4px;
       touch-action: manipulation;
     }
     #panel-progress {
-      font-size: 12px;
+      font-size: 0.75rem;
       color: var(--muted);
       margin-bottom: 14px;
     }
 
     .panel-section { margin-bottom: 16px; }
     .panel-section h4 {
-      font-size: 11px;
+      font-size: 0.6875rem;
       font-weight: 600;
       letter-spacing: 0.06em;
       text-transform: uppercase;
@@ -382,7 +404,7 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       color: var(--text);
-      font-size: 13px;
+      font-size: 0.8125rem;
       padding: 9px 8px;
       cursor: pointer;
       touch-action: manipulation;
@@ -450,6 +472,7 @@
 <button id="mobile-custom-btn" title="Customization">&#9881; Customization</button>
 <div id="custom-overlay"></div>
 <div id="custom-panel">
+  <div id="custom-panel-grab"></div>
   <div id="custom-panel-header">
     <a id="panel-back" href="library.html">&#8592; Library</a>
     <h3>Customization</h3>
@@ -493,7 +516,7 @@
   <div class="panel-section">
     <div class="panel-row">
       <button class="panel-opt-btn" id="m-sync-btn">Sync</button>
-      <span id="m-saved-badge" style="font-size:11px;color:var(--muted);opacity:0;transition:opacity 0.4s;">Saved</span>
+      <span id="m-saved-badge" style="font-size:0.6875rem;color:var(--muted);opacity:0;transition:opacity 0.4s;">Saved</span>
     </div>
   </div>
 </div>
@@ -934,7 +957,7 @@
     });
 
     function runSync(btn) {
-      if (!Gist.isConnected()) { alert('Connect GitHub sync from the Library page first.'); return; }
+      if (!Gist.isConnected()) { VC.toast('Connect GitHub sync from the Library page first.'); return; }
       btn.disabled = true;
       btn.textContent = 'Syncing…';
       Gist.sync().then(function(changedKeys) {
@@ -956,14 +979,81 @@
 
     document.getElementById('sync-btn').addEventListener('click', function() { runSync(this); });
 
+    // Settings sheet: opens/closes with a critically damped spring, follows the
+    // finger 1:1 when dragged, rubber-bands upward, and on release projects the
+    // flick to decide where to land (velocity is handed to the spring).
+    var cp = document.getElementById('custom-panel');
+    var co = document.getElementById('custom-overlay');
+    var cpY = 0, cpH = 0, cpAnim = null, cpOpen = false;
+    function cpSet(y) {
+      cpY = y;
+      cp.style.transform = 'translate3d(0,' + y + 'px,0)';
+      co.style.opacity = cpH ? Math.max(0, Math.min(1, 1 - y / cpH)) : 0;
+    }
+    function cpFinish(open) {
+      cpOpen = open;
+      cp.classList.toggle('open', open);
+      if (!open) { co.classList.remove('show'); co.style.opacity = ''; cp.style.transform = ''; }
+    }
+    function cpTo(target, velocity, damping) {
+      cpAnim && cpAnim.stop();
+      if (VC.reducedMotion()) {                 // cross-fade instead of slide
+        cpSet(target); cpFinish(target === 0); return;
+      }
+      cpAnim = VC.spring({
+        from: cpY, to: target, velocity: velocity || 0,
+        response: 0.35, damping: damping == null ? 1 : damping, precision: 1,
+        onUpdate: cpSet, onDone: function() { cpFinish(target === 0); }
+      });
+    }
     function openCustomPanel() {
-      document.getElementById('custom-panel').classList.add('open');
-      document.getElementById('custom-overlay').classList.add('show');
+      cpH = cp.offsetHeight;
+      co.classList.add('show');
+      co.style.transition = 'none';
+      if (!cpOpen && !cpAnim) cpSet(cpH);
+      cpOpen = true;
+      cpTo(0, 0);
     }
     function closeCustomPanel() {
-      document.getElementById('custom-panel').classList.remove('open');
-      document.getElementById('custom-overlay').classList.remove('show');
+      cpH = cp.offsetHeight;
+      cpTo(cpH, 0);
     }
+    (function() {
+      var track = null;
+      function down(e) {
+        if (e.target.closest && e.target.closest('a,button')) return;
+        cpAnim && cpAnim.stop();
+        cpH = cp.offsetHeight;
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+        track = { y0: e.clientY, pos0: cpY, s: [{ t: e.timeStamp, y: e.clientY }] };
+        cp.classList.add('dragging');
+      }
+      function move(e) {
+        if (!track) return;
+        var pos = track.pos0 + (e.clientY - track.y0);
+        cpSet(pos < 0 ? -VC.rubberband(-pos, cpH) : pos);
+        track.s.push({ t: e.timeStamp, y: e.clientY });
+        if (track.s.length > 6) track.s.shift();
+      }
+      function up() {
+        if (!track) return;
+        cp.classList.remove('dragging');
+        var a = track.s[0], b = track.s[track.s.length - 1];
+        var v = b.t > a.t ? ((b.y - a.y) / (b.t - a.t)) * 1000 : 0;
+        track = null;
+        var landing = cpY + VC.project(v, 0.99);
+        if (landing > cpH * 0.5) cpTo(cpH, v, 1);
+        else cpTo(0, v, Math.abs(v) > 500 ? 0.8 : 1);
+      }
+      ['custom-panel-grab', 'custom-panel-header'].forEach(function(id) {
+        var el = document.getElementById(id);
+        el.style.touchAction = 'none';
+        el.addEventListener('pointerdown', down);
+        el.addEventListener('pointermove', move);
+        el.addEventListener('pointerup', up);
+        el.addEventListener('pointercancel', up);
+      });
+    })();
     document.getElementById('mobile-custom-btn').addEventListener('click', openCustomPanel);
     document.getElementById('custom-panel-close').addEventListener('click', closeCustomPanel);
     document.getElementById('custom-overlay').addEventListener('click', closeCustomPanel);

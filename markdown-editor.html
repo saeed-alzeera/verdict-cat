@@ -9,6 +9,8 @@
 <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
 <link rel="shortcut icon" href="favicon.ico" />
 <link rel="stylesheet" href="editor-md/css/editormd.min.css" />
+<link rel="stylesheet" href="site.css" />
+<script src="site.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -27,9 +29,10 @@
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    font-size: 15px;
+    
     line-height: 1.5;
   }
+  body { font-size: 0.9375rem; }
 
   #topbar {
     height: var(--bar-h);
@@ -43,18 +46,18 @@
   #topbar a {
     color: var(--muted);
     text-decoration: none;
-    font-size: 13px;
+    font-size: 0.8125rem;
     transition: color 0.15s;
   }
   #topbar a:hover { color: var(--accent); }
-  #topbar h1 { font-size: 15px; font-weight: 600; flex: 1; }
-  #save-status { font-size: 12px; color: var(--muted); }
+  #topbar h1 { font-size: 0.9375rem; font-weight: 600; flex: 1; }
+  #save-status { font-size: 0.75rem; color: var(--muted); }
   .btn {
     background: none;
     border: 1px solid var(--border);
     border-radius: 6px;
     color: var(--muted);
-    font-size: 12px;
+    font-size: 0.75rem;
     padding: 5px 12px;
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
@@ -64,7 +67,7 @@
   #topbar { gap: 10px; }
   #title-input {
     flex: 1; min-width: 0; background: none; border: 1px solid transparent; border-radius: 6px;
-    color: var(--text); font-size: 15px; font-weight: 600; padding: 4px 8px; outline: none;
+    color: var(--text); font-size: 0.9375rem; font-weight: 600; padding: 4px 8px; outline: none;
   }
   #title-input:hover, #title-input:focus { border-color: var(--border); }
   .btn.danger:hover { border-color: #e06c6c; color: #e06c6c; }
@@ -82,9 +85,9 @@
   .doc-item { padding: 8px 10px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
   .doc-item:hover { background: var(--bg); }
   .doc-item.active { background: var(--bg); border-color: var(--accent); }
-  .doc-item .t { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .doc-item .d { font-size: 11px; color: var(--muted); }
-  #doc-empty { padding: 10px; font-size: 12px; color: var(--muted); }
+  .doc-item .t { font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .doc-item .d { font-size: 0.6875rem; color: var(--muted); }
+  #doc-empty { padding: 10px; font-size: 0.75rem; color: var(--muted); }
 
   #editor-wrap { padding: 16px; }
   #editor { border-radius: 8px; }
@@ -257,7 +260,11 @@
 
   document.getElementById('sync-btn').addEventListener('click', async function () {
     if (Gist.isConnected()) { sync(); return; }
-    var pat = (prompt('Paste a GitHub personal access token with the "gist" scope to sync across devices:') || '').trim();
+    var pat = await VC.prompt({
+      title: 'Connect GitHub sync',
+      message: 'Paste a GitHub personal access token with the “gist” scope to sync across devices.',
+      placeholder: 'ghp_…', type: 'password', confirmLabel: 'Connect'
+    });
     if (!pat) return;
     setStatus('Connecting…');
     try {
@@ -271,9 +278,13 @@
   });
 
   document.getElementById('disc-btn').addEventListener('click', function () {
-    if (!confirm('Disconnect GitHub sync? Your documents stay on this device.')) return;
+    var saved = Gist.credentials();
     Gist.clear();
     updateConnectUI();
+    VC.toast('GitHub sync disconnected', { action: { label: 'Undo', onClick: function () {
+      Gist.save(saved.pat, saved.gistId);
+      updateConnectUI();
+    } } });
   });
 
   // ── Editor ────────────────────────────────────────────────────────────────
@@ -337,11 +348,17 @@
 
   document.getElementById('delete-btn').addEventListener('click', function () {
     var d = cur && Gist.docs.get(cur);
-    if (!d || !confirm('Delete "' + displayTitle(d) + '"? This also removes it from your other devices.')) return;
+    if (!d) return;
     clearTimeout(editor._saveTimer);
+    var snapshot = { id: d.id, title: d.title, body: d.body };
     Gist.docs.remove(d.id);
     openDoc((Gist.docs.list()[0] || {}).id);
     scheduleSync();
+    VC.toast('Deleted “' + displayTitle(d) + '”', { action: { label: 'Undo', onClick: function () {
+      Gist.docs.put({ id: snapshot.id, title: snapshot.title, body: snapshot.body, updatedAt: Date.now() });
+      openDoc(snapshot.id);
+      scheduleSync();
+    } } });
   });
 
   function closeDocs() {

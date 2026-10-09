@@ -4,6 +4,8 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Sudoku</title>
+<link rel="stylesheet" href="../../site.css" />
+<script src="../../site.js"></script>
 <style>
 /* ── tokens ── */
 :root[data-theme="dark"] {
@@ -65,7 +67,7 @@ header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.5px; }
   flex: 1; padding: 7px 0; border-radius: 8px; font-size: .78rem;
   font-weight: 600; border: 1px solid var(--border);
   background: var(--surface2); color: var(--muted); cursor: pointer;
-  transition: all .15s;
+  transition: background .15s, border-color .15s, color .15s, opacity .15s, transform .12s;
 }
 .diff-btn:hover { border-color: var(--accent); color: var(--ink); }
 .diff-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -83,7 +85,7 @@ header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.5px; }
   background: var(--surface2); border: 1px solid var(--border);
   color: var(--muted); border-radius: 7px; padding: 5px 9px;
   cursor: pointer; font-size: .75rem; font-weight: 600;
-  transition: all .15s; display: flex; align-items: center; gap: 4px;
+  transition: background .15s, border-color .15s, color .15s, opacity .15s, transform .12s; display: flex; align-items: center; gap: 4px;
 }
 .tool-btn:hover { border-color: var(--accent); color: var(--ink); }
 .tool-btn.on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
@@ -146,7 +148,7 @@ header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.5px; }
 .num-btn {
   aspect-ratio: 1; background: var(--surface); border: 1px solid var(--border);
   border-radius: 8px; font-size: clamp(14px,3.5vw,20px); font-weight: 700;
-  color: var(--ink); cursor: pointer; transition: all .12s;
+  color: var(--ink); cursor: pointer; transition: background .15s, border-color .15s, color .15s, opacity .15s, transform .12s;
   display: flex; align-items: center; justify-content: center;
   position: relative;
 }
@@ -166,7 +168,7 @@ header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.5px; }
   flex: 1; padding: 9px 0; border-radius: 8px;
   background: var(--surface2); border: 1px solid var(--border);
   color: var(--ink); font-size: .8rem; font-weight: 600;
-  cursor: pointer; transition: all .15s;
+  cursor: pointer; transition: background .15s, border-color .15s, color .15s, opacity .15s, transform .12s;
   display: flex; align-items: center; justify-content: center; gap: 5px;
 }
 .action-btn:hover { border-color: var(--accent); }
@@ -211,9 +213,9 @@ header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.5px; }
   background: var(--win-bg); border: 1px solid var(--border2);
   border-radius: 16px; padding: 32px 28px; text-align: center;
   max-width: 320px; width: 90%; box-shadow: var(--shadow);
-  animation: popIn .3s cubic-bezier(.34,1.56,.64,1);
+  animation: popIn .35s cubic-bezier(.32,.72,0,1);
 }
-@keyframes popIn { from { transform: scale(.7); opacity: 0; } }
+@keyframes popIn { from { transform: scale(.94); opacity: 0; } }
 .win-emoji { font-size: 2.8rem; margin-bottom: 12px; }
 .win-title { font-size: 1.4rem; font-weight: 800; margin-bottom: 6px; }
 .win-sub { color: var(--muted); font-size: .9rem; margin-bottom: 20px; }

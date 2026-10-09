@@ -4,6 +4,8 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <title>Solitaire</title>
+<link rel="stylesheet" href="../../site.css" />
+<script src="../../site.js"></script>
 <style>
 :root {
   --bg: #0f1117; --panel: #1a1d23; --line: #2e3238;
@@ -14,8 +16,9 @@ html, body {
   min-height: 100vh;
   background: var(--bg); color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 15px;
+  
 }
+  body { font-size: 0.9375rem; }
 
 /* top bar */
 #bar {
@@ -23,13 +26,13 @@ html, body {
   padding: 10px 16px; background: var(--panel);
   border-bottom: 1px solid var(--line); gap: 12px; flex-shrink: 0;
 }
-#bar a { color: var(--muted); text-decoration: none; font-size: 13px; white-space: nowrap; }
+#bar a { color: var(--muted); text-decoration: none; font-size: 0.8125rem; white-space: nowrap; }
 #bar a:hover { color: var(--ink); }
-#bar h1 { font-size: 15px; font-weight: 600; flex: 1; text-align: center; }
+#bar h1 { font-size: 0.9375rem; font-weight: 600; flex: 1; text-align: center; }
 #bar .right { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
 #bar button {
   background: none; border: 1px solid var(--line); border-radius: 6px;
-  color: var(--muted); font-size: 12px; padding: 5px 12px;
+  color: var(--muted); font-size: 0.75rem; padding: 5px 12px;
   cursor: pointer; white-space: nowrap;
   transition: border-color .15s, color .15s;
 }
@@ -124,8 +127,10 @@ html, body {
   cursor: pointer;
 }
 .card.red { color: #c0392b; }
-.dragging { opacity: 0.5; }
-.drag-over { border: 2px dashed #FFD700; }
+.dragging { opacity: 0.3; }
+.drag-over { box-shadow: inset 0 0 0 2px rgba(255,215,0,0.75); border-radius: 10px; transition: box-shadow .15s ease; }
+#drag-ghost { position: fixed; left: 0; top: 0; z-index: 9999; pointer-events: none; will-change: transform; filter: drop-shadow(0 8px 14px rgba(0,0,0,0.45)); }
+#drag-ghost .card { transform: none; left: 0; }
 
 /* message */
 #message {
@@ -170,11 +175,11 @@ html, body {
   color: var(--ink);
   line-height: 1.6;
 }
-.modal-content h2 { margin-bottom: 12px; font-size: 16px; }
-.modal-content p { font-size: 13px; color: var(--muted); }
+.modal-content h2 { margin-bottom: 12px; font-size: 1rem; }
+.modal-content p { font-size: 0.8125rem; color: var(--muted); }
 .modal-content strong { color: var(--ink); }
 .modal-close {
-  float: right; font-size: 22px; cursor: pointer; color: var(--muted); line-height: 1;
+  float: right; font-size: 1.375rem; cursor: pointer; color: var(--muted); line-height: 1;
 }
 .modal-close:hover { color: var(--ink); }
 
@@ -370,12 +375,9 @@ function createCardEl(card, sourceType, cardIndex) {
     if (card.color === "red") el.classList.add("red");
   }
   if (card.faceUp && (sourceType.startsWith("waste") || sourceType.startsWith("tableau"))) {
-    el.draggable = true;
-    el.addEventListener("dragstart", e => {
-      e.dataTransfer.setData("text/plain", JSON.stringify({source: sourceType, index: cardIndex}));
-      el.classList.add("dragging");
-    });
-    el.addEventListener("dragend", () => el.classList.remove("dragging"));
+    el.style.touchAction = "none";
+    el.style.cursor = "grab";
+    el.addEventListener("pointerdown", e => beginDrag(e, el, sourceType, cardIndex));
   }
   return el;
 }
@@ -384,16 +386,108 @@ function suitSymbol(suit) {
   return {hearts:"♥", diamonds:"♦", clubs:"♣", spades:"♠"}[suit] || "";
 }
 
+// Drop targets are registered on the element; hit-testing happens on pointer-up.
 function enableDrop(element, destType, destId) {
-  element.addEventListener("dragover", e => { e.preventDefault(); element.classList.add("drag-over"); });
-  element.addEventListener("dragleave", () => element.classList.remove("drag-over"));
-  element.addEventListener("drop", e => {
-    e.preventDefault();
-    element.classList.remove("drag-over");
-    let data = JSON.parse(e.dataTransfer.getData("text/plain"));
-    if (destType === "foundation") moveToFoundation(data, destId);
-    else if (destType === "tableau") moveToTableau(data, destId);
-  });
+  element._drop = { destType, destId };
+}
+
+// ── Pointer-driven drag ────────────────────────────────────────────────────
+// Works with mouse, touch and pen. The stack follows the pointer 1:1 (offset from
+// the grab point is preserved) and a rejected drop springs back from where it was
+// released, carrying the release velocity.
+let PD = null;
+const DRAG_THRESHOLD = 4;
+
+function beginDrag(e, el, sourceType, cardIndex) {
+  if (PD || (e.pointerType === "mouse" && e.button !== 0)) return;
+  let els = [el];
+  if (sourceType.startsWith("tableau-")) {
+    let pile = el.parentElement;
+    els = Array.from(pile.querySelectorAll(".card")).slice(cardIndex);
+  }
+  let rc = el.getBoundingClientRect();
+  PD = { els, source: sourceType, index: cardIndex, el,
+         px: e.clientX, py: e.clientY, ox: e.clientX - rc.left, oy: e.clientY - rc.top,
+         home: { x: rc.left, y: rc.top }, ghost: null, x: 0, y: 0, hover: null,
+         samples: [{ t: e.timeStamp, x: e.clientX, y: e.clientY }], settling: false };
+  try { el.setPointerCapture(e.pointerId); } catch (err) {}
+  document.addEventListener("pointermove", dragMove);
+  document.addEventListener("pointerup", dragEnd);
+  document.addEventListener("pointercancel", dragEnd);
+}
+
+function dragMove(e) {
+  if (!PD || PD.settling) return;
+  PD.samples.push({ t: e.timeStamp, x: e.clientX, y: e.clientY });
+  if (PD.samples.length > 6) PD.samples.shift();
+  if (!PD.ghost) {
+    if (Math.hypot(e.clientX - PD.px, e.clientY - PD.py) < DRAG_THRESHOLD) return;
+    let g = document.createElement("div");
+    g.id = "drag-ghost";
+    let first = PD.els[0].getBoundingClientRect();
+    PD.els.forEach(c => {
+      let clone = c.cloneNode(true);
+      clone.classList.remove("dragging");
+      clone.style.top = (c.getBoundingClientRect().top - first.top) + "px";
+      clone.style.left = "0";
+      clone.style.transform = "none";
+      g.appendChild(clone);
+    });
+    g.style.width = first.width + "px";
+    document.body.appendChild(g);
+    PD.els.forEach(c => c.classList.add("dragging"));
+    PD.ghost = g;
+  }
+  PD.x = e.clientX - PD.ox; PD.y = e.clientY - PD.oy;
+  PD.ghost.style.transform = "translate3d(" + PD.x + "px," + PD.y + "px,0)";
+  let t = dropTargetAt(e.clientX, e.clientY);
+  if (t !== PD.hover) {
+    PD.hover && PD.hover.classList.remove("drag-over");
+    t && t.classList.add("drag-over");
+    PD.hover = t;
+  }
+}
+
+function dropTargetAt(x, y) {
+  return document.elementsFromPoint(x, y).find(n => n._drop && n._drop.destType !== "waste") || null;
+}
+
+function dragEnd(e) {
+  document.removeEventListener("pointermove", dragMove);
+  document.removeEventListener("pointerup", dragEnd);
+  document.removeEventListener("pointercancel", dragEnd);
+  if (!PD) return;
+  let d = PD;
+  if (!d.ghost) { PD = null; return; }            // never moved: it was a tap
+  d.hover && d.hover.classList.remove("drag-over");
+
+  let ok = false;
+  if (e.type !== "pointercancel") {
+    let t = dropTargetAt(e.clientX, e.clientY);
+    let data = { source: d.source, index: d.index };
+    if (t) {
+      if (t._drop.destType === "foundation") ok = moveToFoundation(data, t._drop.destId);
+      else if (t._drop.destType === "tableau") ok = moveToTableau(data, t._drop.destId);
+    }
+  }
+  if (ok) { d.ghost.remove(); PD = null; return; }   // renderGame() already rebuilt the board
+
+  // Rejected: settle back to the source from the release point.
+  d.settling = true;
+  let a = d.samples[0], b = d.samples[d.samples.length - 1];
+  let dt = b.t > a.t ? (b.t - a.t) / 1000 : 0;
+  let vx = dt ? (b.x - a.x) / dt : 0, vy = dt ? (b.y - a.y) / dt : 0;
+  let done = () => {
+    d.ghost.remove();
+    d.els.forEach(c => c.classList && c.classList.remove("dragging"));
+    PD = null;
+  };
+  if (VC.reducedMotion()) { done(); return; }
+  let pending = 2;
+  let fin = () => { if (--pending === 0) done(); };
+  let draw = () => { d.ghost.style.transform = "translate3d(" + d.x + "px," + d.y + "px,0)"; };
+  VC.spring({ from: d.x, to: d.home.x, velocity: vx, response: 0.3, damping: 1, precision: 0.5, onUpdate: v => { d.x = v; draw(); }, onDone: fin });
+  VC.spring({ from: d.y, to: d.home.y, velocity: vy, response: 0.3, damping: 1, precision: 0.5, onUpdate: v => { d.y = v; draw(); }, onDone: fin });
 }
 
 function cardValue(rank) {
@@ -427,6 +521,7 @@ function moveToFoundation(data, suit) {
   msg("");
   renderGame();
   checkWin();
+  return true;
 }
 
 function moveToTableau(data, destIdx) {
@@ -452,6 +547,7 @@ function moveToTableau(data, destIdx) {
   tableau[destIdx] = dest.concat(moving);
   msg("");
   renderGame();
+  return true;
 }
 
 function flipTop(pileIdx) {

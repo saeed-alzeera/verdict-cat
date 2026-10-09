@@ -4,6 +4,8 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Crossword</title>
+<link rel="stylesheet" href="../site.css" />
+<script src="../site.js"></script>
 <style>
 /* ── tokens ── */
 :root[data-theme="dark"] {
@@ -47,7 +49,7 @@ header {
 .back-btn {
   color: var(--muted); text-decoration: none; font-size: .8rem;
   padding: 5px 9px; border-radius: 6px; border: 1px solid var(--border);
-  transition: all .15s; white-space: nowrap; line-height: 1;
+  transition: background .15s, border-color .15s, color .15s, opacity .15s, transform .12s; white-space: nowrap; line-height: 1;
 }
 .back-btn:hover { color: var(--ink); border-color: var(--accent); }
 header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.4px; }
@@ -216,7 +218,7 @@ header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.4px; }
 .btn {
   padding: 7px 13px; border-radius: 8px; font-size: .79rem; font-weight: 600;
   border: 1px solid var(--border); background: var(--surface2); color: var(--ink);
-  cursor: pointer; transition: all .15s; white-space: nowrap; line-height: 1;
+  cursor: pointer; transition: background .15s, border-color .15s, color .15s, opacity .15s, transform .12s; white-space: nowrap; line-height: 1;
 }
 .btn:hover:not(:disabled) { border-color: var(--accent); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -311,7 +313,7 @@ header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.4px; }
 .assign-item {
   display: flex; align-items: baseline; gap: 8px;
   padding: 6px 8px; border-radius: 6px; cursor: pointer;
-  border: 1px solid var(--border); margin-bottom: 4px; transition: all .1s;
+  border: 1px solid var(--border); margin-bottom: 4px; transition: background .1s, border-color .1s, color .1s;
 }
 .assign-item:hover { border-color: var(--accent); }
 .assign-item.selected { background: var(--accent-dim); border-color: var(--accent); }
@@ -378,7 +380,7 @@ header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: -.4px; }
 
 <header>
   <div class="header-left">
-    <a class="back-btn" href="../index.html">← Hub</a>
+    <a class="back-btn" href="../games.html">← Games</a>
     <h1>Crossword</h1>
   </div>
   <button class="icon-btn" id="btn-theme" title="Toggle theme">🌙</button>
@@ -777,7 +779,7 @@ function computeGrid() {
 // ── Design → Fill ──
 document.getElementById('btn-go-fill').addEventListener('click', () => {
   computeGrid();
-  if (!S.slots.length) { alert('No valid slots found. The grid needs white cells that form words of 2+ letters.'); return; }
+  if (!S.slots.length) { VC.toast('No valid slots found. The grid needs white cells that form words of 2+ letters.', { duration: 4200 }); return; }
   const hash = [...S.blacks].sort().join('|') + ':' + S.gridSize;
   const N = S.gridSize;
   let freshGrid = false;
