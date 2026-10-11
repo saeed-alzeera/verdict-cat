@@ -1,0 +1,306 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Shared design layer for every first-party page.
+   Loaded BEFORE each page's own <style>, so page rules can still override.
+   Principles (see .claude/skills/apple-design): respond on press, springs/
+   ease-outs without needless overshoot, translucent materials, size-specific
+   type, and graceful reduced-motion / transparency / contrast fallbacks.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Shared palette. Pages may still declare their own aliases. */
+  --vc-bg: #0f1117;
+  --vc-surface: #1a1d23;
+  --vc-border: #2e3238;
+  --vc-text: #e8eaed;
+  --vc-muted: #8b9099;
+  --vc-accent: #5b9bd5;
+  --vc-danger: #e05c5c;
+  --vc-green: #4caf82;
+
+  /* Motion: iOS-style ease-out (no overshoot) for things that just appear. */
+  --vc-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --vc-dur-fast: 0.12s;
+  --vc-dur: 0.35s;
+
+  /* Material */
+  --vc-glass-bg: rgba(26, 29, 35, 0.72);
+  --vc-glass-border: rgba(255, 255, 255, 0.08);
+  --vc-glass-top: rgba(255, 255, 255, 0.14);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Type: platform font, optical sizing, size-specific tracking. */
+body {
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { text-wrap: balance; }
+h1 { letter-spacing: -0.02em; }
+h2 { letter-spacing: -0.015em; }
+
+/* ── Press feedback: respond on pointer-down, not on release ── */
+button:not(:disabled),
+a.hub-card,
+.vc-pressable {
+  transition-property: border-color, color, background-color, opacity, transform;
+  touch-action: manipulation;
+}
+button:not(:disabled):active,
+a.hub-card:active,
+.vc-pressable:active {
+  transform: scale(0.97);
+  transition-duration: var(--vc-dur-fast);
+}
+
+/* Keyboard focus is always visible, mouse focus never shouts. */
+:focus-visible {
+  outline: 2px solid var(--vc-accent);
+  outline-offset: 2px;
+}
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline-offset: 0; }
+
+/* ── Hub cards (shared by index / games / reso) ── */
+a.hub-card {
+  flex: 1 1 180px;
+  max-width: 200px;
+  background: var(--panel, var(--vc-surface));
+  border: 1px solid var(--line, var(--vc-border));
+  border-radius: 12px;
+  padding: 28px 20px 24px;
+  text-align: center;
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--ink, var(--vc-text));
+  transition-duration: 0.2s;
+  transition-timing-function: var(--vc-ease);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+a.hub-card .icon { font-size: 2rem; line-height: 1; }
+a.hub-card .label { font-size: 0.9375rem; font-weight: 600; }
+a.hub-card .desc { font-size: 0.75rem; color: var(--muted, var(--vc-muted)); }
+@media (hover: hover) {
+  a.hub-card:hover { border-color: var(--accent, var(--vc-accent)); transform: translateY(-2px); }
+  a.hub-card:active { transform: scale(0.97); }
+}
+
+/* ── Materials ── */
+.vc-glass {
+  background: var(--vc-glass-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--vc-glass-border);
+  border-top-color: var(--vc-glass-top); /* light catching the edge */
+}
+
+/* Sticky header that content scrolls under; the divider only appears once
+   content is actually underneath (scroll-edge effect instead of a hard rule). */
+.vc-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--vc-glass-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid transparent !important;
+  transition: border-color 0.2s ease;
+}
+html[data-scrolled] .vc-sticky { border-bottom-color: var(--vc-border) !important; }
+
+/* ── Overlays / modals (animated materialize) ── */
+.vc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0);
+  -webkit-backdrop-filter: blur(0px);
+  backdrop-filter: blur(0px);
+  transition: background-color 0.3s ease, backdrop-filter 0.3s ease, -webkit-backdrop-filter 0.3s ease;
+}
+.vc-overlay.vc-in {
+  background: rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+/* The first child is the box: scale + blur-in from the trigger. */
+.vc-overlay > * {
+  opacity: 0;
+  transform: scale(0.94);
+  filter: blur(4px);
+  transform-origin: var(--vc-ox, 50%) var(--vc-oy, 50%);
+  transition: opacity 0.25s ease, transform 0.4s var(--vc-ease), filter 0.3s ease;
+}
+.vc-overlay.vc-in > * { opacity: 1; transform: none; filter: none; }
+
+/* ── Sheet (bottom sheet on phones, centered modal on larger screens) ── */
+.vc-sheet-overlay { align-items: flex-end; }
+.vc-sheet-overlay > .vc-sheet {
+  /* On phones JS drives transform with a spring; don't fight it with CSS. */
+  filter: none;
+  transition: none;
+  opacity: 1;
+  transform: translateY(100%);
+}
+.vc-sheet {
+  width: 100%;
+  max-height: 88vh;
+  max-height: 88dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--vc-surface);
+  border: 1px solid var(--vc-border);
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  padding: 0 20px calc(20px + env(safe-area-inset-bottom));
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.45);
+  color: var(--vc-text);
+  will-change: transform;
+}
+.vc-sheet-handle {
+  flex: none;
+  padding: 10px 0 6px;
+  cursor: grab;
+  touch-action: none;
+}
+.vc-sheet-handle::before {
+  content: "";
+  display: block;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  margin: 0 auto 10px;
+  background: var(--vc-border);
+}
+.vc-sheet.vc-dragging .vc-sheet-handle { cursor: grabbing; }
+.vc-sheet h2 { font-size: 1.0625rem; font-weight: 600; margin: 0 0 6px; }
+.vc-sheet-body { overflow-y: auto; overscroll-behavior: contain; }
+.vc-sheet-body p { font-size: 0.8125rem; line-height: 1.55; color: var(--vc-muted); margin: 0 0 16px; }
+.vc-sheet-body input {
+  width: 100%;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+  background: var(--vc-bg);
+  border: 1px solid var(--vc-border);
+  border-radius: 8px;
+  color: var(--vc-text);
+  font-size: 1rem; /* 16px avoids iOS zoom-on-focus */
+  outline: none;
+}
+.vc-sheet-body input:focus { border-color: var(--vc-accent); }
+.vc-actions { display: flex; flex-direction: column; gap: 8px; }
+
+@media (min-width: 640px) {
+  .vc-sheet-overlay { align-items: center; }
+  .vc-sheet-overlay > .vc-sheet {
+    transform: scale(0.94);
+    opacity: 0;
+    filter: blur(4px);
+    transition: opacity 0.25s ease, transform 0.4s var(--vc-ease), filter 0.3s ease;
+    width: 420px;
+    max-width: calc(100vw - 32px);
+    border: 1px solid var(--vc-border);
+    border-radius: 14px;
+    padding-top: 12px;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+  }
+  .vc-sheet-overlay.vc-in > .vc-sheet { transform: none; opacity: 1; filter: none; }
+  .vc-sheet-handle { display: none; }
+}
+
+/* Buttons used by sheets and confirms */
+.vc-btn {
+  width: 100%;
+  padding: 11px;
+  border-radius: 10px;
+  border: 1px solid var(--vc-border);
+  background: none;
+  color: var(--vc-muted);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.vc-btn:hover { border-color: var(--vc-muted); color: var(--vc-text); }
+.vc-btn.vc-primary { background: var(--vc-accent); border-color: var(--vc-accent); color: #fff; }
+.vc-btn.vc-primary:hover { opacity: 0.9; }
+.vc-btn.vc-danger { background: var(--vc-danger); border-color: var(--vc-danger); color: #fff; }
+
+/* ── Toast (with optional Undo) ── */
+#vc-toast-region {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  z-index: 10001;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  padding: 0 16px;
+}
+.vc-toast {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 460px;
+  padding: 10px 14px 10px 18px;
+  border-radius: 12px;
+  font-size: 0.8125rem;
+  color: var(--vc-text);
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  transition: opacity 0.25s ease, transform 0.4s var(--vc-ease);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+.vc-toast.vc-in { opacity: 1; transform: none; }
+.vc-toast button {
+  background: none;
+  border: none;
+  color: var(--vc-accent);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 6px 4px;
+  cursor: pointer;
+}
+
+/* ── Accessibility fallbacks ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+  /* Keep comprehension-aiding opacity changes, drop spatial motion. */
+  a.hub-card:hover, .book-card:hover, .upload-card:hover { transform: none !important; }
+  .vc-overlay > *, .vc-toast { transform: none; filter: none; }
+  .vc-sheet-overlay > .vc-sheet { transform: none !important; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .vc-glass, .vc-sticky, .vc-overlay, .vc-overlay.vc-in {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .vc-glass, .vc-sticky, .vc-toast { background: var(--vc-surface); }
+  .vc-overlay.vc-in { background: rgba(0, 0, 0, 0.75); }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --vc-border: #6b7280;
+    --vc-muted: #b8bec9;
+    --vc-glass-bg: #1a1d23;
+    --vc-glass-border: #6b7280;
+  }
+  .vc-glass, .vc-sticky, .vc-toast { background: var(--vc-surface); border-color: var(--vc-border); }
+}

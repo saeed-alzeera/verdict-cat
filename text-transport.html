@@ -9,6 +9,8 @@
 <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
 <link rel="shortcut icon" href="favicon.ico" />
 <script src="gist.js"></script>
+<link rel="stylesheet" href="site.css" />
+<script src="site.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -29,9 +31,10 @@
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    font-size: 15px;
+    
     line-height: 1.5;
   }
+  body { font-size: 0.9375rem; }
 
   /* ── Top bar ── */
   #topbar {
@@ -49,7 +52,7 @@
   #topbar a {
     color: var(--muted);
     text-decoration: none;
-    font-size: 13px;
+    font-size: 0.8125rem;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -57,12 +60,12 @@
   }
   #topbar a:hover { color: var(--accent); }
   #topbar h1 {
-    font-size: 15px;
+    font-size: 0.9375rem;
     font-weight: 600;
     flex: 1;
   }
   #sync-status {
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--muted);
     display: flex;
     align-items: center;
@@ -98,7 +101,7 @@
     margin-bottom: 32px;
   }
   #input-area p {
-    font-size: 13px;
+    font-size: 0.8125rem;
     color: var(--muted);
     margin-bottom: 14px;
   }
@@ -109,7 +112,7 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     color: var(--text);
-    font-size: 14px;
+    font-size: 0.875rem;
     font-family: inherit;
     padding: 12px 14px;
     resize: vertical;
@@ -131,7 +134,7 @@
     border: 1px solid var(--border);
     border-radius: 6px;
     color: var(--text);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-family: inherit;
     padding: 7px 16px;
     cursor: pointer;
@@ -175,7 +178,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     cursor: pointer;
     user-select: none;
     color: var(--muted);
@@ -189,7 +192,7 @@
   }
 
   #snippets-section h2 {
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -211,7 +214,7 @@
   .snippet-text {
     padding: 14px 16px;
     font-family: inherit;
-    font-size: 14px;
+    font-size: 0.875rem;
     white-space: pre-wrap;
     word-break: break-word;
     line-height: 1.55;
@@ -231,7 +234,7 @@
   }
 
   .snippet-date {
-    font-size: 11px;
+    font-size: 0.6875rem;
     color: var(--muted);
     flex-shrink: 0;
   }
@@ -242,7 +245,7 @@
   }
 
   .snippet-actions .btn {
-    font-size: 12px;
+    font-size: 0.75rem;
     padding: 5px 12px;
   }
 
@@ -250,9 +253,9 @@
     text-align: center;
     padding: 40px 20px;
     color: var(--muted);
-    font-size: 14px;
+    font-size: 0.875rem;
   }
-  #empty-state .icon { font-size: 36px; margin-bottom: 10px; }
+  #empty-state .icon { font-size: 2.25rem; margin-bottom: 10px; }
 
   /* ── Sync panel ── */
   #sync-panel {
@@ -264,8 +267,8 @@
     display: none;
   }
   #sync-panel.open { display: block; }
-  #sync-panel h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
-  #sync-panel p { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  #sync-panel h3 { font-size: 0.8125rem; font-weight: 600; margin-bottom: 8px; }
+  #sync-panel p { font-size: 0.75rem; color: var(--muted); margin-bottom: 12px; }
   #sync-panel .row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
   #sync-panel input {
     flex: 1;
@@ -273,14 +276,14 @@
     border: 1px solid var(--border);
     border-radius: 6px;
     color: var(--text);
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-family: inherit;
     padding: 7px 12px;
     outline: none;
     transition: border-color 0.15s;
   }
   #sync-panel input:focus { border-color: var(--accent); }
-  #sync-error { font-size: 12px; color: var(--warn); min-height: 16px; }
+  #sync-error { font-size: 0.75rem; color: var(--warn); min-height: 16px; }
 </style>
 </head>
 <body>
@@ -291,7 +294,7 @@
   <div id="sync-status">
     <div id="sync-dot"></div>
     <span id="sync-label">Local only</span>
-    <button class="btn" id="sync-toggle-btn" style="font-size:11px;padding:4px 10px;">Sync</button>
+    <button class="btn" id="sync-toggle-btn" style="font-size:0.6875rem;padding:4px 10px;">Sync</button>
   </div>
 </div>
 

@@ -8,6 +8,8 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
 <link rel="shortcut icon" href="favicon.ico" />
+<link rel="stylesheet" href="site.css" />
+<script src="site.js"></script>
 <style>
   :root {
     --bg: #0f1117;
@@ -25,7 +27,8 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    font-size: 15px; line-height: 1.45; -webkit-text-size-adjust: 100%; }
+     line-height: 1.45; -webkit-text-size-adjust: 100%; }
+  body { font-size: 0.9375rem; }
 
   header {
     padding: 16px 16px 10px;
@@ -35,7 +38,7 @@
   }
   #hub-back {
     display: inline-flex; align-items: center; gap: 5px;
-    font-size: 13px; color: var(--muted);
+    font-size: 0.8125rem; color: var(--muted);
     text-decoration: none; padding: 6px 10px;
     border: 1px solid var(--line); border-radius: 8px;
     white-space: nowrap; flex-shrink: 0;
@@ -43,8 +46,8 @@
   }
   #hub-back:hover { color: var(--ink); border-color: var(--muted); }
   #header-text { flex: 1; min-width: 0; }
-  h1 { font-size: 18px; margin: 0 0 2px; letter-spacing: -0.01em; }
-  .sub { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  h1 { font-size: 1.125rem; margin: 0 0 2px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   main { padding: 16px 16px 80px; max-width: 900px; margin: 0 auto; }
 
@@ -52,7 +55,7 @@
     margin: 0 0 14px;
     padding: 11px 14px;
     border-radius: 8px;
-    font-size: 13px;
+    font-size: 0.8125rem;
     display: none;
   }
   #status-msg.loading { background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
@@ -62,12 +65,12 @@
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 10px; padding: 16px; margin-bottom: 16px;
   }
-  .field-label { font-size: 12px; color: var(--muted); font-weight: 600;
+  .field-label { font-size: 0.75rem; color: var(--muted); font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 6px; }
   .field-input {
     width: 100%; padding: 10px 12px;
     background: var(--bg); border: 1px solid var(--line);
-    border-radius: 8px; color: var(--ink); font-size: 14px;
+    border-radius: 8px; color: var(--ink); font-size: 0.875rem;
     outline: none; transition: border-color 0.15s;
   }
   .field-input:focus { border-color: var(--accent); }
@@ -77,7 +80,7 @@
     font: inherit; padding: 9px 16px;
     border: 1px solid var(--line); border-radius: 8px;
     background: var(--panel-alt); color: var(--muted);
-    cursor: pointer; font-size: 13px;
+    cursor: pointer; font-size: 0.8125rem;
     transition: color 0.15s, border-color 0.15s, background 0.15s;
     white-space: nowrap;
   }
@@ -86,8 +89,8 @@
   .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   .btn-primary:hover { opacity: 0.88; color: #fff; border-color: var(--accent); }
 
-  .company-name { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
-  .company-meta { font-size: 12px; color: var(--muted); }
+  .company-name { font-size: 0.9375rem; font-weight: 600; margin: 0 0 2px; }
+  .company-meta { font-size: 0.75rem; color: var(--muted); }
 
   .picker-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
   .picker-search { margin-bottom: 8px; }
@@ -98,14 +101,14 @@
   }
   .picker-item {
     display: flex; align-items: center; gap: 8px;
-    padding: 8px 10px; font-size: 13px;
+    padding: 8px 10px; font-size: 0.8125rem;
     border-bottom: 1px solid var(--line); cursor: pointer;
   }
   .picker-item:last-child { border-bottom: none; }
   .picker-item:hover { background: var(--panel-alt); }
   .picker-item input { flex-shrink: 0; }
-  .picker-item .tag-code { color: var(--muted); font-size: 11px; margin-left: auto; }
-  .picker-empty { padding: 16px; text-align: center; color: var(--muted); font-size: 13px; }
+  .picker-item .tag-code { color: var(--muted); font-size: 0.6875rem; margin-left: auto; }
+  .picker-empty { padding: 16px; text-align: center; color: var(--muted); font-size: 0.8125rem; }
 
   table {
     width: 100%; border-collapse: collapse;
@@ -113,7 +116,7 @@
     border-radius: 10px; overflow: hidden;
   }
   thead th {
-    text-align: right; font-size: 12px; text-transform: uppercase;
+    text-align: right; font-size: 0.75rem; text-transform: uppercase;
     letter-spacing: 0.04em; color: var(--muted); background: var(--panel-alt);
     padding: 10px 12px; border-bottom: 1px solid var(--line); font-weight: 600;
     white-space: nowrap;
@@ -131,23 +134,23 @@
   .cell-value[title] { cursor: help; border-bottom: 1px dotted var(--muted); }
 
   .filing-link {
-    display: block; margin-top: 3px; font-size: 11px; font-weight: 500;
+    display: block; margin-top: 3px; font-size: 0.6875rem; font-weight: 500;
     text-transform: none; letter-spacing: 0; color: var(--accent); text-decoration: none;
   }
   .filing-link:hover { text-decoration: underline; }
 
-  #fy-note { font-size: 13px; color: var(--muted); }
+  #fy-note { font-size: 0.8125rem; color: var(--muted); }
   #fy-note strong { color: var(--ink); }
   #fy-note ul { margin: 6px 0 0; padding-left: 18px; }
   #fy-note li { margin: 2px 0; }
 
   .term-def { padding: 10px 0; border-bottom: 1px solid var(--line); }
   .term-def:last-child { border-bottom: none; }
-  .term-def dt { font-weight: 600; font-size: 13px; margin-bottom: 3px; }
+  .term-def dt { font-weight: 600; font-size: 0.8125rem; margin-bottom: 3px; }
   .term-def dt .tag-code { font-weight: 400; margin-left: 6px; }
-  .term-def dd { margin: 0; font-size: 13px; color: var(--muted); white-space: pre-line; }
+  .term-def dd { margin: 0; font-size: 0.8125rem; color: var(--muted); white-space: pre-line; }
 
-  #empty-msg { display: none; text-align: center; padding: 40px 20px; color: var(--muted); font-size: 14px; }
+  #empty-msg { display: none; text-align: center; padding: 40px 20px; color: var(--muted); font-size: 0.875rem; }
 
   @media (max-width: 520px) {
     .ticker-row { flex-direction: column; }
@@ -157,7 +160,7 @@
 <body>
 
 <header>
-  <a id="hub-back" href="index.html">← Hub</a>
+  <a id="hub-back" href="reso.html">← Reso</a>
   <div id="header-text">
     <h1>SEC Financials</h1>
     <div class="sub">Build a table from a company's actual filings</div>

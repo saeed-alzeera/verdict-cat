@@ -9,6 +9,8 @@
 <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
 <link rel="shortcut icon" href="favicon.ico" />
 <link rel="stylesheet" href="editor-md/css/editormd.min.css" />
+<link rel="stylesheet" href="site.css" />
+<script src="site.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -27,9 +29,10 @@
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    font-size: 15px;
+    
     line-height: 1.5;
   }
+  body { font-size: 0.9375rem; }
 
   #topbar {
     height: var(--bar-h);
@@ -43,18 +46,18 @@
   #topbar a {
     color: var(--muted);
     text-decoration: none;
-    font-size: 13px;
+    font-size: 0.8125rem;
     transition: color 0.15s;
   }
   #topbar a:hover { color: var(--accent); }
-  #topbar h1 { font-size: 15px; font-weight: 600; flex: 1; }
-  #save-status { font-size: 12px; color: var(--muted); }
+  #topbar h1 { font-size: 0.9375rem; font-weight: 600; flex: 1; }
+  #save-status { font-size: 0.75rem; color: var(--muted); }
   .btn {
     background: none;
     border: 1px solid var(--border);
     border-radius: 6px;
     color: var(--muted);
-    font-size: 12px;
+    font-size: 0.75rem;
     padding: 5px 12px;
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
@@ -66,12 +69,12 @@
 
   #md-lock { position: fixed; inset: 0; z-index: 9999; background: var(--bg); display: flex; align-items: center; justify-content: center; }
   #md-lock-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 36px 40px; width: 320px; max-width: calc(100vw - 32px); text-align: center; }
-  #md-lock-box h2 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
-  #md-lock-box p { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
-  #md-pass { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; outline: none; margin-bottom: 10px; background: var(--bg); color: var(--text); }
-  #md-error { color: #e8a730; font-size: 13px; min-height: 18px; margin-bottom: 10px; }
-  #md-unlock { width: 100%; padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; }
-  #md-back { display: inline-block; margin-top: 14px; color: var(--muted); font-size: 13px; text-decoration: none; }
+  #md-lock-box h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 6px; }
+  #md-lock-box p { font-size: 0.8125rem; color: var(--muted); margin-bottom: 20px; }
+  #md-pass { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9375rem; outline: none; margin-bottom: 10px; background: var(--bg); color: var(--text); }
+  #md-error { color: #e8a730; font-size: 0.8125rem; min-height: 18px; margin-bottom: 10px; }
+  #md-unlock { width: 100%; padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 0.9375rem; font-weight: 500; cursor: pointer; }
+  #md-back { display: inline-block; margin-top: 14px; color: var(--muted); font-size: 0.8125rem; text-decoration: none; }
 </style>
 </head>
 <body>

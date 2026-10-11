@@ -8,6 +8,8 @@
 <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="../favicon-180.png" />
 <link rel="shortcut icon" href="../favicon.ico" />
+<link rel="stylesheet" href="../site.css" />
+<script src="../site.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -30,40 +32,49 @@
     gap: 16px;
     flex-wrap: wrap;
   }
-  header a { color: var(--muted); text-decoration: none; font-size: 13px; }
+  header a { color: var(--muted); text-decoration: none; font-size: 0.8125rem; }
   header a:hover { color: var(--text); }
-  header .title { font-size: 15px; font-weight: 600; flex: 1; }
+  header .title { font-size: 0.9375rem; font-weight: 600; flex: 1; }
 
   main { max-width: 860px; margin: 0 auto; padding: 28px 20px 60px; }
 
-  pre {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 24px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 13px;
-    line-height: 1.55;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    overflow-x: auto;
-  }
+  /* Rendered document: hierarchy from size + weight + leading as a set. */
+  .prose { font-size: 1rem; line-height: 1.6; max-width: 70ch; margin: 0 auto; overflow-wrap: anywhere;
+    opacity: 0; transform: translateY(6px); transition: opacity 0.35s ease, transform 0.5s cubic-bezier(0.32, 0.72, 0, 1); }
+  .prose.in { opacity: 1; transform: none; }
+  .prose h1, .prose h2, .prose h3 { font-weight: 650; text-wrap: balance; }
+  .prose h1 { font-size: 1.875rem; line-height: 1.1; letter-spacing: -0.025em; margin: 0 0 1.25rem; }
+  .prose h2 { font-size: 1.375rem; line-height: 1.2; letter-spacing: -0.02em; margin: 2.25rem 0 0.75rem; padding-top: 0.5rem; }
+  .prose h3 { font-size: 1.0625rem; line-height: 1.3; letter-spacing: -0.01em; margin: 1.75rem 0 0.5rem; }
+  .prose p { margin: 0 0 1rem; }
+  .prose ul, .prose ol { margin: 0 0 1rem 1.25rem; }
+  .prose li { margin-bottom: 0.35rem; }
+  .prose hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  .prose a { color: var(--accent); text-underline-offset: 2px; }
+  .prose strong { font-weight: 600; }
+  .prose blockquote { margin: 0 0 1rem; padding-left: 1rem; border-left: 3px solid var(--border); color: var(--muted); }
+  .prose .table-wrap { overflow-x: auto; margin: 0 0 1.25rem; border: 1px solid var(--border); border-radius: 10px; }
+  .prose table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
+  .prose th, .prose td { padding: 0.55rem 0.8rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+  .prose th { color: var(--muted); font-weight: 600; font-size: 0.75rem; letter-spacing: 0.03em; text-transform: uppercase; }
+  .prose tr:last-child td { border-bottom: none; }
 
-  .status { color: var(--muted); font-size: 14px; padding: 8px 0 20px; }
+  .status { color: var(--muted); font-size: 0.875rem; padding: 8px 0 20px; }
 </style>
 </head>
 <body>
 
-<header>
+<header class="vc-sticky">
   <a href="../texas.html">&larr; Texas</a>
   <div class="title" id="page-title">Profile</div>
 </header>
 
 <main>
   <div class="status" id="status"></div>
-  <pre id="content" hidden></pre>
+  <article class="prose" id="content" hidden></article>
 </main>
 
+<script src="../editor-md/lib/marked.min.js"></script>
 <script>
   (function() {
     var params = new URLSearchParams(window.location.search);
@@ -88,8 +99,16 @@
       })
       .then(function(text) {
         statusEl.textContent = '';
-        contentEl.textContent = text;
+        // Source uses a minus sign as its bullet; normalise so it renders as a list.
+        text = text.replace(/^(\s*)[−–]\s+o\s+/gm, '$1- ').replace(/^(\s*)[−–]\s+/gm, '$1- ');
+        marked.setOptions({ gfm: true, tables: true, breaks: false, sanitize: true });
+        contentEl.innerHTML = marked(text);
+        contentEl.querySelectorAll('table').forEach(function(t) {
+          var w = document.createElement('div'); w.className = 'table-wrap';
+          t.parentNode.insertBefore(w, t); w.appendChild(t);
+        });
         contentEl.hidden = false;
+        requestAnimationFrame(function() { contentEl.classList.add('in'); });
       })
       .catch(function() {
         statusEl.textContent = 'Profile not found.';

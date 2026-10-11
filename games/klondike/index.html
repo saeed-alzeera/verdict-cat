@@ -4,6 +4,8 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <title>Klondike Solitaire</title>
+<link rel="stylesheet" href="../../site.css" />
+<script src="../../site.js"></script>
 <style>
 :root {
   --bg: #111418; --panel: #0f1115; --line: #252830;
@@ -16,7 +18,7 @@ body {
   background: var(--bg); color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   user-select: none; -webkit-user-select: none;
-  overflow-x: hidden; touch-action: none;
+  overflow-x: hidden; touch-action: manipulation;
 }
 
 /* top bar */
@@ -27,19 +29,19 @@ body {
 }
 #bar a {
   color: var(--muted); text-decoration: none;
-  font-size: 13px; white-space: nowrap; flex-shrink: 0;
+  font-size: 0.8125rem; white-space: nowrap; flex-shrink: 0;
 }
 #bar a:hover { color: var(--ink); }
 #bar h1 {
-  font-size: 13px; font-weight: 700; letter-spacing: 1.5px;
+  font-size: 0.8125rem; font-weight: 700; letter-spacing: 1.5px;
   text-transform: uppercase; flex: 1; text-align: center;
   color: var(--ink);
 }
 #bar .right { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
-#moves-stat { font-size: 12px; color: var(--muted); white-space: nowrap; }
+#moves-stat { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
 #new-btn {
   background: none; border: 1px solid var(--line); border-radius: 6px;
-  color: var(--muted); font-size: 12px; padding: 6px 14px;
+  color: var(--muted); font-size: 0.75rem; padding: 6px 14px;
   cursor: pointer; white-space: nowrap; transition: border-color .15s, color .15s;
 }
 #new-btn:hover { border-color: var(--accent); color: var(--accent); }
@@ -74,7 +76,7 @@ body {
 .slot-hint {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 22px; color: rgba(255,255,255,0.38);
+  font-size: 1.375rem; color: rgba(255,255,255,0.38);
   pointer-events: none;
 }
 
@@ -83,7 +85,7 @@ body {
 .tcol-empty-hint {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 26px; font-weight: 900; color: rgba(255,255,255,0.18);
+  font-size: 1.625rem; font-weight: 900; color: rgba(255,255,255,0.18);
   pointer-events: none; border: 2px solid rgba(255,255,255,0.28);
   border-radius: var(--cr);
 }
@@ -96,6 +98,7 @@ body {
   border: 1px solid rgba(0,0,0,0.18);
   box-shadow: 0 2px 6px rgba(0,0,0,0.45);
   overflow: hidden;
+  touch-action: none; /* cards own their touch gestures; the rest of the page can scroll */
 }
 .card.up { background: #ffffff; cursor: grab; }
 .card.up:active { cursor: grabbing; }
@@ -108,7 +111,7 @@ body {
   cursor: default;
 }
 .card.down.flip-hint { cursor: pointer; }
-.card.dragging { opacity: 0.25; pointer-events: none; }
+.card.dragging { opacity: 0.3; pointer-events: none; }
 
 /* card image */
 .card-img {
@@ -132,18 +135,18 @@ body {
 }
 .ct { top: 4px; left: 5px; }
 .cb { bottom: 4px; right: 5px; transform: rotate(180deg); align-items: center; }
-.ct .rk, .cb .rk { font-size: 15px; font-weight: 800; display: block; letter-spacing: -0.5px; }
-.ct .st, .cb .st { font-size: 12px; font-weight: 700; display: block; }
+.ct .rk, .cb .rk { font-size: 0.9375rem; font-weight: 800; display: block; letter-spacing: -0.5px; }
+.ct .st, .cb .st { font-size: 0.75rem; font-weight: 700; display: block; }
 .cc {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 38px; opacity: 0.14; pointer-events: none;
+  font-size: 2.375rem; opacity: 0.14; pointer-events: none;
 }
 .r { color: #d40000; }
 .k { color: #0d0d0d; }
 
 /* ghost */
-#ghost { position: fixed; z-index: 9999; pointer-events: none; display: none; }
+#ghost { position: fixed; left: 0; top: 0; z-index: 9999; pointer-events: none; display: none; will-change: transform; filter: drop-shadow(0 8px 14px rgba(0,0,0,0.45)); }
 #ghost .card { position: absolute; }
 
 /* win */
@@ -158,12 +161,12 @@ body {
   border-radius: 14px; padding: 40px 48px; text-align: center;
   box-shadow: 0 20px 60px rgba(0,0,0,0.6);
 }
-#win-box h2 { font-size: 30px; font-weight: 700; margin-bottom: 10px; }
-#win-box p { color: var(--muted); margin-bottom: 28px; font-size: 14px; }
+#win-box h2 { font-size: 1.875rem; font-weight: 700; margin-bottom: 10px; }
+#win-box p { color: var(--muted); margin-bottom: 28px; font-size: 0.875rem; }
 #win-box button {
   background: #2a6fdb; color: #fff;
   border: none; border-radius: 8px;
-  padding: 13px 36px; font-size: 15px;
+  padding: 13px 36px; font-size: 0.9375rem;
   cursor: pointer; font-weight: 600; letter-spacing: 0.3px;
 }
 #win-box button:hover { background: #3580ef; }
@@ -173,14 +176,14 @@ body {
   :root { --cw: 44px; --ch: 62px; --cr: 5px; }
   #top-row, #tab-row { gap: 5px; }
   #game { padding: 10px 6px; }
-  .ct .rk, .cb .rk { font-size: 10px; }
-  .ct .st, .cb .st { font-size: 8px; }
-  .cc { font-size: 24px; }
+  .ct .rk, .cb .rk { font-size: 0.625rem; }
+  .ct .st, .cb .st { font-size: 0.5rem; }
+  .cc { font-size: 1.5rem; }
 }
 @media (max-width: 380px) {
   :root { --cw: 36px; --ch: 52px; --cr: 4px; }
   #top-row, #tab-row { gap: 4px; }
-  .cc { font-size: 20px; }
+  .cc { font-size: 1.25rem; }
 }
 </style>
 </head>
@@ -342,8 +345,7 @@ function renderWaste() {
     let el = makeCard(card);
     el.style.cssText = 'position:absolute;top:0;left:0;';
     el.dataset.src = 'w';
-    el.addEventListener('mousedown', startDrag);
-    el.addEventListener('touchstart', startDrag, {passive:false});
+    el.addEventListener('pointerdown', startDrag);
     slot.appendChild(el);
   }
 }
@@ -393,8 +395,7 @@ function renderTab() {
       el.dataset.c   = c;
       el.dataset.i   = i;
       if (card.f) {
-        el.addEventListener('mousedown', startDrag);
-        el.addEventListener('touchstart', startDrag, {passive:false});
+        el.addEventListener('pointerdown', startDrag);
       } else if (i === cards.length-1) {
         el.classList.add('flip-hint');
         el.onclick = () => flipTop(c);
@@ -508,15 +509,17 @@ function checkWin() {
   document.getElementById('win').classList.add('on');
 }
 
-// ── Drag & Drop ───────────────────────────────────────────────
+// ── Drag & Drop (Pointer Events) ──────────────────────────────
+// 1:1 tracking from the grab point, release velocity sampled for a spring
+// hand-off, and a rejected drop settles back from where it was released.
 let DR = null;      // active drag state
-let PEND = null;    // mousedown recorded, waiting to see if it's a drag or click
+let PEND = null;    // pointerdown recorded, waiting to see if it's a drag or click
 
 const DRAG_THRESHOLD = 5;
 
 function startDrag(e) {
-  if (G.won) return;
-  if (e.type === 'touchstart') e.preventDefault();
+  if (G.won || DR) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
 
   let el  = e.currentTarget;
   let src = el.dataset.src;
@@ -528,21 +531,21 @@ function startDrag(e) {
     : G.tab[col].slice(idx);
   if (!cards.length || !cards[0].f) return;
 
-  let px = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
-  let py = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+  let px = e.clientX, py = e.clientY;
   let rc = el.getBoundingClientRect();
 
-  PEND = { src, col, idx, cards, el, px, py, ox: px - rc.left, oy: py - rc.top };
+  PEND = { src, col, idx, cards, el, px, py, ox: px - rc.left, oy: py - rc.top,
+           home: { x: rc.left, y: rc.top }, id: e.pointerId, samples: [{ t: e.timeStamp, x: px, y: py }] };
+  try { el.setPointerCapture(e.pointerId); } catch (err) {}
 
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup',   onUp);
-  document.addEventListener('touchmove', onMove, {passive:false});
-  document.addEventListener('touchend',  onUp);
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup',   onUp);
+  document.addEventListener('pointercancel', onUp);
 }
 
 function activateDrag() {
   if (!PEND) return;
-  let { src, col, idx, cards, el, ox, oy } = PEND;
+  let { src, col, idx, cards, el, ox, oy, home, id, samples } = PEND;
 
   if (src === 'w') {
     el.classList.add('dragging');
@@ -565,50 +568,78 @@ function activateDrag() {
     ghost.appendChild(cel);
   });
 
-  DR = { src, col, idx, cards, ox, oy };
+  DR = { src, col, idx, cards, ox, oy, home, id, samples, x: 0, y: 0, settling: false };
   PEND = null;
 }
 
 function placeGhost(x, y) {
-  let g = document.getElementById('ghost');
-  g.style.left = (x - DR.ox) + 'px';
-  g.style.top  = (y - DR.oy) + 'px';
+  DR.x = x - DR.ox; DR.y = y - DR.oy;
+  document.getElementById('ghost').style.transform = 'translate3d(' + DR.x + 'px,' + DR.y + 'px,0)';
+}
+
+function pushSample(list, e) {
+  list.push({ t: e.timeStamp, x: e.clientX, y: e.clientY });
+  if (list.length > 6) list.shift();
 }
 
 function onMove(e) {
-  if (e.type === 'touchmove') e.preventDefault();
-  let x = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
-  let y = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+  let x = e.clientX, y = e.clientY;
 
   if (PEND && !DR) {
+    pushSample(PEND.samples, e);
     let dx = x - PEND.px, dy = y - PEND.py;
     if (Math.sqrt(dx*dx + dy*dy) > DRAG_THRESHOLD) activateDrag();
     else return;
   }
 
-  if (DR) placeGhost(x, y);
+  if (DR && !DR.settling) { pushSample(DR.samples, e); placeGhost(x, y); }
+}
+
+function releaseVelocity(samples) {
+  let a = samples[0], b = samples[samples.length-1];
+  if (!a || b.t <= a.t) return { x: 0, y: 0 };
+  let dt = (b.t - a.t) / 1000;
+  return { x: (b.x - a.x) / dt, y: (b.y - a.y) / dt };
 }
 
 function onUp(e) {
-  document.removeEventListener('mousemove', onMove);
-  document.removeEventListener('mouseup',   onUp);
-  document.removeEventListener('touchmove', onMove);
-  document.removeEventListener('touchend',  onUp);
+  document.removeEventListener('pointermove', onMove);
+  document.removeEventListener('pointerup',   onUp);
+  document.removeEventListener('pointercancel', onUp);
 
   if (PEND) {
     // No movement: treat as click → auto-move
     let { src, col, idx } = PEND;
     PEND = null;
-    autoMove(src, col, idx);
+    if (e.type !== 'pointercancel') autoMove(src, col, idx);
     return;
   }
 
   if (DR) {
-    let x = e.type === 'touchend' ? e.changedTouches[0].clientX : e.clientX;
-    let y = e.type === 'touchend' ? e.changedTouches[0].clientY : e.clientY;
-    document.getElementById('ghost').style.display = 'none';
-    if (!drop(x, y)) render();
-    DR = null;
+    let x = e.clientX, y = e.clientY;
+    let v = releaseVelocity(DR.samples);
+    if (e.type !== 'pointercancel' && drop(x, y)) {
+      document.getElementById('ghost').style.display = 'none';
+      DR = null;
+      return;
+    }
+    // Rejected drop: spring the stack back from the release point, carrying velocity.
+    let g = document.getElementById('ghost');
+    let drag = DR;
+    drag.settling = true;
+    let pending = 2;
+    let finish = () => {
+      if (--pending) return;
+      g.style.display = 'none';
+      g.style.transform = '';
+      DR = null;
+      render();
+    };
+    if (VC.reducedMotion()) { pending = 1; finish(); return; }
+    VC.spring({ from: drag.x, to: drag.home.x, velocity: v.x, response: 0.3, damping: 1, precision: 0.5,
+      onUpdate: (px) => { drag.x = px; g.style.transform = 'translate3d(' + drag.x + 'px,' + drag.y + 'px,0)'; }, onDone: finish });
+    VC.spring({ from: drag.y, to: drag.home.y, velocity: v.y, response: 0.3, damping: 1, precision: 0.5,
+      onUpdate: (py) => { drag.y = py; g.style.transform = 'translate3d(' + drag.x + 'px,' + drag.y + 'px,0)'; }, onDone: finish });
   }
 }
 

@@ -11,6 +11,8 @@
 <script src="gist.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="ebook-convert.js"></script>
+<link rel="stylesheet" href="site.css" />
+<script src="site.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -36,15 +38,15 @@
     gap: 12px;
     flex-wrap: wrap;
   }
-  header h1 { font-family: Georgia, 'Times New Roman', serif; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; }
-  header .sub { font-size: 13px; color: var(--muted); flex: 1; }
+  header h1 { font-size: 1.625rem; font-weight: 700; letter-spacing: -0.02em; }
+  header .sub { font-size: 0.8125rem; color: var(--muted); flex: 1; }
 
   #search-wrap { width: 100%; order: 10; margin-top: 16px; }
   #search-input {
     width: 100%; max-width: 420px;
     padding: 9px 14px;
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; color: var(--text); font-size: 14px;
+    border-radius: 8px; color: var(--text); font-size: 0.875rem;
     outline: none; transition: border-color 0.15s;
   }
   #search-input::placeholder { color: var(--muted); }
@@ -53,14 +55,14 @@
   @media (max-width: 768px) {
     header { padding: 18px 16px 14px; gap: 8px; }
     header .sub { display: none; }
-    header h1 { font-size: 22px; }
+    header h1 { font-size: 1.375rem; }
   }
 
   #sync-status {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--muted);
   }
   .status-dot {
@@ -78,7 +80,7 @@
     border: 1px solid var(--border);
     border-radius: 6px;
     color: var(--muted);
-    font-size: 12px;
+    font-size: 0.75rem;
     padding: 5px 11px;
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
@@ -109,9 +111,13 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px; overflow: hidden;
-    transition: border-color 0.15s, background 0.15s, transform 0.15s;
+    transition: border-color 0.2s, background 0.2s, transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
   }
-  .book-card:hover { border-color: var(--accent); background: var(--card-hover); transform: translateY(-2px); }
+  @media (hover: hover) {
+    .book-card:hover { border-color: var(--accent); background: var(--card-hover); transform: translateY(-2px); }
+    .upload-card:hover { border-color: var(--accent); background: var(--card-hover); transform: translateY(-2px); }
+  }
+  .book-card:active, .upload-card:active { transform: scale(0.97); transition-duration: 0.12s; }
 
   .book-cover {
     width: 100%; aspect-ratio: 2/3;
@@ -123,26 +129,27 @@
     background: linear-gradient(145deg, #1e2330, #252c3a);
     display: flex; align-items: center; justify-content: center;
     padding: 16px;
-    font-size: 13px; font-weight: 500; color: var(--text); text-align: center; line-height: 1.45;
+    font-size: 0.8125rem; font-weight: 500; color: var(--text); text-align: center; line-height: 1.45;
   }
-  .book-cover-icon { font-size: 36px; display: block; margin-bottom: 12px; opacity: 0.5; }
+  .book-cover-icon { font-size: 2.25rem; display: block; margin-bottom: 12px; opacity: 0.5; }
 
   .book-info { padding: 10px 12px 12px; }
-  .book-info .title { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.35; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .book-info .author { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .book-info .title { font-size: 0.8125rem; font-weight: 500; color: var(--text); line-height: 1.35; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .book-info .author { font-size: 0.6875rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .card-menu-btn {
     position: absolute; top: 6px; right: 6px;
     width: 26px; height: 26px;
     border-radius: 50%;
-    background: rgba(15,17,23,0.78); backdrop-filter: blur(2px);
+    background: rgba(15,17,23,0.62); -webkit-backdrop-filter: blur(16px) saturate(180%); backdrop-filter: blur(16px) saturate(180%);
     border: none; color: #fff;
-    font-size: 16px; font-weight: 700; line-height: 1; cursor: pointer;
+    font-size: 1rem; font-weight: 700; line-height: 1; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    opacity: 0; transition: opacity 0.15s, background 0.15s;
+    opacity: 0.9; transition: opacity 0.15s, background 0.15s, transform 0.12s;
     z-index: 2;
   }
   .book-card:hover .card-menu-btn, .card-menu-btn.active { opacity: 1; }
+  .card-menu-btn { width: 32px; height: 32px; font-size: 1.125rem; }
   .card-menu-btn:hover { background: rgba(0,0,0,0.85); }
 
   .card-menu {
@@ -155,7 +162,7 @@
   .card-menu button {
     display: block; width: 100%; text-align: left;
     padding: 8px 12px; background: none; border: none;
-    color: #e05c5c; font-size: 13px; cursor: pointer;
+    color: #e05c5c; font-size: 0.8125rem; cursor: pointer;
   }
   .card-menu button:hover { background: rgba(224,92,92,0.12); }
 
@@ -163,17 +170,12 @@
   .resume-badge {
     position: absolute; left: 8px; bottom: 8px;
     display: flex; align-items: center;
-    background: rgba(15,17,23,0.78); backdrop-filter: blur(2px);
+    background: rgba(15,17,23,0.62); -webkit-backdrop-filter: blur(16px) saturate(180%); backdrop-filter: blur(16px) saturate(180%);
     border-radius: 20px; padding: 4px 9px 4px 7px;
-    font-size: 10px; font-weight: 500; color: #fff;
+    font-size: 0.625rem; font-weight: 500; color: #fff;
   }
 
   /* ── Setup modal ── */
-  #setup-modal {
-    position: fixed; inset: 0; z-index: 9999;
-    background: rgba(0,0,0,0.7);
-    display: flex; align-items: center; justify-content: center;
-  }
   #setup-box {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -182,27 +184,27 @@
     width: 420px;
     max-width: calc(100vw - 32px);
   }
-  #setup-box h2 { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
-  #setup-box .setup-sub { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 22px; }
+  #setup-box h2 { font-size: 1.0625rem; font-weight: 600; margin-bottom: 6px; }
+  #setup-box .setup-sub { font-size: 0.8125rem; color: var(--muted); line-height: 1.55; margin-bottom: 22px; }
   .setup-steps { margin: 0 0 22px 18px; }
-  .setup-steps li { font-size: 13px; color: var(--text); line-height: 1.7; }
+  .setup-steps li { font-size: 0.8125rem; color: var(--text); line-height: 1.7; }
   .setup-steps a { color: var(--accent); text-decoration: none; }
   .setup-steps a:hover { text-decoration: underline; }
   .setup-steps strong { color: var(--text); }
   #setup-pat {
     width: 100%; padding: 10px 12px;
     background: var(--bg); border: 1px solid var(--border);
-    border-radius: 8px; color: var(--text); font-size: 14px;
+    border-radius: 8px; color: var(--text); font-size: 0.875rem;
     font-family: monospace; outline: none; margin-bottom: 8px;
     transition: border-color 0.15s;
   }
   #setup-pat:focus { border-color: var(--accent); }
-  #setup-error { font-size: 12px; color: #e8a730; min-height: 18px; margin-bottom: 12px; }
+  #setup-error { font-size: 0.75rem; color: #e8a730; min-height: 18px; margin-bottom: 12px; }
   #setup-connect {
     width: 100%; padding: 10px;
     background: var(--accent); color: #fff;
     border: none; border-radius: 8px;
-    font-size: 14px; font-weight: 500; cursor: pointer;
+    font-size: 0.875rem; font-weight: 500; cursor: pointer;
     margin-bottom: 8px;
     transition: opacity 0.15s;
   }
@@ -211,7 +213,7 @@
     width: 100%; padding: 8px;
     background: none; border: 1px solid var(--border);
     border-radius: 8px; color: var(--muted);
-    font-size: 13px; cursor: pointer;
+    font-size: 0.8125rem; cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
   }
   #setup-skip:hover { border-color: var(--muted); color: var(--text); }
@@ -222,9 +224,8 @@
     border-radius: 10px;
     cursor: pointer;
     overflow: hidden;
-    transition: border-color 0.15s, background 0.15s, transform 0.15s;
+    transition: border-color 0.2s, background 0.2s, transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
   }
-  .upload-card:hover { border-color: var(--accent); background: var(--card-hover); transform: translateY(-2px); }
   .upload-cover-area {
     width: 100%; aspect-ratio: 2/3;
     background: var(--surface);
@@ -236,19 +237,14 @@
     border-radius: 50%;
     background: var(--bg);
     color: var(--muted);
-    font-size: 24px; font-weight: 400; line-height: 1;
+    font-size: 1.5rem; font-weight: 400; line-height: 1;
     transition: color 0.15s, background 0.15s;
   }
   .upload-card:hover .upload-plus { color: var(--accent); background: rgba(91,155,213,0.12); }
-  .upload-label { padding: 10px 12px 12px; font-size: 13px; font-weight: 500; color: var(--muted); transition: color 0.15s; }
+  .upload-label { padding: 10px 12px 12px; font-size: 0.8125rem; font-weight: 500; color: var(--muted); transition: color 0.15s; }
   .upload-card:hover .upload-label { color: var(--accent); }
 
   /* -- Upload modal -- */
-  #upload-modal {
-    position: fixed; inset: 0; z-index: 9999;
-    background: rgba(0,0,0,0.7);
-    display: flex; align-items: center; justify-content: center;
-  }
   #upload-box {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -259,24 +255,24 @@
     max-height: calc(100vh - 48px);
     overflow-y: auto;
   }
-  #upload-box h2 { font-size: 17px; font-weight: 600; margin-bottom: 16px; }
+  #upload-box h2 { font-size: 1.0625rem; font-weight: 600; margin-bottom: 16px; }
   #ul-cover-preview {
     width: 72px; height: 108px;
     border-radius: 4px; overflow: hidden; margin: 0 auto 18px;
     background: linear-gradient(145deg, #1e2330, #252c3a);
     display: flex; align-items: center; justify-content: center;
-    font-size: 28px;
+    font-size: 1.75rem;
   }
   #ul-cover-preview img { width: 100%; height: 100%; object-fit: cover; }
-  #upload-box label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 5px; }
+  #upload-box label { display: block; font-size: 0.75rem; color: var(--muted); margin: 12px 0 5px; }
   #upload-box input[type="text"] {
     width: 100%; padding: 9px 12px;
     background: var(--bg); border: 1px solid var(--border);
-    border-radius: 8px; color: var(--text); font-size: 14px;
+    border-radius: 8px; color: var(--text); font-size: 0.875rem;
     outline: none; transition: border-color 0.15s;
   }
   #upload-box input[type="text"]:focus { border-color: var(--accent); }
-  #ul-status { font-size: 12px; min-height: 18px; margin: 10px 0 2px; color: var(--muted); }
+  #ul-status { font-size: 0.75rem; min-height: 18px; margin: 10px 0 2px; color: var(--muted); }
   #ul-status.ok { color: var(--green); }
   #ul-status.err { color: #e05c5c; }
   #ul-status.working { color: var(--accent); }
@@ -284,7 +280,7 @@
     width: 100%; padding: 10px; margin-top: 12px;
     background: var(--accent); color: #fff;
     border: none; border-radius: 8px;
-    font-size: 14px; font-weight: 500; cursor: pointer;
+    font-size: 0.875rem; font-weight: 500; cursor: pointer;
     transition: opacity 0.15s;
   }
   #ul-submit-btn:hover { opacity: 0.88; }
@@ -293,29 +289,18 @@
     width: 100%; padding: 8px; margin-top: 8px;
     background: none; border: 1px solid var(--border);
     border-radius: 8px; color: var(--muted);
-    font-size: 13px; cursor: pointer;
+    font-size: 0.8125rem; cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
   }
   #ul-cancel-btn:hover { border-color: var(--muted); color: var(--text); }
 
 
-  /* ── Toast ── */
-  #toast {
-    position: fixed; bottom: 24px; left: 50%;
-    transform: translateX(-50%) translateY(12px);
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; padding: 10px 18px;
-    font-size: 13px; color: var(--text);
-    opacity: 0; transition: opacity 0.25s, transform 0.25s;
-    pointer-events: none; z-index: 100;
-  }
-  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
 
 <!-- Setup modal (shown on first visit) -->
-<div id="setup-modal" style="display:none;">
+<div id="setup-modal" class="vc-overlay">
   <div id="setup-box">
     <h2>Sync reading progress</h2>
     <p class="setup-sub">Progress is saved to a private GitHub Gist — invisible to others, works on every device, survives browser resets.</p>
@@ -331,7 +316,7 @@
   </div>
 </div>
 
-<header>
+<header class="vc-sticky">
   <a class="hdr-btn" href="index.html" style="text-decoration:none;">&#8592; Hub</a>
   <h1>Library</h1>
   <span class="sub">Select a book to read</span>
@@ -346,15 +331,14 @@
 </header>
 
 <div id="grid"></div>
-<div id="toast"></div>
 
 <input type="file" id="ul-epub-input" style="display:none;" />
 
-<div id="upload-modal" style="display:none;">
+<div id="upload-modal" class="vc-overlay">
   <div id="upload-box">
     <div id="ul-cover-preview">&#128218;</div>
     <h2>Upload Book</h2>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:4px;">Metadata pulled from the book — edit if needed. epub, fb2 and non-DRM mobi are supported.</p>
+    <p style="font-size:0.8125rem;color:var(--muted);margin-bottom:4px;">Metadata pulled from the book — edit if needed. epub, fb2 and non-DRM mobi are supported.</p>
     <label for="ul-title">Title</label>
     <input type="text" id="ul-title" placeholder="Book Title" />
     <label for="ul-author">Author</label>
@@ -499,12 +483,7 @@
   ];
   // ─────────────────────────────────────────────────────────────────────────
 
-  function toast(msg) {
-    var t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(function() { t.classList.remove('show'); }, 2400);
-  }
+  function toast(msg) { VC.toast(msg); }
 
   function setSyncStatus(state) {
     var dot   = document.getElementById('status-dot');
@@ -609,8 +588,8 @@
 
   // ── Setup modal ───────────────────────────────────────────────────────────
   function showSetup() {
-    document.getElementById('setup-modal').style.display = 'flex';
-    document.getElementById('setup-pat').focus();
+    VC.show(document.getElementById('setup-modal'));
+    document.getElementById('setup-pat').focus({ preventScroll: true });
   }
 
   document.getElementById('setup-pat').addEventListener('keydown', function(e) {
@@ -628,7 +607,7 @@
     try {
       var gistId = await Gist.connect(pat);
       Gist.save(pat, gistId);
-      document.getElementById('setup-modal').style.display = 'none';
+      VC.hide(document.getElementById('setup-modal'));
       await syncFromGist();
     } catch(err) {
       errEl.textContent = err.message || 'Connection failed. Check the token and try again.';
@@ -638,16 +617,21 @@
   });
 
   document.getElementById('setup-skip').addEventListener('click', function() {
-    document.getElementById('setup-modal').style.display = 'none';
+    VC.hide(document.getElementById('setup-modal'));
     renderCards();
   });
 
   // ── Disconnect ────────────────────────────────────────────────────────────
   document.getElementById('disconnect-btn').addEventListener('click', function() {
-    if (!confirm('Disconnect GitHub sync? Your local progress stays on this device.')) return;
+    var saved = Gist.credentials();
     Gist.clear();
     setSyncStatus('none');
     renderCards();
+    VC.toast('GitHub sync disconnected', { action: { label: 'Undo', onClick: function() {
+      Gist.save(saved.pat, saved.gistId);
+      setSyncStatus('connected');
+      renderCards();
+    } } });
   });
 
   // ── Sync on load ──────────────────────────────────────────────────────────
@@ -772,7 +756,12 @@
 
   async function deleteBook(book) {
     if (!getUploadPat()) { showSetup(); return; }
-    if (!confirm('Delete "' + book.title + '" from the library? This removes it from GitHub for everyone.')) return;
+    var ok = await VC.confirm({
+      title: 'Delete book?',
+      message: '"' + book.title + '" will be removed from the library and from GitHub for everyone. This can\'t be undone.',
+      confirmLabel: 'Delete', danger: true
+    });
+    if (!ok) return;
     toast('Deleting "' + book.title + '"…');
     try {
       await patchFile('library.html', function(src) { return removeEntryFromLibrary(src, book.slug); }, 'Remove book from library: ' + book.title);
@@ -891,7 +880,7 @@
   }
 
   function closeUploadModal() {
-    document.getElementById('upload-modal').style.display = 'none';
+    VC.hide(document.getElementById('upload-modal'));
     document.getElementById('ul-epub-input').value = '';
     ulFile = null; ulCoverB64 = null; ulCoverExt = null;
   }
@@ -900,7 +889,7 @@
     var file = this.files[0];
     if (!file) return;
     if (!window.EbookConvert || !window.EbookConvert.isSupported(file.name)) {
-      alert('Unsupported file type. Please choose an .epub, .fb2 or .mobi file (.azw3 is not supported).');
+      VC.toast('Unsupported file. Choose an .epub, .fb2 or .mobi (.azw3 isn\'t supported).', { duration: 4200 });
       this.value = '';
       return;
     }
@@ -913,7 +902,7 @@
     ulCoverB64 = null; ulCoverExt = null;
     var needsConversion = window.EbookConvert.needsConversion(file.name);
     setUlStatus('working', needsConversion ? 'Converting to epub…' : 'Reading metadata…');
-    document.getElementById('upload-modal').style.display = 'flex';
+    VC.show(document.getElementById('upload-modal'), document.querySelector('.upload-card'));
     try {
       ulFile = await window.EbookConvert.convert(file);
     } catch (e) {

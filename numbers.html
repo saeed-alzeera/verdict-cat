@@ -8,6 +8,8 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
 <link rel="shortcut icon" href="favicon.ico" />
+<link rel="stylesheet" href="site.css" />
+<script src="site.js"></script>
 <style>
   :root {
     --bg: #0f1117;
@@ -36,12 +38,13 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    font-size: 15px; line-height: 1.45; -webkit-text-size-adjust: 100%; }
+     line-height: 1.45; -webkit-text-size-adjust: 100%; }
+  body { font-size: 0.9375rem; }
   header { padding: 16px 16px 8px; display: flex; gap: 12px; align-items: center; }
   header > div { flex: 1; }
   #hub-back {
     display: inline-flex; align-items: center; gap: 5px;
-    font-size: 13px; color: var(--muted);
+    font-size: 0.8125rem; color: var(--muted);
     text-decoration: none; padding: 6px 10px;
     border: 1px solid var(--line); border-radius: 8px;
     white-space: nowrap; flex-shrink: 0;
@@ -49,16 +52,16 @@
   }
   #hub-back:hover { color: var(--ink); border-color: var(--muted); }
   #theme-toggle { background: transparent; color: var(--muted); border: 1px solid var(--line);
-    border-radius: 8px; padding: 6px 10px; font-size: 18px; cursor: pointer; min-height: unset;
+    border-radius: 8px; padding: 6px 10px; font-size: 1.125rem; cursor: pointer; min-height: unset;
     flex-shrink: 0; line-height: 1; }
   #theme-toggle:hover { color: var(--ink); border-color: var(--muted); }
-  h1 { font-size: 18px; margin: 0 0 4px; letter-spacing: -0.01em; }
-  .sub { color: var(--muted); font-size: 13px; }
+  h1 { font-size: 1.125rem; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); font-size: 0.8125rem; }
   main { padding: 12px 16px 80px; max-width: 980px; margin: 0 auto; }
   .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
     background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
     padding: 10px; margin: 8px 0 14px; position: sticky; top: 0; z-index: 5; }
-  .controls label { font-size: 12px; color: var(--muted); margin-right: 4px; }
+  .controls label { font-size: 0.75rem; color: var(--muted); margin-right: 4px; }
   select, button {
     font: inherit; padding: 9px 10px; border: 1px solid var(--line);
     border-radius: 8px; background: var(--panel); color: var(--ink); min-height: 40px;
@@ -67,10 +70,10 @@
   button { background: var(--accent); color: #fff; border-color: var(--accent); }
   button:disabled { opacity: 0.55; }
   .meta { display: flex; justify-content: space-between; align-items: center;
-    color: var(--muted); font-size: 12px; padding: 0 2px 6px; }
+    color: var(--muted); font-size: 0.75rem; padding: 0 2px 6px; }
   table { width: 100%; border-collapse: collapse; background: var(--panel);
     border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-  thead th { text-align: left; font-size: 12px; text-transform: uppercase;
+  thead th { text-align: left; font-size: 0.75rem; text-transform: uppercase;
     letter-spacing: 0.04em; color: var(--muted); background: var(--panel-alt);
     padding: 10px 10px; border-bottom: 1px solid var(--line); font-weight: 600; }
   tbody td { padding: 11px 10px; border-bottom: 1px solid var(--line);
@@ -78,22 +81,22 @@
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:nth-child(odd) td { background: var(--row-alt); }
   .name { font-weight: 600; }
-  .source { display: inline; color: var(--accent); font-size: 12px; text-decoration: underline; word-break: break-word; }
+  .source { display: inline; color: var(--accent); font-size: 0.75rem; text-decoration: underline; word-break: break-word; }
   .source:hover { color: #0d3157; }
   .year { color: var(--muted); white-space: nowrap; }
   .value { text-align: right; white-space: nowrap; font-weight: 600; }
   .na { color: var(--na); font-weight: 400; font-style: italic; }
   .err { color: var(--warn); font-weight: 400; font-style: italic; }
-  footer { color: var(--muted); font-size: 11px; padding: 10px 4px 0; line-height: 1.5; }
-  .loader { color: var(--muted); padding: 16px; text-align: center; font-size: 13px; }
+  footer { color: var(--muted); font-size: 0.6875rem; padding: 10px 4px 0; line-height: 1.5; }
+  .loader { color: var(--muted); padding: 16px; text-align: center; font-size: 0.8125rem; }
   .exports { margin-top: 14px; background: var(--panel); border: 1px solid var(--line);
     border-radius: 10px; padding: 12px 14px; }
-  .export-line { margin: 6px 0; font-size: 13px; line-height: 1.5;
+  .export-line { margin: 6px 0; font-size: 0.8125rem; line-height: 1.5;
     font-variant-numeric: tabular-nums; word-break: break-word; }
   .export-line:empty::before { content: "—"; color: var(--muted); }
   .export-row { display: flex; align-items: flex-start; gap: 8px; margin: 6px 0; }
   .export-row .export-line { flex: 1; margin: 0; }
-  .copy-btn { flex-shrink: 0; font-size: 12px; padding: 4px 10px; min-height: unset;
+  .copy-btn { flex-shrink: 0; font-size: 0.75rem; padding: 4px 10px; min-height: unset;
     background: var(--panel); color: var(--accent); border: 1px solid var(--line);
     border-radius: 6px; cursor: pointer; white-space: nowrap; }
   .copy-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -112,80 +115,83 @@
     border-radius: 12px; padding: 36px 40px; width: 320px;
     text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,0.3);
   }
-  #num-auth-box h2 { font-size: 22px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
-  #num-auth-box p  { font-size: 13px; color: var(--muted); margin: 0 0 24px; }
+  #num-auth-box h2 { font-size: 1.375rem; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.02em; }
+  #num-auth-box p  { font-size: 0.8125rem; color: var(--muted); margin: 0 0 24px; }
   #num-auth-input {
     width: 100%; padding: 10px 14px;
     border: 1px solid var(--line); border-radius: 8px;
-    font-size: 15px; outline: none; margin-bottom: 12px;
+    font-size: 0.9375rem; outline: none; margin-bottom: 12px;
     background: var(--bg); color: var(--ink);
   }
-  #num-auth-error { color: var(--warn); font-size: 13px; min-height: 18px; margin-bottom: 10px; }
+  #num-auth-error { color: var(--warn); font-size: 0.8125rem; min-height: 18px; margin-bottom: 10px; }
   #num-auth-btn {
     width: 100%; padding: 10px;
     background: var(--accent); color: #fff;
     border: none; border-radius: 8px;
-    font-size: 15px; font-weight: 500; cursor: pointer;
+    font-size: 0.9375rem; font-weight: 500; cursor: pointer;
   }
   #num-auth-btn:hover { opacity: 0.88; }
 
   .modal-overlay { position: fixed; inset: 0; z-index: 9998; background: rgba(0,0,0,0.5);
     display: none; align-items: center; justify-content: center; padding: 16px; }
-  .modal-overlay.open { display: flex; }
+  .modal-overlay.open { display: flex; animation: vcFade 0.25s ease both; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+  .modal-overlay.open > * { animation: vcPop 0.4s cubic-bezier(0.32, 0.72, 0, 1) both; }
+  @keyframes vcFade { from { opacity: 0; } }
+  @keyframes vcPop { from { opacity: 0; transform: scale(0.94); } }
   .modal-box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
     padding: 20px 22px; width: 100%; max-width: 420px; max-height: 86vh; overflow-y: auto;
     box-shadow: 0 4px 24px rgba(0,0,0,0.3); }
-  .modal-box h2 { font-size: 17px; margin: 0 0 4px; }
-  .modal-box .modal-sub { font-size: 12px; color: var(--muted); margin: 0 0 14px; line-height: 1.5; }
+  .modal-box h2 { font-size: 1.0625rem; margin: 0 0 4px; }
+  .modal-box .modal-sub { font-size: 0.75rem; color: var(--muted); margin: 0 0 14px; line-height: 1.5; }
   .modal-box input[type=text], .modal-box input[type=password], .modal-box input[type=search] {
     width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px;
-    font-size: 14px; background: var(--bg); color: var(--ink); margin-bottom: 10px; outline: none; }
+    font-size: 0.875rem; background: var(--bg); color: var(--ink); margin-bottom: 10px; outline: none; }
   .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
-  .modal-error { color: var(--warn); font-size: 12px; min-height: 16px; }
+  .modal-error { color: var(--warn); font-size: 0.75rem; min-height: 16px; }
   .country-checklist { max-height: 260px; overflow-y: auto; border: 1px solid var(--line);
     border-radius: 8px; padding: 6px; margin-bottom: 4px; }
   .region-country-item { display: flex; align-items: center; gap: 8px; padding: 6px 4px;
-    font-size: 13px; border-radius: 6px; cursor: pointer; }
+    font-size: 0.8125rem; border-radius: 6px; cursor: pointer; }
   .region-country-item:hover { background: var(--panel-alt); }
   .region-country-item input { margin: 0; }
 
   .regions-section { margin-top: 20px; background: var(--panel); border: 1px solid var(--line);
     border-radius: 10px; padding: 14px; }
-  .regions-section h2 { font-size: 15px; margin: 0 0 10px; }
+  .regions-section h2 { font-size: 0.9375rem; margin: 0 0 10px; }
   .region-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
   .region-toolbar select { flex: 1 1 200px; min-width: 0; }
-  .region-sync-row { display: flex; align-items: center; gap: 8px; font-size: 12px;
+  .region-sync-row { display: flex; align-items: center; gap: 8px; font-size: 0.75rem;
     color: var(--muted); margin-bottom: 12px; flex-wrap: wrap; }
-  .link-btn { background: none; border: none; color: var(--accent); font-size: 12px;
+  .link-btn { background: none; border: none; color: var(--accent); font-size: 0.75rem;
     padding: 0; cursor: pointer; min-height: unset; text-decoration: underline; }
   .region-manage-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
-  .region-item { display: flex; align-items: center; gap: 10px; font-size: 13px;
+  .region-item { display: flex; align-items: center; gap: 10px; font-size: 0.8125rem;
     padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-alt); }
   .region-item-name { font-weight: 600; flex: 1; }
-  .region-item-count { color: var(--muted); font-size: 12px; }
-  .mini-btn { font-size: 12px; padding: 4px 9px; min-height: unset; background: var(--panel);
+  .region-item-count { color: var(--muted); font-size: 0.75rem; }
+  .mini-btn { font-size: 0.75rem; padding: 4px 9px; min-height: unset; background: var(--panel);
     color: var(--accent); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
   .mini-btn.danger { color: var(--warn); }
-  .region-empty { color: var(--muted); font-size: 13px; padding: 6px 2px; }
+  .region-empty { color: var(--muted); font-size: 0.8125rem; padding: 6px 2px; }
   .region-results { margin-top: 14px; }
   .region-results-header { display: flex; align-items: center; justify-content: space-between;
     gap: 10px; margin-bottom: 10px; }
-  .region-results-title { font-size: 15px; margin: 0; }
+  .region-results-title { font-size: 0.9375rem; margin: 0; }
   .region-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 10px; margin-bottom: 10px; }
   .region-metric { background: var(--panel-alt); border: 1px solid var(--line); border-radius: 8px;
     padding: 10px 12px; }
-  .rm-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 4px; }
-  .rm-value { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .region-note { font-size: 12px; color: var(--warn); margin-bottom: 10px; }
+  .rm-label { font-size: 0.6875rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 4px; }
+  .rm-value { font-size: 1.125rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .region-note { font-size: 0.75rem; color: var(--warn); margin-bottom: 10px; }
   .region-members { display: flex; flex-wrap: wrap; gap: 6px; }
-  .region-chip { font-size: 11px; color: var(--muted); background: var(--panel-alt);
+  .region-chip { font-size: 0.6875rem; color: var(--muted); background: var(--panel-alt);
     border: 1px solid var(--line); border-radius: 12px; padding: 3px 9px; }
   .region-sources { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
-  .region-sources-label { font-size: 11px; color: var(--muted); text-transform: uppercase;
+  .region-sources-label { font-size: 0.6875rem; color: var(--muted); text-transform: uppercase;
     letter-spacing: 0.03em; margin-bottom: 6px; }
   .region-sources-list { display: flex; flex-direction: column; gap: 4px; }
-  .region-source-item { font-size: 12px; color: var(--muted); word-break: break-word; }
+  .region-source-item { font-size: 0.75rem; color: var(--muted); word-break: break-word; }
 </style>
 </head>
 <body>
@@ -283,7 +289,7 @@
   <div class="modal-box">
     <h2>Sync regions</h2>
     <p class="modal-sub">Regions are saved to a private GitHub Gist, so they persist across devices. If you've already connected sync elsewhere in this app (e.g. Library), regions will sync automatically using that same connection — no need to reconnect here.</p>
-    <ol style="font-size:12px;color:var(--muted);padding-left:18px;margin:0 0 12px;line-height:1.6;">
+    <ol style="font-size:0.75rem;color:var(--muted);padding-left:18px;margin:0 0 12px;line-height:1.6;">
       <li>Open <a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=verdict-cat" target="_blank" rel="noopener noreferrer">github.com/settings/tokens</a></li>
       <li>Generate a token with the <strong>gist</strong> scope</li>
       <li>Paste it below</li>
@@ -822,12 +828,16 @@ async function saveRegionFromModal() {
 async function removeRegion(id) {
   const r = regions.find((x) => x.id === id);
   if (!r) return;
-  if (!confirm(`Delete region "${r.name}"? This cannot be undone.`)) return;
   deleteRegionLocal(id);
   refreshRegionsUI();
   document.getElementById("region-results").innerHTML = "";
   lastRegionAnalysis = null;
   await maybeSyncRegionsPush();
+  VC.toast(`Deleted region “${r.name}”`, { action: { label: "Undo", onClick: async () => {
+    persistRegion({ ...r, updatedAt: Date.now() });
+    refreshRegionsUI();
+    await maybeSyncRegionsPush();
+  } } });
 }
 
 // GDP-weighted region rollup: GDP sums; growth and inflation are GDP-weighted
@@ -1035,9 +1045,13 @@ function initRegions() {
     }
   });
   document.getElementById("region-sync-disconnect-link").addEventListener("click", () => {
-    if (!confirm("Disconnect region sync? Regions stay on this device.")) return;
+    const saved = Gist.credentials();
     Gist.clear();
     updateRegionSyncStatus();
+    VC.toast("Region sync disconnected", { action: { label: "Undo", onClick: () => {
+      Gist.save(saved.pat, saved.gistId);
+      updateRegionSyncStatus();
+    } } });
   });
 
   document.querySelectorAll(".modal-overlay").forEach((overlay) => {
