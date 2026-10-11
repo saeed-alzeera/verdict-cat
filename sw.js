@@ -1,4 +1,4 @@
-const CACHE = 'verdict-cat-v4';
+const CACHE = 'verdict-cat-v3';
 
 // HTML documents are self-modifying (the library/reader pages get patched
 // in place on GitHub whenever a book is uploaded or deleted), so they must
@@ -14,8 +14,7 @@ const PRECACHE = [
   '/favicon.ico',
 ];
 
-// Shared site.css / site.js ship design changes, so they are network-first like HTML.
-const HTML_RE = /\.(html|css|js)$|\/$/;
+const HTML_RE = /\.html$|\/$/;
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
