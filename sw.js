@@ -1,4 +1,4 @@
-const CACHE = 'verdict-cat-v3';
+const CACHE = 'verdict-cat-v4';
 
 // HTML documents are self-modifying (the library/reader pages get patched
 // in place on GitHub whenever a book is uploaded or deleted), so they must
@@ -14,7 +14,7 @@ const PRECACHE = [
   '/favicon.ico',
 ];
 
-const HTML_RE = /\.html$|\/$/;
+const HTML_RE = /\.(html|js)$|\/$/;
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -37,8 +37,8 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
   if (url.origin === self.location.origin) {
-    // HTML documents: network-first, cache only as an offline fallback, so
-    // navigating to a page always gets the latest deployed content.
+    // HTML documents and scripts: network-first, cache only as an offline
+    // fallback, so a page always gets the latest deployed content.
     if (e.request.mode === 'navigate' || HTML_RE.test(url.pathname)) {
       e.respondWith(
         fetch(e.request)

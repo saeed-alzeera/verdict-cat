@@ -1,0 +1,43 @@
+name: Deploy Sync Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "sync-worker/**"
+      - ".github/workflows/deploy-sync-worker.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-sync-worker
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The Worker's R2 binding needs the bucket to exist before deploy.
+      # Creating an existing bucket errors, which is fine to ignore.
+      - name: Ensure R2 bucket exists
+        uses: cloudflare/wrangler-action@v3
+        continue-on-error: true
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: "sync-worker"
+          command: r2 bucket create verdict-cat-books
+
+      # SYNC_KEY is set once by the owner:  wrangler secret put SYNC_KEY
+      # (or add a SYNC_KEY repo secret and uncomment `secrets:` below to
+      # have the workflow set it on every deploy).
+      - name: Deploy worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: "sync-worker"
+          # secrets: |
+          #   SYNC_KEY
+        # env:
+        #   SYNC_KEY: ${{ secrets.SYNC_KEY }}

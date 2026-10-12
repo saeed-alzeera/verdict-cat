@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
 <link rel="shortcut icon" href="favicon.ico" />
-<script src="gist.js"></script>
+<script src="gist.js?v=2"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="ebook-convert.js"></script>
 <style>
@@ -318,13 +318,9 @@
 <div id="setup-modal" style="display:none;">
   <div id="setup-box">
     <h2>Sync reading progress</h2>
-    <p class="setup-sub">Progress is saved to a private GitHub Gist — invisible to others, works on every device, survives browser resets.</p>
-    <ol class="setup-steps">
-      <li>Open <a href="https://github.com/settings/tokens/new?scopes=repo,gist&description=verdict-cat" target="_blank">github.com/settings/tokens</a></li>
-      <li>Generate a token with the <strong>repo</strong> and <strong>gist</strong> scopes</li>
-      <li>Paste it below</li>
-    </ol>
-    <input id="setup-pat" type="password" placeholder="ghp_…" autocomplete="off" />
+    <p class="setup-sub">Progress is saved to your sync server — works on every device, survives browser resets. The same key lets you upload and delete books.</p>
+    <p class="setup-sub">Paste your sync key below. (An old GitHub token still works as a fallback for progress sync.)</p>
+    <input id="setup-pat" type="password" placeholder="Sync key" autocomplete="off" />
     <div id="setup-error"></div>
     <button id="setup-connect">Connect</button>
     <button id="setup-skip">Skip — use this device only</button>
@@ -499,6 +495,23 @@
   ];
   // ─────────────────────────────────────────────────────────────────────────
 
+  // Books baked into this file (STATIC_BOOKS) plus anything uploaded through the
+  // sync worker. A worker "hidden" marker removes a static book (that's how
+  // deleting one works without touching the repo); a worker book with the same
+  // slug replaces the static entry.
+  var STATIC_BOOKS = BOOKS.slice();
+  async function refreshCatalog() {
+    var remote = [];
+    try { remote = await Gist.books.list(); } catch(e) { remote = null; }
+    if (remote === null) { BOOKS = STATIC_BOOKS.slice(); return; }
+    var hidden = {}, uploaded = {};
+    remote.forEach(function(b) { if (b.hidden) hidden[b.slug] = true; else uploaded[b.slug] = b; });
+    BOOKS = STATIC_BOOKS.filter(function(b) { return !hidden[b.slug] && !uploaded[b.slug]; });
+    remote.filter(function(b) { return !b.hidden; })
+      .sort(function(a, b) { return a.createdAt - b.createdAt; })
+      .forEach(function(b) { BOOKS.push({ slug: b.slug, title: b.title, author: b.author, cover: b.cover }); });
+  }
+
   function toast(msg) {
     var t = document.getElementById('toast');
     t.textContent = msg;
@@ -621,7 +634,7 @@
     var pat = document.getElementById('setup-pat').value.trim();
     var errEl = document.getElementById('setup-error');
     var btn = document.getElementById('setup-connect');
-    if (!pat) { errEl.textContent = 'Paste your token first.'; return; }
+    if (!pat) { errEl.textContent = 'Paste your sync key first.'; return; }
     errEl.textContent = '';
     btn.disabled = true;
     btn.textContent = 'Connecting…';
@@ -655,10 +668,16 @@
     setSyncStatus('syncing');
     await Gist.pull();
     setSyncStatus('connected');
+    if (Gist.lastError) {
+      document.getElementById('status-label').textContent = 'Sync failed';
+      document.getElementById('status-dot').className = 'status-dot';
+      toast(Gist.lastError);
+    }
     renderCards();
   }
 
   // ── Init ──────────────────────────────────────────────────────────────────
+  refreshCatalog().then(renderCards);
   if (Gist.isConnected()) {
     syncFromGist();
   } else {
@@ -689,158 +708,33 @@
   }, { once: true });
 
   // -- Upload ------------------------------------------------------------------
-  var REPO      = 'saeed-alzeera/verdict-cat';
-  var BRANCH    = 'main';
+  // Books are stored in the sync worker (R2) — no GitHub token or repo commit.
   var ulFile    = null;
   var ulCoverB64 = null;
   var ulCoverExt = null;
 
-  function getUploadPat() { return localStorage.getItem('verdict-cat-pat') || ''; }
+  function hasUploadKey() { return Gist.mode() === 'worker'; }
 
-  async function ghGet(path) {
-    var r = await fetch('https://api.github.com/repos/' + REPO + path, {
-      headers: { Authorization: 'Bearer ' + getUploadPat(), Accept: 'application/vnd.github+json' }
-    });
-    if (!r.ok) throw new Error('GitHub ' + r.status + ': ' + (await r.text()));
-    return r.json();
-  }
-
-  async function ghPut(path, body) {
-    var r = await fetch('https://api.github.com/repos/' + REPO + path, {
-      method: 'PUT',
-      headers: {
-        Authorization: 'Bearer ' + getUploadPat(),
-        Accept: 'application/vnd.github+json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
-    });
-    if (!r.ok) throw new Error('GitHub ' + r.status + ': ' + (await r.text()));
-    return r.json();
-  }
-
-  async function ghDelete(path, sha, commitMsg) {
-    var r = await fetch('https://api.github.com/repos/' + REPO + '/contents/' + path, {
-      method: 'DELETE',
-      headers: {
-        Authorization: 'Bearer ' + getUploadPat(),
-        Accept: 'application/vnd.github+json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ message: commitMsg, sha: sha, branch: BRANCH })
-    });
-    if (!r.ok) throw new Error('GitHub ' + r.status + ': ' + (await r.text()));
-    return r.json();
-  }
-
-  // Removes one object literal from `src` matched by headRe (which must match
-  // through the entry's opening "{"), terminated at the next line that is
-  // exactly 4-space-indented "}". Also removes exactly one adjacent comma so
-  // the surrounding array/object stays valid, whichever side it's on. Uses
-  // index arithmetic (not one big regex) so a missing trailing comma on the
-  // last entry can't cause the match to run away into unrelated code.
-  function removeObjectEntry(src, headRe) {
-    var head = headRe.exec(src);
-    if (!head) return src;
-    var start = head.index;
-    var closeRe = /\n[ \t]{4}\}/g;
-    closeRe.lastIndex = head.index + head[0].length;
-    var close = closeRe.exec(src);
-    if (!close) return src;
-    var end = close.index + close[0].length;
-    var after = src.slice(end);
-    var afterComma = after.match(/^\s*,/);
-    if (afterComma) {
-      end += afterComma[0].length;
-    } else {
-      var before = src.slice(0, start);
-      var beforeComma = before.match(/,\s*$/);
-      if (beforeComma) start -= beforeComma[0].length;
-    }
-    return src.slice(0, start) + src.slice(end);
-  }
-
-  function removeEntryFromLibrary(src, slug) {
-    var headRe = new RegExp('[ \\t]*\\{\\s*\\n\\s*slug:\\s*[\'"]' + slug + '[\'"][\\s\\S]{0,80}?');
-    return removeObjectEntry(src, headRe);
-  }
-
-  function removeEntryFromReader(src, slug) {
-    var headRe = new RegExp('[ \\t]*[\'"]' + slug + '[\'"]\\s*:\\s*\\{[\\s\\S]{0,20}?');
-    return removeObjectEntry(src, headRe);
+  function dataUrlToBlob(b64, ext) {
+    var bin = atob(b64);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: ext === 'png' ? 'image/png' : 'image/jpeg' });
   }
 
   async function deleteBook(book) {
-    if (!getUploadPat()) { showSetup(); return; }
-    if (!confirm('Delete "' + book.title + '" from the library? This removes it from GitHub for everyone.')) return;
+    if (!hasUploadKey()) { showSetup(); return; }
+    if (!confirm('Delete "' + book.title + '" from the library? This removes it for every device.')) return;
     toast('Deleting "' + book.title + '"…');
     try {
-      await patchFile('library.html', function(src) { return removeEntryFromLibrary(src, book.slug); }, 'Remove book from library: ' + book.title);
-      await patchFile('reader.html', function(src) { return removeEntryFromReader(src, book.slug); }, 'Remove book from reader: ' + book.title);
-
-      try {
-        var epubPath = 'books/' + book.slug + '.epub';
-        var epubData = await ghGet('/contents/' + epubPath + '?ref=' + BRANCH);
-        await ghDelete(epubPath, epubData.sha, 'Delete epub: ' + book.title);
-      } catch(e) { /* file may already be missing */ }
-
-      if (book.cover) {
-        try {
-          var coverData = await ghGet('/contents/' + book.cover + '?ref=' + BRANCH);
-          await ghDelete(book.cover, coverData.sha, 'Delete cover: ' + book.title);
-        } catch(e) { /* file may already be missing */ }
-      }
-
-      var idx = BOOKS.findIndex(function(b) { return b.slug === book.slug; });
-      if (idx !== -1) BOOKS.splice(idx, 1);
+      await Gist.books.remove(book.slug);
+      await refreshCatalog();
       localStorage.removeItem('epub-progress:' + book.slug);
       renderCards();
       toast('"' + book.title + '" deleted.');
     } catch(err) {
       toast('Delete failed: ' + (err.message || 'unknown error'));
     }
-  }
-
-  // GitHub's Contents API returns/accepts base64 of the raw UTF-8 bytes.
-  // atob()/btoa() only round-trip Latin-1 binary strings, so decoding
-  // straight into JS text (and re-encoding it the same way) silently
-  // mangles every non-ASCII character — and does so a little more each
-  // time a file gets patched. Go through TextDecoder/TextEncoder instead
-  // so multi-byte characters survive the round trip.
-  function utf8FromBase64(b64) {
-    var binary = atob(b64.replace(/\n/g, ''));
-    var bytes = new Uint8Array(binary.length);
-    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return new TextDecoder('utf-8').decode(bytes);
-  }
-
-  function base64FromUtf8(str) {
-    var bytes = new TextEncoder().encode(str);
-    var binary = '';
-    for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-    return btoa(binary);
-  }
-
-  async function patchFile(filename, patchFn, commitMsg) {
-    var data = await ghGet('/contents/' + filename + '?ref=' + BRANCH);
-    var src = utf8FromBase64(data.content);
-    var patched = patchFn(src);
-    if (patched === src) throw new Error('Could not patch ' + filename + ' — pattern not found.');
-    await ghPut('/contents/' + filename, {
-      message: commitMsg,
-      content: base64FromUtf8(patched),
-      sha: data.sha,
-      branch: BRANCH
-    });
-  }
-
-  function toBase64(file) {
-    return new Promise(function(resolve, reject) {
-      var fr = new FileReader();
-      fr.onload = function() { resolve(fr.result.split(',')[1]); };
-      fr.onerror = reject;
-      fr.readAsDataURL(file);
-    });
   }
 
   async function readEpubMeta(file) {
@@ -885,7 +779,7 @@
   }
 
   function openUploadModal() {
-    if (!getUploadPat()) { showSetup(); return; }
+    if (!hasUploadKey()) { showSetup(); return; }
     document.getElementById('ul-epub-input').value = '';
     document.getElementById('ul-epub-input').click();
   }
@@ -945,50 +839,17 @@
     var author = document.getElementById('ul-author').value.trim();
     var slug   = document.getElementById('ul-slug').value.trim();
     if (!title || !author || !slug) { setUlStatus('err', 'Title, author and slug are required.'); return; }
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) { setUlStatus('err', 'Slug may only contain lowercase letters, numbers and hyphens.'); return; }
     if (!ulFile) { setUlStatus('err', 'No file selected.'); return; }
     var btn = this;
     btn.disabled = true;
     try {
-      var totalSteps = ulCoverB64 ? 4 : 3;
-      setUlStatus('working', '1/' + totalSteps + '  Uploading epub…');
-      var b64 = await toBase64(ulFile);
-      var epubPath = 'books/' + slug + '.epub';
-      var existingSha = null;
-      try { existingSha = (await ghGet('/contents/' + epubPath + '?ref=' + BRANCH)).sha; } catch(e) {}
-      var epubBody = { message: 'Add book: ' + title, content: b64, branch: BRANCH };
-      if (existingSha) epubBody.sha = existingSha;
-      await ghPut('/contents/' + epubPath, epubBody);
-
-      var coverPath = null;
-      if (ulCoverB64) {
-        setUlStatus('working', '2/' + totalSteps + '  Uploading cover…');
-        coverPath = 'books/covers/' + slug + '.' + ulCoverExt;
-        var coverSha = null;
-        try { coverSha = (await ghGet('/contents/' + coverPath + '?ref=' + BRANCH)).sha; } catch(e) {}
-        var coverBody = { message: 'Add cover: ' + title, content: ulCoverB64, branch: BRANCH };
-        if (coverSha) coverBody.sha = coverSha;
-        await ghPut('/contents/' + coverPath, coverBody);
-      }
-
-      setUlStatus('working', (ulCoverB64 ? '3' : '2') + '/' + totalSteps + '  Updating library…');
-      var coverValue = coverPath ? JSON.stringify(coverPath) : 'null';
-      await patchFile('library.html', function(src) {
-        var entry = "    {\n      slug: '" + slug + "',\n      title: " + JSON.stringify(title) + ",\n      author: " + JSON.stringify(author) + ",\n      cover: " + coverValue + "\n    }";
-        return src.replace(/(var BOOKS = \[)([\s\S]*?)(\];)/, function(_, open, body, close) {
-          return open + body.trimEnd() + ',\n' + entry + '\n  ' + close;
-        });
-      }, 'Register book in library: ' + title);
-
-      setUlStatus('working', (ulCoverB64 ? '4' : '3') + '/' + totalSteps + '  Updating reader…');
-      var rawUrl = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/' + epubPath;
-      await patchFile('reader.html', function(src) {
-        var entry = "    " + JSON.stringify(slug) + ": {\n      url: " + JSON.stringify(rawUrl) + ",\n      title: " + JSON.stringify(title) + ",\n      author: " + JSON.stringify(author) + "\n    }";
-        return src.replace(/(var BOOKS = \{)([\s\S]*?)(\};)/, function(_, open, body, close) {
-          return open + body.trimEnd() + ',\n' + entry + '\n  ' + close;
-        });
-      }, 'Register book in reader: ' + title);
-
-      BOOKS.push({ slug: slug, title: title, author: author, cover: coverPath });
+      setUlStatus('working', 'Uploading…');
+      await Gist.books.upload({
+        slug: slug, title: title, author: author, epub: ulFile,
+        cover: ulCoverB64 ? dataUrlToBlob(ulCoverB64, ulCoverExt) : null
+      });
+      await refreshCatalog();
       renderCards();
       setUlStatus('ok', 'Done! "' + title + '" added to the library.');
       setTimeout(closeUploadModal, 1600);

@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
 <link rel="shortcut icon" href="favicon.ico" />
-<script src="gist.js"></script>
+<script src="gist.js?v=2"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -299,15 +299,15 @@
 
   <!-- Gist sync panel (hidden by default) -->
   <div id="sync-panel">
-    <h3>Cross-device sync via GitHub Gist</h3>
-    <p>Paste a GitHub personal access token (with <strong>repo</strong> and <strong>gist</strong> scopes) to sync snippets across devices.</p>
+    <h3>Cross-device sync</h3>
+    <p>Paste your sync key to sync snippets across devices. (An old GitHub token still works as a fallback.)</p>
     <div id="sync-connected" style="display:none">
-      <p style="color:#4caf50;margin-bottom:8px;">&#10003; Connected to Gist</p>
+      <p style="color:#4caf50;margin-bottom:8px;">&#10003; Connected</p>
       <button class="btn btn-danger" id="sync-disconnect-btn">Disconnect</button>
     </div>
     <div id="sync-form">
       <div class="row">
-        <input type="password" id="pat-input" placeholder="ghp_..." autocomplete="off" />
+        <input type="password" id="pat-input" placeholder="Sync key" autocomplete="off" />
         <button class="btn btn-primary" id="sync-connect-btn">Connect</button>
       </div>
       <div id="sync-error"></div>
@@ -348,7 +348,7 @@
 
 <script>
   var STORAGE_KEY = 'text-transport-snippets';
-  var GIST_FILE   = 'verdict-cat-text-transport.json';
+  var DOC_NAME    = 'text-transport';
 
   var snippets = [];
   var copiedId = null;
@@ -371,38 +371,18 @@
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch(e) {}
   }
 
-  // ── Gist sync ──────────────────────────────────────────────────────────────
-
-  var API = 'https://api.github.com';
-
-  function gistHeaders(pat) {
-    return { 'Authorization': 'token ' + pat, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' };
-  }
+  // ── Sync ───────────────────────────────────────────────────────────────────
+  // Backend (sync worker, or legacy gist) is chosen by gist.js.
 
   async function gistPull() {
     if (!Gist.isConnected()) return null;
-    var c = Gist.credentials();
-    try {
-      var resp = await fetch(API + '/gists/' + c.gistId, { headers: gistHeaders(c.pat) });
-      if (!resp.ok) return null;
-      var data = await resp.json();
-      var file = data.files[GIST_FILE];
-      if (!file) return null;
-      var parsed = JSON.parse(file.content || '[]');
-      return Array.isArray(parsed) ? parsed : null;
-    } catch(e) { return null; }
+    var parsed = await Gist.pullDoc(DOC_NAME);
+    return Array.isArray(parsed) ? parsed : null;
   }
 
   async function gistPush(list) {
     if (!Gist.isConnected()) return;
-    var c = Gist.credentials();
-    try {
-      await fetch(API + '/gists/' + c.gistId, {
-        method: 'PATCH',
-        headers: gistHeaders(c.pat),
-        body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(list, null, 2) } } })
-      });
-    } catch(e) {}
+    await Gist.pushDoc(DOC_NAME, list);
   }
 
   // ── Sync status UI ─────────────────────────────────────────────────────────
@@ -415,7 +395,7 @@
 
     if (Gist.isConnected()) {
       dot.className = 'connected';
-      label.textContent = 'Gist sync';
+      label.textContent = 'Synced';
       connDiv.style.display = 'block';
       formDiv.style.display = 'none';
     } else {
@@ -624,7 +604,7 @@
     var patInput = document.getElementById('pat-input');
     var errDiv   = document.getElementById('sync-error');
     var pat = patInput.value.trim();
-    if (!pat) { errDiv.textContent = 'Please enter a token.'; return; }
+    if (!pat) { errDiv.textContent = 'Please enter your sync key.'; return; }
     errDiv.textContent = '';
     document.getElementById('sync-connect-btn').disabled = true;
     document.getElementById('sync-connect-btn').textContent = 'Connecting…';
