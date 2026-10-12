@@ -40,11 +40,58 @@
   tbody td:first-child { background:var(--panel); font-weight:600; white-space:nowrap; }
   ol.refs { padding-left:22px; font-size:12.5px; color:var(--muted); }
   ol.refs li { margin-bottom:6px; word-break:break-word; }
+  mark.cmt { background:rgba(255,200,70,.26); color:inherit; border-bottom:2px solid #e0b43c; border-radius:2px; cursor:pointer; transition:background .2s; }
+  mark.cmt:hover, mark.cmt.flash { background:rgba(255,200,70,.5); }
+  #selbtn, #pop { position:absolute; z-index:50; display:none; }
+  #selbtn { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:7px 12px; font:inherit; font-size:13px;
+    font-weight:600; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.45); }
+  #pop { width:min(320px, calc(100vw - 24px)); background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:12px; box-shadow:0 8px 28px rgba(0,0,0,.55); }
+  #pop .q { font-size:12px; color:var(--muted); border-left:3px solid #e0b43c; padding-left:8px; margin:0 0 10px;
+    max-height:64px; overflow:hidden; }
+  #pop textarea { width:100%; min-height:84px; resize:vertical; background:var(--bg); color:var(--ink); border:1px solid var(--line);
+    border-radius:8px; padding:8px; font:inherit; font-size:14px; }
+  #pop textarea:focus { outline:none; border-color:var(--accent); }
+  #pop .txt { font-size:14px; line-height:1.5; white-space:pre-wrap; word-break:break-word; margin:0 0 10px; }
+  #pop .row { display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
+  #pop .row button { background:var(--bg); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:6px 12px; font:inherit; font-size:13px; cursor:pointer; }
+  #pop .row button.pri { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  #pop .row button.del { color:#e5736b; margin-right:auto; }
+  #cmts { margin-top:36px; border-top:1px solid var(--line); padding-top:18px; }
+  #cmts h3 { font-size:15px; margin:0 0 12px; }
+  #cmts .c { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:10px; cursor:pointer; }
+  #cmts .c:hover { border-color:var(--accent); }
+  #cmts .c .q { font-size:12px; color:var(--muted); border-left:3px solid #e0b43c; padding-left:8px; margin-bottom:6px; }
+  #cmts .c .t { font-size:14px; white-space:pre-wrap; word-break:break-word; }
+  #cmts h3.sec { margin-top:26px; }
+  #cmts .gform textarea { width:100%; min-height:70px; resize:vertical; background:var(--panel); color:var(--ink); border:1px solid var(--line);
+    border-radius:8px; padding:8px; font:inherit; font-size:14px; }
+  #cmts .gform textarea:focus { outline:none; border-color:var(--accent); }
+  #cmts .gform { margin-bottom:12px; }
+  #cmts .btn, #vbar button { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:5px 11px;
+    font:inherit; font-size:13px; cursor:pointer; }
+  #cmts .btn.pri { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  #cmts .btn.del { color:#e5736b; }
+  #cmts .gform .btn { margin-top:8px; }
+  #cmts .g { cursor:default; }
+  #cmts .g:hover { border-color:var(--line); }
+  #cmts .g .acts { display:flex; gap:6px; margin-top:8px; align-items:center; }
+  #cmts .g .when { font-size:11px; color:var(--muted); margin-right:auto; }
+  #vbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:0 0 18px; padding:10px 12px; background:var(--panel);
+    border:1px solid var(--line); border-radius:10px; font-size:13px; }
+  #vbar button:disabled { opacity:.35; cursor:default; }
+  #vbar select { background:var(--bg); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:5px 8px; font:inherit; font-size:13px; max-width:100%; }
+  #vbar .vmsg { flex-basis:100%; color:var(--muted); font-size:12px; }
+  #vbar .old { color:#e0b43c; }
+  #cmts .hint { font-size:12px; color:var(--muted); }
 </style>
 </head>
 <body>
 <a id="back" href="reso.html">&#8592; Reso</a>
 <main id="app"></main>
+<button id="selbtn" type="button">&#128172; Comment</button>
+<div id="pop"></div>
+<script src="gist.js?v=3"></script>
 <script>
   if (localStorage.getItem('hub_auth') !== '1') location.replace('index.html');
 
@@ -137,15 +184,348 @@
     app.innerHTML = '<p class="empty">Loading…</p>';
     try {
       const md = await fetchText('articles/' + encodeURIComponent(slug) + '.md');
-      app.innerHTML = '<article>' + render(md) + '</article>';
+      app.innerHTML = '<div id="vbar" style="display:none"></div><article>' + render(md) + '</article><section id="cmts"></section>';
       document.title = titleOf(md) + ' · Reso';
       window.scrollTo(0, 0);
+      openComments(slug);
+      loadVersions(slug, md);
     } catch (e) {
       app.innerHTML = '<p class="err">Article not found.</p>';
     }
   }
 
+  // ── Highlight + comment ─────────────────────────────────────────────────────
+  // A comment is anchored by the quoted text plus a little surrounding context
+  // (and its original offset), so it still lands in the right place if the
+  // article is edited. Stored in localStorage and, when sync is connected,
+  // merged across devices through the sync worker (per-comment last-writer-wins).
+  const CTX = 32;
+  let comments = [], curSlug = null, pending = null, mouseDown = false;
+  const articleEl = () => app.querySelector('article');
+  const selbtn = document.getElementById('selbtn');
+  const pop = document.getElementById('pop');
+  const lsKey = slug => 'vc-article-comments:' + slug;
+  const docName = slug => 'article-comments:' + slug;
+  const syncOn = () => window.Gist && !!localStorage.getItem('verdict-cat-sync-key');
+
+  function loadLocal(slug) {
+    try { const v = JSON.parse(localStorage.getItem(lsKey(slug)) || '[]'); return Array.isArray(v) ? v : []; }
+    catch (e) { return []; }
+  }
+  function persist() {
+    try { localStorage.setItem(lsKey(curSlug), JSON.stringify(comments)); } catch (e) {}
+    if (syncOn()) Gist.pushDoc(docName(curSlug), comments);
+  }
+  function merge(a, b) {
+    const m = new Map();
+    a.concat(b).forEach(c => { const o = m.get(c.id); if (!o || (c.ts || 0) > (o.ts || 0)) m.set(c.id, c); });
+    return [...m.values()];
+  }
+  const live = () => comments.filter(c => !c.deleted && !c.general);
+  const liveGeneral = () => comments.filter(c => !c.deleted && c.general);
+  const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  let viewingOld = false;
+
+  function openComments(slug) {
+    curSlug = slug; comments = loadLocal(slug); hidePop(); hideBtn();
+    refresh();
+    if (syncOn()) {
+      Gist.pullDoc(docName(slug)).then(remote => {
+        if (curSlug !== slug || !Array.isArray(remote)) return;
+        const merged = merge(comments, remote);
+        const changed = JSON.stringify(merged) !== JSON.stringify(comments);
+        comments = merged;
+        try { localStorage.setItem(lsKey(slug), JSON.stringify(comments)); } catch (e) {}
+        if (changed) { refresh(); Gist.pushDoc(docName(slug), comments); }
+      });
+    }
+  }
+
+  function textOffset(root, node, off) {
+    const r = document.createRange();
+    r.selectNodeContents(root); r.setEnd(node, off);
+    return r.toString().length;
+  }
+
+  // Best occurrence of c.quote in text: prefer matching prefix/suffix, then nearest original offset.
+  function locate(text, c) {
+    let best = -1, bestScore = -1, i = text.indexOf(c.quote);
+    while (i !== -1) {
+      let score = 0;
+      if (c.prefix && text.slice(Math.max(0, i - c.prefix.length), i) === c.prefix) score += 2;
+      if (c.suffix && text.substr(i + c.quote.length, c.suffix.length) === c.suffix) score += 2;
+      score -= Math.min(Math.abs(i - (c.start || 0)) / 1e6, 0.99);
+      if (score > bestScore) { bestScore = score; best = i; }
+      i = text.indexOf(c.quote, i + 1);
+    }
+    return best;
+  }
+
+  function wrap(root, s, e, id) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const targets = []; let pos = 0, n;
+    while ((n = walker.nextNode())) {
+      const ns = pos, ne = pos + n.nodeValue.length; pos = ne;
+      if (ne <= s) continue;
+      if (ns >= e) break;
+      const a = Math.max(s, ns) - ns, b = Math.min(e, ne) - ns;
+      if (n.nodeValue.slice(a, b).trim()) targets.push([n, a, b]);
+    }
+    targets.forEach(([node, a, b]) => {
+      let mid = node;
+      if (a > 0) mid = node.splitText(a);
+      if (b - a < mid.nodeValue.length) mid.splitText(b - a);
+      const m = document.createElement('mark');
+      m.className = 'cmt'; m.dataset.id = id;
+      mid.parentNode.insertBefore(m, mid); m.appendChild(mid);
+    });
+  }
+
+  function applyHighlights() {
+    const root = articleEl(); if (!root) return;
+    root.querySelectorAll('mark.cmt').forEach(m => {
+      const p = m.parentNode;
+      while (m.firstChild) p.insertBefore(m.firstChild, m);
+      p.removeChild(m);
+    });
+    root.normalize();
+    live().forEach(c => {
+      const at = locate(root.textContent, c);
+      c.missing = at < 0;
+      if (at >= 0) wrap(root, at, at + c.quote.length, c.id);
+    });
+  }
+
+  function renderList() {
+    const box = document.getElementById('cmts'); if (!box) return;
+    box.innerHTML = '';
+    // General comments
+    const gl = liveGeneral();
+    const gh = document.createElement('h3');
+    gh.textContent = 'General comments' + (gl.length ? ' (' + gl.length + ')' : '');
+    box.appendChild(gh);
+    const form = document.createElement('div');
+    form.className = 'gform';
+    form.innerHTML = '<textarea placeholder="Add a general comment on this article…"></textarea><button class="btn pri" type="button">Add comment</button>';
+    const gta = form.querySelector('textarea');
+    const add = () => {
+      const text = gta.value.trim(); if (!text) return;
+      const now = Date.now();
+      comments.push({ id: newId(), general: true, text, ts: now, created: now });
+      persist(); renderList();
+    };
+    form.querySelector('button').onclick = add;
+    gta.onkeydown = ev => { if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') add(); };
+    box.appendChild(form);
+    gl.slice().sort((a, b) => (b.created || b.ts) - (a.created || a.ts)).forEach(c => {
+      const d = document.createElement('div');
+      d.className = 'c g';
+      const draw = () => {
+        d.innerHTML = '<div class="t"></div><div class="acts"><span class="when"></span>' +
+          '<button class="btn edit" type="button">Edit</button><button class="btn del" type="button">Delete</button></div>';
+        d.querySelector('.t').textContent = c.text;
+        d.querySelector('.when').textContent = new Date(c.created || c.ts).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+        d.querySelector('.del').onclick = () => { c.deleted = true; c.ts = Date.now(); persist(); renderList(); };
+        d.querySelector('.edit').onclick = () => {
+          d.innerHTML = '<div class="gform"><textarea></textarea></div><div class="acts"><button class="btn cancel" type="button">Cancel</button><button class="btn pri save" type="button">Save</button></div>';
+          const ta = d.querySelector('textarea'); ta.value = c.text; ta.focus();
+          d.querySelector('.cancel').onclick = draw;
+          d.querySelector('.save').onclick = () => {
+            const t = ta.value.trim(); if (!t) return;
+            c.text = t; c.ts = Date.now(); persist(); draw();
+          };
+        };
+      };
+      draw(); box.appendChild(d);
+    });
+    // Highlight comments
+    const list = live();
+    const h = document.createElement('h3');
+    h.className = 'sec';
+    h.textContent = 'Highlight comments' + (list.length ? ' (' + list.length + ')' : '');
+    box.appendChild(h);
+    if (!list.length) {
+      const p = document.createElement('p'); p.className = 'hint';
+      p.textContent = 'Select any text above to comment on it.'; box.appendChild(p);
+    }
+    list.forEach(c => {
+      const d = document.createElement('div');
+      d.className = 'c';
+      d.innerHTML = '<div class="q">' + esc(c.quote.length > 140 ? c.quote.slice(0, 140) + '…' : c.quote) + '</div>' +
+        '<div class="t">' + esc(c.text) + '</div>' + (c.missing ? '<div class="hint">Original text no longer found in this version</div>' : '');
+      d.onclick = () => {
+        const m = articleEl().querySelector('mark.cmt[data-id="' + c.id + '"]');
+        if (!m) return openPop(c, d);
+        m.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        m.classList.add('flash'); setTimeout(() => m.classList.remove('flash'), 1200);
+      };
+      box.appendChild(d);
+    });
+  }
+  function refresh() { applyHighlights(); renderList(); }
+
+  function place(el, rect) {
+    el.style.display = 'block';
+    const w = el.offsetWidth;
+    const left = Math.min(Math.max(12, rect.left + window.scrollX + rect.width / 2 - w / 2), window.scrollX + document.documentElement.clientWidth - w - 12);
+    el.style.left = left + 'px';
+    el.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+  }
+  function hideBtn() { selbtn.style.display = 'none'; }
+  function hidePop() { pop.style.display = 'none'; pop.innerHTML = ''; pending = null; }
+
+  function checkSelection() {
+    if (pop.style.display === 'block') return;
+    const sel = window.getSelection(), root = articleEl();
+    if (!root || viewingOld || !sel.rangeCount || sel.isCollapsed) return hideBtn();
+    const r = sel.getRangeAt(0);
+    if (!root.contains(r.startContainer) || !root.contains(r.endContainer)) return hideBtn();
+    let s = textOffset(root, r.startContainer, r.startOffset);
+    let e = textOffset(root, r.endContainer, r.endOffset);
+    const full = root.textContent;
+    while (s < e && /\s/.test(full[s])) s++;
+    while (e > s && /\s/.test(full[e - 1])) e--;
+    if (e <= s) return hideBtn();
+    pending = { start: s, quote: full.slice(s, e), prefix: full.slice(Math.max(0, s - CTX), s), suffix: full.substr(e, CTX), rect: r.getBoundingClientRect() };
+    place(selbtn, pending.rect);
+  }
+
+  function openPop(c, anchorEl) {
+    const rect = anchorEl.getBoundingClientRect();
+    const isNew = !c.id;
+    const q = c.quote.length > 160 ? c.quote.slice(0, 160) + '…' : c.quote;
+    pop.innerHTML = '<div class="q">' + esc(q) + '</div>';
+    const draw = editing => {
+      pop.querySelectorAll('.body').forEach(x => x.remove());
+      const body = document.createElement('div'); body.className = 'body';
+      if (editing) {
+        body.innerHTML = '<textarea placeholder="Add a comment…"></textarea><div class="row">' +
+          (isNew ? '' : '<button class="del" type="button">Delete</button>') +
+          '<button class="cancel" type="button">Cancel</button><button class="pri save" type="button">Save</button></div>';
+        pop.appendChild(body);
+        const ta = body.querySelector('textarea');
+        ta.value = c.text || ''; ta.focus();
+        const save = () => {
+          const text = ta.value.trim(); if (!text) return;
+          if (isNew) {
+            comments.push({ id: newId(), quote: c.quote, prefix: c.prefix, suffix: c.suffix, start: c.start, text, ts: Date.now() });
+          } else { c.text = text; c.ts = Date.now(); }
+          persist(); hidePop(); refresh();
+        };
+        body.querySelector('.save').onclick = save;
+        ta.onkeydown = ev => { if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') save(); };
+        body.querySelector('.cancel').onclick = () => isNew ? hidePop() : draw(false);
+        const del = body.querySelector('.del');
+        if (del) del.onclick = () => { c.deleted = true; c.ts = Date.now(); persist(); hidePop(); refresh(); };
+      } else {
+        body.innerHTML = '<p class="txt"></p><div class="row"><button class="del" type="button">Delete</button><button class="edit" type="button">Edit</button><button class="pri close" type="button">Close</button></div>';
+        body.querySelector('.txt').textContent = c.text;
+        pop.appendChild(body);
+        body.querySelector('.edit').onclick = () => draw(true);
+        body.querySelector('.close').onclick = hidePop;
+        body.querySelector('.del').onclick = () => { c.deleted = true; c.ts = Date.now(); persist(); hidePop(); refresh(); };
+      }
+    };
+    draw(isNew);
+    place(pop, rect);
+  }
+
+  selbtn.addEventListener('mousedown', ev => ev.preventDefault());
+  selbtn.addEventListener('click', () => {
+    if (!pending) return;
+    const p = pending; hideBtn();
+    const sel = window.getSelection();
+    const rect = p.rect; sel.removeAllRanges();
+    openPop({ quote: p.quote, prefix: p.prefix, suffix: p.suffix, start: p.start }, { getBoundingClientRect: () => rect });
+  });
+
+  let selTimer = null;
+  document.addEventListener('selectionchange', () => {
+    clearTimeout(selTimer);
+    selTimer = setTimeout(() => { if (!mouseDown) checkSelection(); }, 250);
+  });
+  document.addEventListener('mousedown', ev => {
+    mouseDown = true;
+    if (!pop.contains(ev.target) && ev.target !== selbtn) { if (pop.style.display === 'block') hidePop(); }
+  });
+  document.addEventListener('mouseup', () => { mouseDown = false; setTimeout(checkSelection, 0); });
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { hidePop(); hideBtn(); } });
+  app.addEventListener('click', ev => {
+    const m = ev.target.closest && ev.target.closest('mark.cmt');
+    if (!m || !window.getSelection().isCollapsed) return;
+    const c = comments.find(x => x.id === m.dataset.id);
+    if (c) { hideBtn(); openPop(c, m); }
+  });
+
+  // ── Versions ────────────────────────────────────────────────────────────────
+  // Each commit that touched the article file is a version (v1 = first draft,
+  // highest = current). History comes from the GitHub API; older versions are
+  // read-only. Existing highlights re-anchor onto whatever text still matches.
+  const REPO = 'saeed-alzeera/verdict-cat';
+  const vcache = {};
+  let versions = [], vIdx = 0;
+
+  async function loadVersions(slug, currentMd) {
+    versions = []; vIdx = 0; viewingOld = false;
+    const bar = document.getElementById('vbar');
+    try {
+      const path = 'articles/' + slug + '.md';
+      const r = await fetch('https://api.github.com/repos/' + REPO + '/commits?per_page=100&path=' + encodeURIComponent(path));
+      if (!r.ok) throw new Error(r.status);
+      const commits = await r.json();
+      if (curSlug !== slug || !bar || !commits.length) return;
+      versions = commits.map((c, i) => ({
+        sha: c.sha, path,
+        date: c.commit.committer.date,
+        msg: c.commit.message.split('\n')[0].replace(/\s*\(#\d+\)\s*$/, ''),
+        n: commits.length - i
+      }));
+      vcache[versions[0].sha] = currentMd;
+      bar.style.display = 'flex';
+      drawBar();
+    } catch (e) { /* history unavailable (offline / rate limited): hide the tool */ }
+  }
+
+  function drawBar() {
+    const bar = document.getElementById('vbar'); if (!bar) return;
+    const v = versions[vIdx], N = versions.length;
+    bar.innerHTML = '<button class="prev" type="button" title="Older version">&#8592;</button>' +
+      '<select></select><button class="next" type="button" title="Newer version">&#8594;</button>' +
+      '<span class="vmsg"></span>';
+    const sel = bar.querySelector('select');
+    versions.forEach((x, i) => {
+      const o = document.createElement('option');
+      o.value = i;
+      o.textContent = 'v' + x.n + (i === 0 ? ' (current)' : '') + ' · ' + new Date(x.date).toLocaleDateString([], { dateStyle: 'medium' });
+      sel.appendChild(o);
+    });
+    sel.value = vIdx;
+    sel.onchange = () => showVersion(+sel.value);
+    const prev = bar.querySelector('.prev'), next = bar.querySelector('.next');
+    prev.disabled = vIdx >= N - 1; next.disabled = vIdx <= 0;
+    prev.onclick = () => showVersion(vIdx + 1);
+    next.onclick = () => showVersion(vIdx - 1);
+    const msg = bar.querySelector('.vmsg');
+    msg.textContent = v.msg + (vIdx ? ' — read-only older version' : '');
+    msg.className = 'vmsg' + (vIdx ? ' old' : '');
+  }
+
+  async function showVersion(i) {
+    const v = versions[i], slug = curSlug;
+    if (!v) return;
+    let md = vcache[v.sha];
+    if (md == null) {
+      try { md = await fetchText('https://raw.githubusercontent.com/' + REPO + '/' + v.sha + '/' + v.path); vcache[v.sha] = md; }
+      catch (e) { const m = document.querySelector('#vbar .vmsg'); if (m) m.textContent = 'Could not load that version.'; return; }
+    }
+    if (curSlug !== slug) return;
+    vIdx = i; viewingOld = i > 0; hidePop(); hideBtn();
+    articleEl().innerHTML = render(md);
+    refresh(); drawBar();
+  }
+
   function route() {
+    hidePop(); hideBtn();
     const slug = decodeURIComponent(location.hash.replace(/^#/, ''));
     document.title = 'Reso · Articles';
     slug ? showArticle(slug) : showList();
