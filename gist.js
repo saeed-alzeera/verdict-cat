@@ -56,7 +56,9 @@
       throw new Error(w.Gist.lastError);
     }
     if (!resp.ok) {
-      w.Gist.lastError = 'Sync server error (' + resp.status + ').';
+      var detail = '';
+      try { detail = (await resp.json()).error || ''; } catch(e) {}
+      w.Gist.lastError = 'Sync server error (' + resp.status + ')' + (detail ? ': ' + detail : '') + '.';
       throw new Error(w.Gist.lastError);
     }
     w.Gist.lastError = null;

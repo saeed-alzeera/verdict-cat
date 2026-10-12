@@ -18,11 +18,14 @@
  *   DELETE /books/:slug            removes files; for a slug with no upload
  *                                  (a book baked into library.html) records a
  *                                  "hidden" marker instead
- *   GET    /files/*                R2 object (epubs, covers)
+ *   GET    /files/*                epub / cover bytes
  */
 import { DurableObject } from 'cloudflare:workers';
 
-const MAX_EPUB_BYTES = 40 * 1024 * 1024;  // body is buffered; Workers have 128MB of memory
+// Files are stored as 1 MiB chunks in the Durable Object's SQLite (a row is
+// limited to 2 MB), and move to/from the DO in one RPC message (32 MiB limit).
+const CHUNK_BYTES = 1024 * 1024;
+const MAX_EPUB_BYTES = 25 * 1024 * 1024;
 const MAX_COVER_BYTES = 8 * 1024 * 1024;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,150}$/;
 const NS_RE = /^[a-z0-9][a-z0-9_-]{0,40}$/;
@@ -67,6 +70,13 @@ export class SyncStore extends DurableObject {
         ns TEXT NOT NULL, key TEXT NOT NULL, value TEXT, ts INTEGER NOT NULL,
         PRIMARY KEY (ns, key)
       );
+      CREATE TABLE IF NOT EXISTS blob_meta (
+        key TEXT PRIMARY KEY, type TEXT NOT NULL, size INTEGER NOT NULL, etag TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS blob_chunks (
+        key TEXT NOT NULL, idx INTEGER NOT NULL, data BLOB NOT NULL,
+        PRIMARY KEY (key, idx)
+      );
       CREATE TABLE IF NOT EXISTS books (
         slug TEXT PRIMARY KEY, title TEXT, author TEXT,
         epub_key TEXT, cover_key TEXT, hidden INTEGER NOT NULL DEFAULT 0,
@@ -97,6 +107,47 @@ export class SyncStore extends DurableObject {
     return this.getNs(ns);
   }
 
+  // ── File storage (epubs, covers) ───────────────────────────────────────
+  putBlob(key, type, bytes) {
+    const buf = bytes instanceof ArrayBuffer ? bytes : new Uint8Array(bytes).buffer;
+    const etag = '"' + Date.now().toString(36) + '-' + buf.byteLength.toString(36) + '"';
+    this.ctx.storage.transactionSync(() => {
+      this.sql.exec('DELETE FROM blob_chunks WHERE key = ?', key);
+      for (let off = 0, idx = 0; off < buf.byteLength || idx === 0; off += CHUNK_BYTES, idx++) {
+        this.sql.exec('INSERT INTO blob_chunks (key, idx, data) VALUES (?, ?, ?)', key, idx, buf.slice(off, off + CHUNK_BYTES));
+      }
+      this.sql.exec(
+        `INSERT INTO blob_meta (key, type, size, etag) VALUES (?, ?, ?, ?)
+         ON CONFLICT (key) DO UPDATE SET type = excluded.type, size = excluded.size, etag = excluded.etag`,
+        key, type, buf.byteLength, etag
+      );
+    });
+  }
+
+  // Returns { type, etag, size } and, unless metaOnly, the bytes as an ArrayBuffer.
+  getBlob(key, metaOnly) {
+    const meta = [...this.sql.exec('SELECT type, size, etag FROM blob_meta WHERE key = ?', key)][0];
+    if (!meta) return null;
+    if (metaOnly) return { type: meta.type, etag: meta.etag, size: meta.size };
+    const out = new Uint8Array(meta.size);
+    let off = 0;
+    for (const r of this.sql.exec('SELECT data FROM blob_chunks WHERE key = ? ORDER BY idx', key)) {
+      const chunk = new Uint8Array(r.data);
+      out.set(chunk, off);
+      off += chunk.byteLength;
+    }
+    return { type: meta.type, etag: meta.etag, size: meta.size, bytes: out.buffer };
+  }
+
+  deleteBlobs(keys) {
+    this.ctx.storage.transactionSync(() => {
+      for (const key of keys) {
+        this.sql.exec('DELETE FROM blob_chunks WHERE key = ?', key);
+        this.sql.exec('DELETE FROM blob_meta WHERE key = ?', key);
+      }
+    });
+  }
+
   listBooks() {
     return [...this.sql.exec(
       'SELECT slug, title, author, epub_key, cover_key, hidden, created_at FROM books ORDER BY created_at'
@@ -117,7 +168,7 @@ export class SyncStore extends DurableObject {
     );
   }
 
-  // Returns the removed row (so the caller can delete its R2 objects), or
+  // Returns the removed row (so the caller can delete its files), or
   // null if there was none — in which case a hidden marker is recorded.
   removeBook(slug) {
     const row = this.getBook(slug);
@@ -161,13 +212,20 @@ export default {
     // Public reads: catalogue and files.
     if (isRead && parts[0] === 'files' && parts.length > 1) {
       const key = parts.slice(1).join('/');
-      const obj = await env.BOOKS.get(key);
-      if (!obj) return fail(404, 'Not found');
+      const meta = await store.getBlob(key, true);
+      if (!meta) return fail(404, 'Not found');
       const headers = new Headers(CORS);
-      obj.writeHttpMetadata(headers);
-      headers.set('ETag', obj.httpEtag);
+      headers.set('Content-Type', meta.type);
+      headers.set('ETag', meta.etag);
       headers.set('Cache-Control', 'public, max-age=3600');
-      return new Response(request.method === 'HEAD' ? null : obj.body, { headers });
+      // Revalidating clients skip the (comparatively expensive) chunk read.
+      if (request.headers.get('If-None-Match') === meta.etag) return new Response(null, { status: 304, headers });
+      if (request.method === 'HEAD') {
+        headers.set('Content-Length', String(meta.size));
+        return new Response(null, { headers });
+      }
+      const file = await store.getBlob(key);
+      return new Response(file.bytes, { headers });
     }
     if (isRead && parts[0] === 'books' && parts.length === 1) {
       const rows = await store.listBooks();
@@ -213,14 +271,14 @@ export default {
 
         const existing = await store.getBook(slug);
         const epubKey = 'books/' + slug + '.epub';
-        await env.BOOKS.put(epubKey, await epub.arrayBuffer(), { httpMetadata: { contentType: 'application/epub+zip' } });
+        await store.putBlob(epubKey, 'application/epub+zip', await epub.arrayBuffer());
 
         let coverKey = existing && !existing.hidden ? existing.cover_key : null;
         if (cover && typeof cover !== 'string' && cover.size > 0) {
           const ext = extFor(cover);
           const newKey = 'covers/' + slug + '.' + ext;
-          await env.BOOKS.put(newKey, await cover.arrayBuffer(), { httpMetadata: { contentType: ext === 'png' ? 'image/png' : 'image/jpeg' } });
-          if (coverKey && coverKey !== newKey) await env.BOOKS.delete(coverKey);
+          await store.putBlob(newKey, ext === 'png' ? 'image/png' : 'image/jpeg', await cover.arrayBuffer());
+          if (coverKey && coverKey !== newKey) await store.deleteBlobs([coverKey]);
           coverKey = newKey;
         }
 
@@ -235,7 +293,7 @@ export default {
         const removed = await store.removeBook(slug);
         if (removed) {
           const keys = [removed.epub_key, removed.cover_key].filter(Boolean);
-          if (keys.length) await env.BOOKS.delete(keys);
+          if (keys.length) await store.deleteBlobs(keys);
         }
         return json({ ok: true, hidden: !removed });
       }
