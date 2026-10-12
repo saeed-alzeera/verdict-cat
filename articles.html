@@ -63,6 +63,36 @@
   #cmts .c:hover { border-color:var(--accent); }
   #cmts .c .q { font-size:12px; color:var(--muted); border-left:3px solid #e0b43c; padding-left:8px; margin-bottom:6px; }
   #cmts .c .t { font-size:14px; white-space:pre-wrap; word-break:break-word; }
+  main.reading { max-width:760px; }
+  #rail { display:none; }
+  .rc { position:absolute; left:0; right:0; background:var(--panel); border:1px solid var(--line); border-left:3px solid #e0b43c;
+    border-radius:8px; padding:10px 12px; font-size:13px; cursor:pointer; transition:top .15s, box-shadow .15s; }
+  .rc.active { border-color:var(--accent); border-left-color:var(--accent); box-shadow:0 4px 18px rgba(0,0,0,.5); z-index:2; }
+  .rc .rt { white-space:pre-wrap; word-break:break-word; line-height:1.5; font-size:13.5px; }
+  .rc .rm { font-size:11px; color:var(--muted); margin-top:6px; }
+  .rc .rq { font-size:11.5px; color:var(--muted); margin-bottom:6px; }
+  .rc textarea { width:100%; min-height:70px; resize:vertical; background:var(--bg); color:var(--ink); border:1px solid var(--line);
+    border-radius:8px; padding:7px; font:inherit; font-size:13.5px; }
+  .rc textarea:focus { outline:none; border-color:var(--accent); }
+  .rc .racts { display:none; gap:6px; justify-content:flex-end; margin-top:8px; }
+  .rc.active .racts, .rc.draft .racts { display:flex; }
+  .rc .racts button { background:var(--bg); color:var(--ink); border:1px solid var(--line); border-radius:7px; padding:4px 10px; font:inherit; font-size:12px; cursor:pointer; }
+  .rc .racts button.pri { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  .rc .racts button.del { color:#e5736b; margin-right:auto; }
+  mark.cmt.active { background:rgba(255,200,70,.55); }
+  @media (min-width:1000px) {
+    main.reading { max-width:1120px; }
+    #artwrap { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:28px; }
+    #rail { display:block; position:relative; }
+    main.reading #vbar, main.reading #cmts { max-width:calc(100% - 328px); }
+  }
+  #hcmts { margin-top:28px; }
+  #hcmts h3 { font-size:15px; margin:0 0 12px; }
+  #hcmts .c { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:10px; cursor:pointer; }
+  #hcmts .c .q { font-size:12px; color:var(--muted); border-left:3px solid #e0b43c; padding-left:8px; margin-bottom:6px; }
+  #hcmts .c .t { font-size:14px; white-space:pre-wrap; word-break:break-word; }
+  #hcmts .hint { font-size:12px; color:var(--muted); }
+  #cmts { margin:0 0 24px; padding:0 0 18px; border-top:0; border-bottom:1px solid var(--line); }
   #cmts h3.sec { margin-top:26px; }
   #cmts .gform textarea { width:100%; min-height:70px; resize:vertical; background:var(--panel); color:var(--ink); border:1px solid var(--line);
     border-radius:8px; padding:8px; font:inherit; font-size:14px; }
@@ -152,6 +182,7 @@
   async function showList() {
     back.textContent = '← Reso';
     back.onclick = null; back.href = 'reso.html';
+    app.classList.remove('reading');
     app.innerHTML = '<h1 class="page">Articles</h1><p class="sub">Reso Insights drafts</p><div id="list" class="empty">Loading…</div>';
     const list = document.getElementById('list');
     try {
@@ -184,7 +215,8 @@
     app.innerHTML = '<p class="empty">Loading…</p>';
     try {
       const md = await fetchText('articles/' + encodeURIComponent(slug) + '.md');
-      app.innerHTML = '<div id="vbar" style="display:none"></div><article>' + render(md) + '</article><section id="cmts"></section>';
+      app.innerHTML = '<div id="vbar" style="display:none"></div><section id="cmts"></section><div id="artwrap"><article>' + render(md) + '</article><aside id="rail"></aside></div><section id="hcmts"></section>';
+      app.classList.add('reading');
       document.title = titleOf(md) + ' · Reso';
       window.scrollTo(0, 0);
       openComments(slug);
@@ -224,10 +256,12 @@
   const live = () => comments.filter(c => !c.deleted && !c.general);
   const liveGeneral = () => comments.filter(c => !c.deleted && c.general);
   const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  let viewingOld = false;
+  let viewingOld = false, activeId = null, draft = null;
+  const wideMq = window.matchMedia('(min-width:1000px)');
+  const wide = () => wideMq.matches;
 
   function openComments(slug) {
-    curSlug = slug; comments = loadLocal(slug); hidePop(); hideBtn();
+    curSlug = slug; comments = loadLocal(slug); activeId = null; draft = null; hidePop(); hideBtn();
     refresh();
     if (syncOn()) {
       Gist.pullDoc(docName(slug)).then(remote => {
@@ -338,16 +372,17 @@
       };
       draw(); box.appendChild(d);
     });
-    // Highlight comments
+    // Highlight comments list below the article (narrow layout only; wide layout uses the margin rail)
+  }
+
+  function renderHighlightList() {
+    const box = document.getElementById('hcmts'); if (!box) return;
+    box.innerHTML = '';
     const list = live();
+    if (wide() || !list.length) return;
     const h = document.createElement('h3');
-    h.className = 'sec';
-    h.textContent = 'Highlight comments' + (list.length ? ' (' + list.length + ')' : '');
+    h.textContent = 'Highlight comments (' + list.length + ')';
     box.appendChild(h);
-    if (!list.length) {
-      const p = document.createElement('p'); p.className = 'hint';
-      p.textContent = 'Select any text above to comment on it.'; box.appendChild(p);
-    }
     list.forEach(c => {
       const d = document.createElement('div');
       d.className = 'c';
@@ -362,7 +397,81 @@
       box.appendChild(d);
     });
   }
-  function refresh() { applyHighlights(); renderList(); }
+  function refresh() { applyHighlights(); renderList(); renderHighlightList(); renderRail(); }
+
+  // ── Margin rail (wide layout): comment cards beside their highlights ───────
+  function markFor(id) { const r = articleEl(); return r && r.querySelector('mark.cmt[data-id="' + id + '"]'); }
+  const docTop = el => el.getBoundingClientRect().top + window.scrollY;
+
+  function setActive(id) {
+    activeId = id;
+    document.querySelectorAll('mark.cmt.active').forEach(m => m.classList.remove('active'));
+    if (id) document.querySelectorAll('mark.cmt[data-id="' + id + '"]').forEach(m => m.classList.add('active'));
+    renderRail();
+  }
+
+  function layoutRail() {
+    const rail = document.getElementById('rail'); if (!rail || !wide()) return;
+    const base = docTop(rail);
+    const cards = [...rail.children].map(el => ({ el, y: el._y() - base })).sort((a, b) => a.y - b.y);
+    let bottom = 0;
+    cards.forEach(c => { const t = Math.max(c.y, bottom); c.el.style.top = t + 'px'; bottom = t + c.el.offsetHeight + 8; });
+    rail.style.minHeight = bottom + 'px';
+  }
+
+  let editingId = null;
+  function renderRail() {
+    const rail = document.getElementById('rail'); if (!rail) return;
+    rail.innerHTML = '';
+    if (!wide()) return;
+    live().forEach(c => {
+      const m = markFor(c.id);
+      const el = document.createElement('div');
+      el.className = 'rc' + (c.id === activeId ? ' active' : '');
+      el.dataset.id = c.id;
+      el._y = () => { const mk = markFor(c.id); return mk ? docTop(mk) : docTop(rail) + 1e5; };
+      if (editingId === c.id) {
+        el.innerHTML = '<textarea></textarea><div class="racts" style="display:flex"><button class="cancel" type="button">Cancel</button><button class="pri save" type="button">Save</button></div>';
+        const ta = el.querySelector('textarea'); ta.value = c.text;
+        el.querySelector('.cancel').onclick = ev => { ev.stopPropagation(); editingId = null; renderRail(); };
+        const save = () => { const t = ta.value.trim(); if (!t) return; c.text = t; c.ts = Date.now(); editingId = null; persist(); renderRail(); };
+        el.querySelector('.save').onclick = ev => { ev.stopPropagation(); save(); };
+        ta.onkeydown = ev => { if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') save(); };
+        rail.appendChild(el); ta.focus();
+      } else {
+        el.innerHTML = (m ? '' : '<div class="rq">Original text no longer found in this version</div>') +
+          '<div class="rt"></div><div class="racts"><button class="del" type="button">Delete</button><button class="edit" type="button">Edit</button></div>';
+        el.querySelector('.rt').textContent = c.text;
+        el.querySelector('.del').onclick = ev => { ev.stopPropagation(); c.deleted = true; c.ts = Date.now(); activeId = null; persist(); refresh(); };
+        el.querySelector('.edit').onclick = ev => { ev.stopPropagation(); editingId = c.id; renderRail(); };
+        el.onclick = () => { if (activeId !== c.id) { setActive(c.id); if (m) m.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } };
+        rail.appendChild(el);
+      }
+    });
+    if (draft) {
+      const el = document.createElement('div');
+      el.className = 'rc draft active';
+      el._y = () => draft.docY;
+      el.innerHTML = '<div class="rq"></div><textarea placeholder="Add a comment…"></textarea><div class="racts"><button class="cancel" type="button">Cancel</button><button class="pri save" type="button">Comment</button></div>';
+      el.querySelector('.rq').textContent = draft.quote.length > 90 ? draft.quote.slice(0, 90) + '…' : draft.quote;
+      const ta = el.querySelector('textarea');
+      ta.value = draft.text || '';
+      ta.oninput = () => { draft.text = ta.value; };
+      const save = () => {
+        const text = ta.value.trim(); if (!text) return;
+        const id = newId();
+        comments.push({ id, quote: draft.quote, prefix: draft.prefix, suffix: draft.suffix, start: draft.start, text, ts: Date.now() });
+        draft = null; activeId = id; persist(); refresh(); setActive(id);
+      };
+      el.querySelector('.save').onclick = ev => { ev.stopPropagation(); save(); };
+      el.querySelector('.cancel').onclick = ev => { ev.stopPropagation(); draft = null; renderRail(); };
+      ta.onkeydown = ev => { if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') save(); };
+      rail.appendChild(el); ta.focus();
+    }
+    layoutRail();
+  }
+  wideMq.addEventListener('change', () => { draft = null; refresh(); });
+  window.addEventListener('resize', () => { if (wide()) layoutRail(); });
 
   function place(el, rect) {
     el.style.display = 'block';
@@ -391,6 +500,12 @@
   }
 
   function openPop(c, anchorEl) {
+    if (wide()) {
+      if (c.id) { setActive(c.id); return; }
+      draft = { quote: c.quote, prefix: c.prefix, suffix: c.suffix, start: c.start, docY: anchorEl.getBoundingClientRect().top + window.scrollY };
+      activeId = null; editingId = null; renderRail();
+      return;
+    }
     const rect = anchorEl.getBoundingClientRect();
     const isNew = !c.id;
     const q = c.quote.length > 160 ? c.quote.slice(0, 160) + '…' : c.quote;
@@ -449,12 +564,16 @@
     if (!pop.contains(ev.target) && ev.target !== selbtn) { if (pop.style.display === 'block') hidePop(); }
   });
   document.addEventListener('mouseup', () => { mouseDown = false; setTimeout(checkSelection, 0); });
-  document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { hidePop(); hideBtn(); } });
+  document.addEventListener('keydown', ev => { if (ev.key === 'Escape') { hidePop(); hideBtn(); if (draft || editingId) { draft = null; editingId = null; renderRail(); } } });
   app.addEventListener('click', ev => {
     const m = ev.target.closest && ev.target.closest('mark.cmt');
     if (!m || !window.getSelection().isCollapsed) return;
     const c = comments.find(x => x.id === m.dataset.id);
     if (c) { hideBtn(); openPop(c, m); }
+  });
+  document.addEventListener('mousedown', ev => {
+    if (!wide() || ev.target.closest('#rail') || ev.target.closest('mark.cmt') || ev.target === selbtn) return;
+    if (activeId && !editingId) setActive(null);
   });
 
   // ── Versions ────────────────────────────────────────────────────────────────
@@ -523,6 +642,8 @@
     articleEl().innerHTML = render(md);
     refresh(); drawBar();
   }
+
+  window.addEventListener('load', () => { if (wide()) layoutRail(); });
 
   function route() {
     hidePop(); hideBtn();
