@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Reso · Articles</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
+<link rel="shortcut icon" href="favicon.ico" />
+<style>
+  :root { --bg:#0f1117; --panel:#1a1d23; --line:#2e3238; --ink:#e8eaed; --muted:#8b9099; --accent:#5b9bd5; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    font-size:15px; line-height:1.45; min-height:100vh; }
+  a { color:var(--accent); }
+  #back { display:inline-block; padding:16px 20px; color:var(--muted); text-decoration:none; font-size:13px; cursor:pointer; }
+  #back:hover { color:var(--accent); }
+  main { max-width:760px; margin:0 auto; padding:8px 20px 80px; }
+  h1.page { font-size:20px; font-weight:600; margin:0 0 6px; letter-spacing:-0.01em; }
+  .sub { font-size:13px; color:var(--muted); margin:0 0 28px; }
+  .item { display:block; width:100%; text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:18px 20px; margin-bottom:12px; cursor:pointer; color:var(--ink); font:inherit; transition:border-color .15s; }
+  .item:hover { border-color:var(--accent); }
+  .item .t { font-size:16px; font-weight:600; margin-bottom:4px; }
+  .item .m { font-size:12px; color:var(--muted); }
+  .item .s { font-size:13px; color:var(--muted); margin-top:6px; }
+  .empty, .err { color:var(--muted); font-size:13px; }
+  article h2 { font-size:26px; line-height:1.25; margin:8px 0 14px; letter-spacing:-0.01em; }
+  article h5 { font-size:17px; margin:30px 0 8px; }
+  article p { margin:0 0 14px; line-height:1.65; }
+  article p.meta { color:var(--muted); font-size:13px; margin:0 0 6px; }
+  .tablewrap { overflow-x:auto; margin:16px 0 20px; border:1px solid var(--line); border-radius:10px; }
+  table { border-collapse:collapse; width:100%; min-width:680px; font-size:13px; line-height:1.45; }
+  th, td { padding:10px 12px; border-bottom:1px solid var(--line); border-right:1px solid var(--line); text-align:left; vertical-align:top; }
+  th:last-child, td:last-child { border-right:none; }
+  tr:last-child td { border-bottom:none; }
+  thead th { background:var(--panel); }
+  tbody td:first-child { background:var(--panel); font-weight:600; white-space:nowrap; }
+  ol.refs { padding-left:22px; font-size:12.5px; color:var(--muted); }
+  ol.refs li { margin-bottom:6px; word-break:break-word; }
+</style>
+</head>
+<body>
+<a id="back" href="reso.html">&#8592; Reso</a>
+<main id="app"></main>
+<script>
+  if (localStorage.getItem('hub_auth') !== '1') location.replace('index.html');
+
+  const app = document.getElementById('app');
+  const back = document.getElementById('back');
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  function inline(s) {
+    s = esc(s);
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+    return s;
+  }
+
+  // Minimal renderer for the subset of markdown Reso articles use.
+  function render(md) {
+    const lines = md.replace(/\r/g, '').split('\n');
+    let out = '', i = 0;
+    while (i < lines.length) {
+      const l = lines[i];
+      if (!l.trim()) { i++; continue; }
+      const h = l.match(/^(#{1,6})\s+(.*)$/);
+      if (h) { const n = h[1].length; out += `<h${n}>${inline(h[2])}</h${n}>`; i++; continue; }
+      if (l.trim().startsWith('|')) {
+        const rows = [];
+        while (i < lines.length && lines[i].trim().startsWith('|')) {
+          rows.push(lines[i].trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim()));
+          i++;
+        }
+        const body = rows.filter((r, k) => k !== 1);
+        out += '<div class="tablewrap"><table><thead><tr>' +
+          body[0].map(c => `<th>${inline(c)}</th>`).join('') + '</tr></thead><tbody>' +
+          body.slice(1).map(r => '<tr>' + r.map(c => `<td>${inline(c)}</td>`).join('') + '</tr>').join('') +
+          '</tbody></table></div>';
+        continue;
+      }
+      if (/^\d+\.\s/.test(l)) {
+        out += '<ol class="refs">';
+        while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+          out += `<li>${inline(lines[i].replace(/^\d+\.\s/, ''))}</li>`; i++;
+        }
+        out += '</ol>'; continue;
+      }
+      out += `<p>${inline(l)}</p>`; i++;
+    }
+    return out;
+  }
+
+  function titleOf(md) {
+    const m = md.match(/^##\s+(.*)$/m);
+    return m ? m[1].trim() : 'Untitled';
+  }
+
+  function fetchText(url) {
+    return fetch(url, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
+  }
+
+  async function showList() {
+    back.textContent = '← Reso';
+    back.onclick = null; back.href = 'reso.html';
+    app.innerHTML = '<h1 class="page">Articles</h1><p class="sub">Reso Insights drafts</p><div id="list" class="empty">Loading…</div>';
+    const list = document.getElementById('list');
+    try {
+      const idx = JSON.parse(await fetchText('articles/index.json'));
+      const items = await Promise.all(idx.map(async a => {
+        const md = await fetchText('articles/' + a.file);
+        const date = (md.split('\n').find(x => /^\d{1,2} \w+ \d{4}$/.test(x.trim())) || '').trim();
+        return { ...a, title: titleOf(md), date };
+      }));
+      list.className = '';
+      list.innerHTML = '';
+      if (!items.length) { list.className = 'empty'; list.textContent = 'No articles yet.'; return; }
+      items.forEach(a => {
+        const b = document.createElement('button');
+        b.className = 'item';
+        b.innerHTML = `<div class="t">${esc(a.title)}</div><div class="m">${esc(a.date)}</div>` +
+          (a.summary ? `<div class="s">${esc(a.summary)}</div>` : '');
+        b.onclick = () => { location.hash = a.file.replace(/\.md$/, ''); };
+        list.appendChild(b);
+      });
+    } catch (e) {
+      list.className = 'err'; list.textContent = 'Could not load articles.';
+    }
+  }
+
+  async function showArticle(slug) {
+    back.textContent = '← Articles';
+    back.removeAttribute('href');
+    back.onclick = () => { location.hash = ''; };
+    app.innerHTML = '<p class="empty">Loading…</p>';
+    try {
+      const md = await fetchText('articles/' + encodeURIComponent(slug) + '.md');
+      app.innerHTML = '<article>' + render(md) + '</article>';
+      document.title = titleOf(md) + ' · Reso';
+      window.scrollTo(0, 0);
+    } catch (e) {
+      app.innerHTML = '<p class="err">Article not found.</p>';
+    }
+  }
+
+  function route() {
+    const slug = decodeURIComponent(location.hash.replace(/^#/, ''));
+    document.title = 'Reso · Articles';
+    slug ? showArticle(slug) : showList();
+  }
+  window.addEventListener('hashchange', route);
+  route();
+</script>
+</body>
+</html>
