@@ -1,0 +1,21 @@
+name = "verdict-cat-sync"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# Sync state (reading progress, regions, snippets) and the book catalogue
+# live in a SQLite-backed Durable Object: strongly consistent, and it needs
+# no database id to be filled in before the first deploy.
+[[durable_objects.bindings]]
+name = "STORE"
+class_name = "SyncStore"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SyncStore"]
+
+# Uploaded epubs and covers. Created by the deploy workflow if missing.
+[[r2_buckets]]
+binding = "BOOKS"
+bucket_name = "verdict-cat-books"
+
+# Required secret (not stored here):  wrangler secret put SYNC_KEY

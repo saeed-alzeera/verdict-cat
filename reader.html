@@ -11,7 +11,7 @@
 <link rel="shortcut icon" href="favicon.ico" />
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
-<script src="gist.js"></script>
+<script src="gist.js?v=2"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -615,6 +615,16 @@
   var slug = params.get('book');
   var bookMeta = slug && BOOKS[slug];
 
+  // Books uploaded through the sync worker aren't listed in BOOKS above; look
+  // them up in the worker's catalogue instead.
+  function resolveBook() {
+    if (!slug) return Promise.resolve(null);
+    return Gist.books.list().then(function(list) {
+      var hit = list.filter(function(b) { return b.slug === slug && !b.hidden; })[0];
+      return hit ? { url: hit.epub, title: hit.title, author: hit.author, openAs: 'epub' } : null;
+    }).catch(function() { return null; });
+  }
+
   function storageKey() { return 'epub-progress:' + slug; }
 
   var lastGistChapter = null;
@@ -659,13 +669,14 @@
     document.getElementById('error-detail').textContent = msg || 'Could not load the book.';
   }
 
+  function startReader() {
   if (!bookMeta) {
     showError('Unknown book. Please select a book from the library.');
   } else {
     document.getElementById('book-title').textContent = bookMeta.title;
     document.title = 'SMEs in KSA report';
 
-    var book = ePub(bookMeta.url);
+    var book = bookMeta.openAs ? ePub(bookMeta.url, { openAs: bookMeta.openAs }) : ePub(bookMeta.url);
     var rendition = book.renderTo('viewer', { width: '100%', height: '100%', spread: isMobile ? 'none' : 'always' });
     var fontSize = isMobile ? 140 : 160;
     var chapterWordCounts = {};
@@ -934,7 +945,7 @@
     });
 
     function runSync(btn) {
-      if (!Gist.isConnected()) { alert('Connect GitHub sync from the Library page first.'); return; }
+      if (!Gist.isConnected()) { alert('Connect sync from the Library page first.'); return; }
       btn.disabled = true;
       btn.textContent = 'Syncing…';
       Gist.sync().then(function(changedKeys) {
@@ -983,9 +994,20 @@
     });
   }
 
+  }
+
   document.getElementById('toc-toggle').addEventListener('click', function() {
     document.getElementById('toc-panel').classList.toggle('open');
   });
+
+  if (bookMeta) {
+    startReader();  // baked-in book: no catalogue round trip needed
+  } else {
+    resolveBook().then(function(meta) {
+      bookMeta = meta;
+      startReader();
+    });
+  }
 </script>
 </body>
 </html>

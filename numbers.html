@@ -282,13 +282,9 @@
 <div id="region-sync-modal" class="modal-overlay">
   <div class="modal-box">
     <h2>Sync regions</h2>
-    <p class="modal-sub">Regions are saved to a private GitHub Gist, so they persist across devices. If you've already connected sync elsewhere in this app (e.g. Library), regions will sync automatically using that same connection — no need to reconnect here.</p>
-    <ol style="font-size:12px;color:var(--muted);padding-left:18px;margin:0 0 12px;line-height:1.6;">
-      <li>Open <a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=verdict-cat" target="_blank" rel="noopener noreferrer">github.com/settings/tokens</a></li>
-      <li>Generate a token with the <strong>gist</strong> scope</li>
-      <li>Paste it below</li>
-    </ol>
-    <input type="password" id="region-sync-pat" placeholder="ghp_…" autocomplete="off" />
+    <p class="modal-sub">Regions are saved to your sync server, so they persist across devices. If you've already connected sync elsewhere in this app (e.g. Library), regions will sync automatically using that same connection — no need to reconnect here.</p>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.6;">Paste your sync key below. (An old GitHub token with the <strong>gist</strong> scope still works as a fallback.)</p>
+    <input type="password" id="region-sync-pat" placeholder="Sync key" autocomplete="off" />
     <div id="region-sync-error" class="modal-error"></div>
     <div class="modal-actions">
       <button id="region-sync-cancel" class="mini-btn">Cancel</button>
@@ -298,7 +294,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="gist.js"></script>
+<script src="gist.js?v=2"></script>
 <script>
 "use strict";
 
@@ -1022,7 +1018,7 @@ function initRegions() {
   document.getElementById("region-sync-connect-confirm").addEventListener("click", async () => {
     const pat = document.getElementById("region-sync-pat").value.trim();
     const errEl = document.getElementById("region-sync-error");
-    if (!pat) { errEl.textContent = "Token required."; return; }
+    if (!pat) { errEl.textContent = "Sync key required."; return; }
     errEl.textContent = "Connecting…";
     try {
       const gistId = await Gist.connect(pat);
