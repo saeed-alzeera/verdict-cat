@@ -78,4 +78,44 @@ Integration is likely to become the competitive advantage. The operators best pl
 
 ##### Sources:
 
-AI2 Work; Arab News; Argaam; Capgemini Research Institute; CBNME; DroneXL; eMarketer; Fulfill.com; Gulf Business; Gulf News; InPost; NextBillion.ai; Post & Parcel; Riyadh Daily; Saudi Food Show; Saudi Post; Saudi Press Agency; Serve Robotics; Sharikat Mubasher; SmartRoutes; Wing
+AI2 Work. https://ai2.work/blog/faa-part-108-bvlos-rule-enters-final-review-at-the-white-house
+
+Arab News. https://www.arabnews.com/node/2611845
+
+Argaam. https://www.argaam.com/en/article/articledetail/id/1841129
+
+Capgemini Research Institute. https://www.capgemini.com/insights/research-library/the-last-mile-delivery-challenge/
+
+CBNME. https://cbnme.com/?p=44839
+
+DroneXL. https://dronexl.co/delivery-by-drone/
+
+eMarketer. https://www.emarketer.com/content/ecommerce-account-more-than-20--of-worldwide-retail-sales-despite-slowdown
+
+Fulfill.com. https://www.fulfill.com/news/fareye-amazon-key-integration-cuts-failed-delivery-costs
+
+Gulf Business. https://gulfbusiness.com/en/2026/mobility/keeta-drone-is-back-in-dubai-and-your-food-could-soon-be-taking-flight/
+
+Gulf News. https://gulfnews.com/business/markets/aramex-bahrain-post-launch-smart-electronic-boxes-for-parcel-deliveries-1.500308545
+
+InPost. https://inpost.eu/what-we-do/our-operations
+
+NextBillion.ai. https://nextbillion.ai/feeds/blog/ups-orion-ai-route-optimization-savings
+
+Post & Parcel. https://postandparcel.info/60292/news/aramex-streamlines-middle-east-deliveries-with-launch-of-my-address/
+
+Riyadh Daily. https://alriyadhdaily.com/article/8006210b92ee40cc8d5586f9bf2263d6
+
+Saudi Food Show. https://www.thesaudifoodshow.com/articles/saudi-arabia-launches-first-autonomous-food-delivery-service-riyadh
+
+Saudi Post. https://splonline.com.sa/en/national-address-1/
+
+Saudi Press Agency. https://www.spa.gov.sa/en/N2300857
+
+Serve Robotics. https://www.sec.gov/Archives/edgar/data/1832483/000183248326000004/serv-20251231xex991earning.htm
+
+Sharikat Mubasher. https://sharikatmubasher.com/news/article/21528275/saudi-delivery-sector-tops-124-mn-orders-in-q4-2025?lang=en
+
+SmartRoutes. https://smartroutes.io/blogs/last-mile-delivery-statistics
+
+Wing. https://wing.com/news/wing-walmart-expand-drone-delivery-coast-to-coast
