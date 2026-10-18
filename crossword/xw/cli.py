@@ -100,23 +100,12 @@ def c_clear(a):
 
 
 def c_theme(a):
-    """Place a theme entry anywhere: caps both ends in black, mirrors the caps."""
+    """Place a theme entry anywhere: caps both ends in black (mirrored), strands blacked too."""
     p = load(a)
-    r, c = parse_cell(a.at)
+    r, cc = parse_cell(a.at)
     w = W.norm(a.word)
-    dr, dc = (0, 1) if a.dir.upper().startswith('A') else (1, 0)
-    cells = [(r + dr * i, c + dc * i) for i in range(len(w))]
-    if not all(p.inb(*x) for x in cells):
-        raise SystemExit('does not fit')
-    for (rr, cc), ch in zip(cells, w):
-        if p.g[rr][cc] not in ('.', ch):
-            raise SystemExit(f'conflict at ({rr},{cc}): {p.g[rr][cc]}')
-    for (rr, cc), ch in zip(cells, w):
-        p.g[rr][cc] = ch
-    for end in ((r - dr, c - dc), (cells[-1][0] + dr, cells[-1][1] + dc)):
-        if p.inb(*end):
-            p.set_black(*end)
-    p.data.setdefault('theme', []).append({'word': w, 'at': [r, c], 'dir': a.dir.upper()[0],
+    p.place_theme(w, r, cc, a.dir.upper()[0])
+    p.data.setdefault('theme', []).append({'word': w, 'at': [r, cc], 'dir': a.dir.upper()[0],
                                            'note': a.note or ''})
     p.save(); show(p)
 
@@ -138,9 +127,13 @@ def c_words(a):
         print(f'{w:<22}{lex.score(w)}')
 
 
+def parse_want(s):
+    return {int(k): int(v) for k, v in (x.split(':') for x in s.split(','))} if s else {}
+
+
 def c_layout(a):
     p = load(a)
-    res = generate(p, tries=a.tries, seed=a.seed, blacks=(a.min_blacks, a.max_blacks), min_entries=a.min_entries)
+    res = generate(p, tries=a.tries, seed=a.seed, blacks=(a.min_blacks, a.max_blacks), min_entries=a.min_entries, want=parse_want(a.want))
     if not res:
         raise SystemExit('no valid layout found; loosen --min-blacks or add tries')
     for i, (sc, q) in enumerate(res[:a.show], 1):
@@ -175,7 +168,6 @@ def c_fill(a):
     errs, _, _ = p.check()
     if any(not e.startswith('duplicate') for e in errs):
         print('fix grid errors first:'); [print('  ', e) for e in errs]; return 1
-    extra = {w: 90 for w in (p.data.get('words') or [])}
     la = lex_args(a)
     la['extra'] = {W.norm(w): 90 for w in (p.data.get('words') or [])}
     t = time.time()
@@ -183,7 +175,13 @@ def c_fill(a):
     def prog(att, best, total, el):
         print(f'  attempt {att:>3}: best {best}/{total} entries  ({el:.0f}s)', flush=True)
 
-    res = autofill(p, la, timeout=a.timeout, seed=a.seed, branch=a.branch, on_progress=prog)
+    if a.must:
+        p.data['must'] = a.must
+    groups = [tuple(W.norm(x) for x in m.split('/')) for m in (p.data.get('must') or [])]
+    la['extra'].update({w: 90 for g in groups for w in g})
+    res = autofill(p, la, timeout=a.timeout, seed=a.seed, branch=a.branch, required=groups, on_progress=prog)
+    if res.unplaced:
+        print('missing must-includes in best attempt:', ', '.join('/'.join(g) for g in res.unplaced))
     print(f'{"FILLED" if res.ok else "no complete fill"} in {res.seconds:.1f}s, {res.nodes:,} nodes, {res.restarts} attempt(s)')
     if res.ok or a.partial:
         p.g = res.grid
@@ -308,10 +306,11 @@ def main(argv=None):
     s = cmd('layout', c_layout, 'propose black-square layouts around any placed letters')
     s.add_argument('--tries', type=int, default=120); s.add_argument('--seed', type=int, default=1)
     s.add_argument('--show', type=int, default=3); s.add_argument('--write', type=int, default=0)
-    s.add_argument('--min-blacks', type=int, default=34); s.add_argument('--max-blacks', type=int, default=42); s.add_argument('--min-entries', type=int, default=68)
+    s.add_argument('--min-blacks', type=int, default=34); s.add_argument('--max-blacks', type=int, default=42); s.add_argument('--min-entries', type=int, default=68); s.add_argument('--want', help='slot lengths you must place, e.g. 5:8,7:5 (min count per length)')
     s = cmd('fill', c_fill, 'autofill all empty squares'); lexopts(s)
     s.add_argument('--timeout', type=int, default=60); s.add_argument('--seed', type=int, default=1)
     s.add_argument('--branch', type=int, default=30); s.add_argument('--partial', action='store_true')
+    s.add_argument('--must', nargs='+', help='words that must appear; A/B means exactly one of A or B (saved in the puzzle)')
     s = cmd('clue', c_clue, 'set a clue'); s.add_argument('slot'); s.add_argument('text')
     s = cmd('must', c_must, 'place must-include words where a full fill still exists'); s.add_argument('words', nargs='+'); lexopts(s)
     s.add_argument('--tries', type=int, default=12); s.add_argument('--timeout', type=int, default=6); s.add_argument('--seed', type=int, default=1)

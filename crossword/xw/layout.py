@@ -81,7 +81,7 @@ def _try_layout(p, rng, target_blacks, max_entries, sample=24):
     return Puzzle({'size': n, 'grid': [''.join(row) for row in g]})
 
 
-def score(q, want_entries=76):
+def score(q, want_entries=76, want=None):
     errs, warns, st = q.check()
     if errs:
         return None
@@ -94,12 +94,14 @@ def score(q, want_entries=76):
     s -= 3.0 * max(0, long_ - 4)                    # a few long slots are great, many are brutal
     s -= 0.7 * abs(long_ - 3) if long_ < 2 else 0
     s -= 4.0 * len([w for w in warns if '2x2' in w])
+    for L, need in (want or {}).items():
+        s -= 6.0 * max(0, need - bl.get(L, 0))   # must-include words need slots of their length
     s += 0.9 * sum(v for k, v in bl.items() if 6 <= k <= 10)   # variety: 6-10s feel like real fill
     s -= 0.6 * max(0, bl.get(4, 0) - 26)
     return s
 
 
-def generate(p, tries=300, seed=1, blacks=(34, 42), min_entries=68, max_entries=78):
+def generate(p, tries=300, seed=1, blacks=(34, 42), min_entries=68, max_entries=78, want=None):
     rng = random.Random(seed)
     seen, out = set(), []
     for _ in range(tries):
@@ -109,7 +111,7 @@ def generate(p, tries=300, seed=1, blacks=(34, 42), min_entries=68, max_entries=
         if key in seen:
             continue
         seen.add(key)
-        sc = score(q)
+        sc = score(q, want=want)
         if sc is not None and len(q.blacks()) >= blacks[0] and len(q.slots()) >= min_entries:
             out.append((sc, q))
     out.sort(key=lambda t: -t[0])

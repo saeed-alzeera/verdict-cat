@@ -126,6 +126,29 @@ class Puzzle:
         for pr, pc in pts:
             self.g[pr][pc] = '#' if on else '.'
 
+    def place_theme(self, word, r, c, d):
+        """Write a word at r,c (d = 'A'/'D'), black its mirrored end caps, and black any
+        1-2 square gap the caps would strand (a run under 3 is illegal)."""
+        dr, dc = (0, 1) if d == 'A' else (1, 0)
+        cells = [(r + dr * i, c + dc * i) for i in range(len(word))]
+        if not all(self.inb(*x) for x in cells):
+            raise ValueError('does not fit')
+        for (rr, cc), ch in zip(cells, word):
+            if self.g[rr][cc] not in ('.', ch):
+                raise ValueError(f'conflict at ({rr},{cc}): {self.g[rr][cc]}')
+        for (rr, cc), ch in zip(cells, word):
+            self.g[rr][cc] = ch
+        for sgn, cap in ((-1, (r - dr, c - dc)), (1, (cells[-1][0] + dr, cells[-1][1] + dc))):
+            if not self.inb(*cap):
+                continue
+            self.set_black(*cap)
+            run, x, y = [], cap[0] + sgn * dr, cap[1] + sgn * dc
+            while self.inb(x, y) and self.g[x][y] == '.':
+                run.append((x, y)); x += sgn * dr; y += sgn * dc
+            if 0 < len(run) < 3:
+                for cell in run:
+                    self.set_black(*cell)
+
     def put(self, s, word):
         word = word.upper()
         if len(word) != len(s):

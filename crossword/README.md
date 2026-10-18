@@ -28,6 +28,8 @@ xw layout mypuzzle --show 3                  # propose black squares around them
 xw layout mypuzzle --write 2                 # take #2 (then nudge with: xw black / xw white)
 xw check mypuzzle                            # symmetry, connectivity, min length, counts, dupes
 xw fill mypuzzle --min-score 40 --partial    # autofill; keeps every letter already placed
+xw fill mypuzzle --must JWANA ALJAR/HAMOOD   # words that must appear (A/B = exactly one); saved in the puzzle
+xw layout mypuzzle --want 5:8,7:4            # favor layouts with enough slots of the lengths you need
 xw quality mypuzzle                          # weakest entries -> swap with xw cands 17A / xw put
 xw clue mypuzzle 17A "..." ; xw list mypuzzle
 ```
