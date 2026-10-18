@@ -133,7 +133,7 @@ def parse_want(s):
 
 def c_layout(a):
     p = load(a)
-    res = generate(p, tries=a.tries, seed=a.seed, blacks=(a.min_blacks, a.max_blacks), min_entries=a.min_entries, want=parse_want(a.want))
+    res = generate(p, tries=a.tries, seed=a.seed, blacks=(a.min_blacks, a.max_blacks), min_entries=a.min_entries, want=parse_want(a.want), asym=a.asym)
     if not res:
         raise SystemExit('no valid layout found; loosen --min-blacks or add tries')
     for i, (sc, q) in enumerate(res[:a.show], 1):
@@ -306,7 +306,7 @@ def main(argv=None):
     s = cmd('layout', c_layout, 'propose black-square layouts around any placed letters')
     s.add_argument('--tries', type=int, default=120); s.add_argument('--seed', type=int, default=1)
     s.add_argument('--show', type=int, default=3); s.add_argument('--write', type=int, default=0)
-    s.add_argument('--min-blacks', type=int, default=34); s.add_argument('--max-blacks', type=int, default=42); s.add_argument('--min-entries', type=int, default=68); s.add_argument('--want', help='slot lengths you must place, e.g. 5:8,7:5 (min count per length)')
+    s.add_argument('--min-blacks', type=int, default=34); s.add_argument('--max-blacks', type=int, default=42); s.add_argument('--min-entries', type=int, default=68); s.add_argument('--asym', type=int, default=0, help='allow up to N unmirrored black squares (also set puzzle allow_asym)'); s.add_argument('--want', help='slot lengths you must place, e.g. 5:8,7:5 (min count per length)')
     s = cmd('fill', c_fill, 'autofill all empty squares'); lexopts(s)
     s.add_argument('--timeout', type=int, default=60); s.add_argument('--seed', type=int, default=1)
     s.add_argument('--branch', type=int, default=30); s.add_argument('--partial', action='store_true')

@@ -45,9 +45,15 @@ def _entries(g, n, threes=False):
     return (cnt, t) if threes else cnt
 
 
-def _try_layout(p, rng, target_blacks, max_entries, sample=24):
-    """Greedy: repeatedly black the symmetric pair (best of a random sample)
-    that adds the most entries without breaking a rule."""
+def _asym(g, n):
+    return sum(1 for r in range(n) for c in range(n)
+               if (r, c) < (n - 1 - r, n - 1 - c) and (g[r][c] == '#') != (g[n - 1 - r][n - 1 - c] == '#'))
+
+
+def _try_layout(p, rng, target_blacks, max_entries, sample=24, asym=0):
+    """Greedy: repeatedly black the symmetric pair (best of a random sample) that adds the
+    most entries without breaking a rule. With asym > 0, single unmirrored squares are
+    also candidates while the unmatched-pair count stays within the allowance."""
     n = p.size
     g = [row[:] for row in p.g]
     nb = sum(ch == '#' for row in g for ch in row)
@@ -60,25 +66,36 @@ def _try_layout(p, rng, target_blacks, max_entries, sample=24):
             if g[r][c] != '.':
                 continue
             mr, mc = n - 1 - r, n - 1 - c
-            if g[mr][mc] != '.':
-                continue
-            g[r][c] = g[mr][mc] = '#'
-            ok = (_runs_ok(g, n, r, c) and _runs_ok(g, n, mr, mc) and _connected(g, n))
-            e, t3 = _entries(g, n, True) if ok else (-1, 0)
-            g[r][c] = g[mr][mc] = '.'
-            if ok and e <= max_entries:
-                tried += 1
-                v = e - 1.6 * t3 + rng.random() * 7
-                if v > best_e:
-                    best, best_e = (r, c, mr, mc), v
-                if tried >= sample:
-                    break
+            singles = [(r, c)]
+            if asym:
+                singles = [(r, c), (mr, mc)] if rng.random() < 0.35 else []
+            options = []
+            if g[mr][mc] == '.':
+                options.append(((r, c), (mr, mc)))
+            if asym and g[mr][mc] == '.' and (r, c) != (mr, mc):
+                options.extend([((x, y),) for x, y in singles if g[x][y] == '.'])
+            for cellset in options:
+                for x, y in cellset:
+                    g[x][y] = '#'
+                ok = all(_runs_ok(g, n, x, y) for x, y in cellset) and _connected(g, n) and _asym(g, n) <= asym
+                e, t3 = _entries(g, n, True) if ok else (-1, 0)
+                for x, y in cellset:
+                    g[x][y] = '.'
+                if ok and e <= max_entries:
+                    tried += 1
+                    v = e - 1.6 * t3 + rng.random() * 7
+                    if v > best_e:
+                        best, best_e = cellset, v
+                    if tried >= sample:
+                        break
+            if tried >= sample:
+                break
         if best is None:
             break
-        r, c, mr, mc = best
-        g[r][c] = g[mr][mc] = '#'
-        nb += 1 if (r, c) == (mr, mc) else 2
-    return Puzzle({'size': n, 'grid': [''.join(row) for row in g]})
+        for x, y in best:
+            g[x][y] = '#'
+        nb += len(best)
+    return Puzzle({'size': n, 'grid': [''.join(row) for row in g], **{k: v for k, v in p.data.items() if k == 'allow_asym'}})
 
 
 def score(q, want_entries=76, want=None):
@@ -101,12 +118,12 @@ def score(q, want_entries=76, want=None):
     return s
 
 
-def generate(p, tries=300, seed=1, blacks=(34, 42), min_entries=68, max_entries=78, want=None):
+def generate(p, tries=300, seed=1, blacks=(34, 42), min_entries=68, max_entries=78, want=None, asym=0):
     rng = random.Random(seed)
     seen, out = set(), []
     for _ in range(tries):
         target = rng.randint(*blacks)
-        q = _try_layout(p, rng, target, max_entries)
+        q = _try_layout(p, rng, target, max_entries, asym=asym)
         key = ''.join(''.join(r) for r in q.g)
         if key in seen:
             continue
