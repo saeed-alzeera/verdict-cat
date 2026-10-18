@@ -1,0 +1,64 @@
+{
+ "title": "Birthday",
+ "author": "Claude",
+ "date": "2026-10-18",
+ "size": 15,
+ "grid": [
+  "....#S...#H...#",
+  "CODENAMES#I...#",
+  "....AE...#JWANA",
+  "#...ME.#..I....",
+  "...#AD....N#...",
+  "...AT#MALAK#...",
+  "BIRTHDAY#.SA###",
+  "...T#E....#GIGI",
+  "###UHF#....O...",
+  "...#ALJAR#ABEER",
+  "...#NEA....#...",
+  "RAMADAN#......#",
+  "AHMED#I........",
+  "#..RY#CHAMPIONS",
+  "#..OE#E...#...."
+ ],
+ "clues": {},
+ "theme": [
+  {
+   "word": "CODENAMES",
+   "at": [
+    1,
+    0
+   ],
+   "dir": "A",
+   "note": ""
+  },
+  {
+   "word": "CHAMPIONS",
+   "at": [
+    13,
+    6
+   ],
+   "dir": "A",
+   "note": ""
+  },
+  {
+   "word": "BIRTHDAY",
+   "at": [
+    6,
+    0
+   ],
+   "dir": "A",
+   "note": ""
+  }
+ ],
+ "notes": "",
+ "must": [
+  "RAMADAN",
+  "JWANA",
+  "SAEED",
+  "AHMED",
+  "ABEER",
+  "MALAK",
+  "ALJAR/HAMOOD",
+  "GIGI/GHUFRAN"
+ ]
+}

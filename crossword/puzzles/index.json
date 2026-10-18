@@ -1,5 +1,14 @@
 [
  {
+  "id": "bday2",
+  "title": "Birthday",
+  "author": "Claude",
+  "date": "2026-10-18",
+  "size": 15,
+  "complete": false,
+  "clued": false
+ },
+ {
   "id": "birthday",
   "title": "Birthday",
   "author": "",
