@@ -1,0 +1,49 @@
+{
+ "title": "Demo: Under the Weather",
+ "author": "Claude",
+ "date": "2026-10-18",
+ "size": 15,
+ "grid": [
+  "CAL##SSA#GAEL##",
+  "AME#STUN#AUDITS",
+  "SEANPENN#BRIGHT",
+  "UNDERTHEWEATHER",
+  "ARTSY#AXIS#OTRA",
+  "LAOS#ITEN#BREAD",
+  "###ILK#DOSE#RPS",
+  "#ANEYE###SASSY#",
+  "PTA#OAHU#GUT###",
+  "ELTON#ASST#AEON",
+  "NAIR#GLUE#ANNIE",
+  "CROSSWORDPUZZLE",
+  "IGNITE#PARLAYED",
+  "LEANON#EKED#MRT",
+  "##LOPS#DAY##ESO"
+ ],
+ "clues": {
+  "A3,0": "Feeling a bit off (and the theme)",
+  "A11,0": "What you're doing right now?",
+  "A2,0": "Oscar winner for \"Mystic River\""
+ },
+ "theme": [
+  {
+   "word": "UNDERTHEWEATHER",
+   "at": [
+    3,
+    0
+   ],
+   "dir": "A",
+   "note": ""
+  },
+  {
+   "word": "CROSSWORDPUZZLE",
+   "at": [
+    11,
+    0
+   ],
+   "dir": "A",
+   "note": ""
+  }
+ ],
+ "notes": "Sample puzzle to try the tools."
+}
