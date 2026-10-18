@@ -75,3 +75,7 @@ Integration is likely to become the competitive advantage. The operators best pl
 19. AI2 Work. FAA Part 108 BVLOS Rule Enters Final Review at the White House. https://ai2.work/blog/faa-part-108-bvlos-rule-enters-final-review-at-the-white-house
 20. Riyadh Daily. LLAMA BOX Guinness World Record, Riyadh. https://alriyadhdaily.com/article/8006210b92ee40cc8d5586f9bf2263d6
 21. Arab News. How Saudi Arabia's self-driving push is transforming transport. https://www.arabnews.com/node/2611845
+
+##### Sources:
+
+AI2 Work; Arab News; Argaam; Capgemini Research Institute; CBNME; DroneXL; eMarketer; Fulfill.com; Gulf Business; Gulf News; InPost; NextBillion.ai; Post & Parcel; Riyadh Daily; Saudi Food Show; Saudi Post; Saudi Press Agency; Serve Robotics; Sharikat Mubasher; SmartRoutes; Wing
