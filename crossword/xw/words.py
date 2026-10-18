@@ -118,6 +118,17 @@ def build(verbose=True):
     return words
 
 
+def curated_set():
+    """Normalized entries of the hand-curated MsFit lists (core, contemporary, idioms)."""
+    raw = os.path.join(VENDOR, 'crossword-dataset', 'raw')
+    out = set()
+    for fn in ('core.txt', 'contemporary.txt', 'idioms.txt'):
+        p = os.path.join(raw, fn)
+        if os.path.exists(p):
+            out.update(w for w, _ in _scored(p) if 3 <= len(w) <= 21)
+    return out
+
+
 class Lexicon:
     """Words with scores plus bitset indexes for pattern matching.
 
@@ -125,7 +136,7 @@ class Lexicon:
     `seed`), so the lowest set bit of any candidate mask is the best word.
     """
 
-    def __init__(self, min_score=25, themes=(), seed=0, extra=None):
+    def __init__(self, min_score=25, themes=(), seed=0, extra=None, curated=False):
         if not os.path.exists(MASTER) or os.path.getmtime(MASTER) < os.path.getmtime(CUSTOM if os.path.exists(CUSTOM) else MASTER):
             build(verbose=False)
         self.scores = {}
@@ -136,6 +147,9 @@ class Lexicon:
                 self.scores[w] = max(self.scores.get(w, 0), sc)
         for w, sc in (extra or {}).items():
             self.scores[w] = sc
+        if curated:   # only hand-curated words (plus anything passed in `extra`)
+            keep = curated_set() | set(extra or {})
+            self.scores = {w: sc for w, sc in self.scores.items() if w in keep}
         self.min_score = min_score
         self.seed = seed
         self._by_len = {}

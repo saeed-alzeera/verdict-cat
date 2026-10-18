@@ -22,7 +22,7 @@ def show(p, a=None):
 
 
 def lex_args(a):
-    return {'min_score': a.min_score, 'themes': tuple(a.theme or ())}
+    return {'min_score': a.min_score, 'themes': tuple(a.theme or ()), 'curated': getattr(a, 'curated', False)}
 
 
 # ---- commands
@@ -287,6 +287,7 @@ def main(argv=None):
     def lexopts(s):
         s.add_argument('--min-score', type=int, default=30)
         s.add_argument('--theme', action='append', help='themed dictionary, e.g. tech (repeatable)')
+        s.add_argument('--curated', action='store_true', help='only hand-curated MsFit words (plus must-words)')
 
     s = cmd('setup', c_setup, 'clone the three word-list repos and build the master list', False)
     s.add_argument('--update', action='store_true')
