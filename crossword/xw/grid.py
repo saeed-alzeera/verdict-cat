@@ -175,15 +175,12 @@ class Puzzle:
         """Returns (errors, warnings, stats) against NYT construction norms."""
         n, g = self.size, self.g
         errs, warns = [], []
-        for r in range(n):
-            for c in range(n):
-                mr, mc = self.mirror(r, c)
-                if (g[r][c] == '#') != (g[mr][mc] == '#'):
-                    errs.append(f'asymmetric: ({r},{c}) vs ({mr},{mc})')
-                    break
-            else:
-                continue
-            break
+        asym = [(r, c) for r in range(n) for c in range(n)
+                if (r, c) < self.mirror(r, c) and (g[r][c] == '#') != (g[self.mirror(r, c)[0]][self.mirror(r, c)[1]] == '#')]
+        allow = self.data.get('allow_asym', 0)
+        if asym:
+            msg = f'{len(asym)} asymmetric black-square pair(s), e.g. {asym[0]} (allowed {allow})'
+            (errs if len(asym) > allow else warns).append(msg)
         # runs shorter than 3, in both directions
         for d in 'AD':
             for i in range(n):
@@ -231,7 +228,7 @@ class Puzzle:
         for s in sl:
             by_len[len(s)] = by_len.get(len(s), 0) + 1
         stats = {'size': n, 'entries': len(sl), 'blacks': nb, 'by_len': dict(sorted(by_len.items())),
-                 'filled': sum(1 for r in g for ch in r if ch not in '#.'),
+                 'asym': len(asym), 'filled': sum(1 for r in g for ch in r if ch not in '#.'),
                  'white': len(white)}
         return errs, warns, stats
 
