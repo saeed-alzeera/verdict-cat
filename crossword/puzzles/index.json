@@ -1,5 +1,14 @@
 [
  {
+  "id": "birthday-v2",
+  "title": "Birthday v2",
+  "author": "Saeed Alzeera",
+  "date": "2026-10-18",
+  "size": 15,
+  "complete": true,
+  "clued": true
+ },
+ {
   "id": "birthday",
   "title": "Birthday",
   "author": "",
