@@ -1,3 +1,24 @@
 # Your words. One per line: WORD or WORD;score   (default score 90)
 # Letters only (spaces/punctuation are stripped): "ice cream" -> ICECREAM
 # Score 0 bans a word from every fill.  Add from the CLI: xw add WORD [score]
+JWANA
+JDAWG
+CODENAMES
+MOVIESTARS
+VEXILLOLOGY
+CHAMPIONS
+LEBANON
+FRENCH
+CAPITAL
+BIRTHDAYCAKE
+PARTYFAVORS
+SAEED
+RAMADAN
+ALJAR
+HAMOOD
+AHMED
+GHUFRAN
+ABEER
+MALAK
+KEY
+WEEKLY

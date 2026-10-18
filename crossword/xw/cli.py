@@ -200,6 +200,35 @@ def c_fill(a):
     return 0
 
 
+def c_must(a):
+    """Place must-include words into slots where the grid can still be completed."""
+    import random
+    p = load(a)
+    la = lex_args(a)
+    la['extra'] = {W.norm(w): 90 for w in a.words}
+    rng = random.Random(a.seed)
+    for w in sorted((W.norm(x) for x in a.words), key=lambda w: (-len(w), w)):
+        if any(p.word(s) == w for s in p.slots()):
+            print(f'{w}: already in grid'); continue
+        fits = []
+        for sl in p.slots():
+            pat = p.pattern(sl)
+            if len(sl) == len(w) and all(x in ('?', y) for x, y in zip(pat, w)) and '?' in pat:
+                fits.append(sl)
+        rng.shuffle(fits)
+        for sl in fits[:a.tries]:
+            q = Puzzle({'size': p.size, 'grid': [''.join(r) for r in p.g]})
+            q.put(q.slot(sl.id), w)
+            res = autofill(q, la, timeout=a.timeout, seed=a.seed)
+            if res.ok:
+                p.put(sl, w)
+                print(f'{w}: placed at {sl.id}')
+                break
+        else:
+            print(f'{w}: NO slot works ({len(fits)} of that length) - adjust blacks')
+    p.save(); show(p)
+
+
 def c_add(a):
     w = W.norm(a.word)
     line = w + (f';{a.score}' if a.score is not None else '')
@@ -284,6 +313,8 @@ def main(argv=None):
     s.add_argument('--timeout', type=int, default=60); s.add_argument('--seed', type=int, default=1)
     s.add_argument('--branch', type=int, default=30); s.add_argument('--partial', action='store_true')
     s = cmd('clue', c_clue, 'set a clue'); s.add_argument('slot'); s.add_argument('text')
+    s = cmd('must', c_must, 'place must-include words where a full fill still exists'); s.add_argument('words', nargs='+'); lexopts(s)
+    s.add_argument('--tries', type=int, default=12); s.add_argument('--timeout', type=int, default=6); s.add_argument('--seed', type=int, default=1)
     s = cmd('quality', c_quality, 'score the current fill, list weakest entries'); s.add_argument('-n', type=int, default=10); lexopts(s)
     cmd('list', c_list, 'list entries and clues')
     s = cmd('words', c_words, 'search the word list by pattern, e.g. xw words "?A?E"', False)
@@ -295,6 +326,6 @@ def main(argv=None):
         r = a.fn(a)
     except (KeyError, ValueError) as e:
         raise SystemExit(f'error: {e.args[0] if e.args else e}')
-    if a.cmd in ('black', 'white', 'put', 'clear', 'theme', 'layout', 'fill', 'clue') and getattr(a, 'puzzle', None):
+    if a.cmd in ('black', 'white', 'put', 'clear', 'theme', 'layout', 'fill', 'clue', 'must') and getattr(a, 'puzzle', None):
         reindex()
     return r or 0

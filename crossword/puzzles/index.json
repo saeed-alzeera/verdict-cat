@@ -1,5 +1,14 @@
 [
  {
+  "id": "birthday",
+  "title": "Birthday",
+  "author": "",
+  "date": "2026-10-18",
+  "size": 15,
+  "complete": false,
+  "clued": false
+ },
+ {
   "id": "demo",
   "title": "Demo: Under the Weather",
   "author": "Claude",
