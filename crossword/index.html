@@ -315,7 +315,9 @@ const esc = s => String(s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;',
 /* ---------- constructor checks (mirror of xw check) ---------- */
 function validate() {
   const n = P.size, errs = [], warns = [];
-  outer: for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) { const [mr, mc] = mir(r, c); if (isB(r, c) !== isB(mr, mc)) { errs.push(`Not symmetric: (${r},${c}) vs (${mr},${mc})`); break outer; } }
+  let asym = 0, firstAsym = null;
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) { const [mr, mc] = mir(r, c); if ((r < mr || (r === mr && c < mc)) && isB(r, c) !== isB(mr, mc)) { asym++; firstAsym = firstAsym || `(${r},${c}) vs (${mr},${mc})`; } }
+  if (asym) { const allow = P.allow_asym || 0; (asym > allow ? errs : warns).push(`${asym} asymmetric pair(s), e.g. ${firstAsym} (allowed ${allow})`); }
   for (const d of ['A', 'D']) for (let i = 0; i < n; i++) {
     let run = [];
     for (let j = 0; j <= n; j++) {

@@ -126,6 +126,29 @@ class Puzzle:
         for pr, pc in pts:
             self.g[pr][pc] = '#' if on else '.'
 
+    def place_theme(self, word, r, c, d):
+        """Write a word at r,c (d = 'A'/'D'), black its mirrored end caps, and black any
+        1-2 square gap the caps would strand (a run under 3 is illegal)."""
+        dr, dc = (0, 1) if d == 'A' else (1, 0)
+        cells = [(r + dr * i, c + dc * i) for i in range(len(word))]
+        if not all(self.inb(*x) for x in cells):
+            raise ValueError('does not fit')
+        for (rr, cc), ch in zip(cells, word):
+            if self.g[rr][cc] not in ('.', ch):
+                raise ValueError(f'conflict at ({rr},{cc}): {self.g[rr][cc]}')
+        for (rr, cc), ch in zip(cells, word):
+            self.g[rr][cc] = ch
+        for sgn, cap in ((-1, (r - dr, c - dc)), (1, (cells[-1][0] + dr, cells[-1][1] + dc))):
+            if not self.inb(*cap):
+                continue
+            self.set_black(*cap)
+            run, x, y = [], cap[0] + sgn * dr, cap[1] + sgn * dc
+            while self.inb(x, y) and self.g[x][y] == '.':
+                run.append((x, y)); x += sgn * dr; y += sgn * dc
+            if 0 < len(run) < 3:
+                for cell in run:
+                    self.set_black(*cell)
+
     def put(self, s, word):
         word = word.upper()
         if len(word) != len(s):
@@ -152,15 +175,12 @@ class Puzzle:
         """Returns (errors, warnings, stats) against NYT construction norms."""
         n, g = self.size, self.g
         errs, warns = [], []
-        for r in range(n):
-            for c in range(n):
-                mr, mc = self.mirror(r, c)
-                if (g[r][c] == '#') != (g[mr][mc] == '#'):
-                    errs.append(f'asymmetric: ({r},{c}) vs ({mr},{mc})')
-                    break
-            else:
-                continue
-            break
+        asym = [(r, c) for r in range(n) for c in range(n)
+                if (r, c) < self.mirror(r, c) and (g[r][c] == '#') != (g[self.mirror(r, c)[0]][self.mirror(r, c)[1]] == '#')]
+        allow = self.data.get('allow_asym', 0)
+        if asym:
+            msg = f'{len(asym)} asymmetric black-square pair(s), e.g. {asym[0]} (allowed {allow})'
+            (errs if len(asym) > allow else warns).append(msg)
         # runs shorter than 3, in both directions
         for d in 'AD':
             for i in range(n):
@@ -208,7 +228,7 @@ class Puzzle:
         for s in sl:
             by_len[len(s)] = by_len.get(len(s), 0) + 1
         stats = {'size': n, 'entries': len(sl), 'blacks': nb, 'by_len': dict(sorted(by_len.items())),
-                 'filled': sum(1 for r in g for ch in r if ch not in '#.'),
+                 'asym': len(asym), 'filled': sum(1 for r in g for ch in r if ch not in '#.'),
                  'white': len(white)}
         return errs, warns, stats
 

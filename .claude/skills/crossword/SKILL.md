@@ -20,6 +20,9 @@ You are a co-constructor, not a button-pusher. Workflow:
    move blacks near them rather than lowering the score floor. Then `xw quality` and swap the weakest
    entries by hand (`xw cands 17A`, `xw put`, or clear the area and refill). Ban junk the lists contain
    (`xw add SSS 0`). Prefer lively, clueable words; avoid obscure abbreviations and crossword-ese.
+   Must-include words: `xw fill --must W1 W2 A/B` (saved in the puzzle JSON). Count letters first: if the
+   must-list plus theme covers roughly a third or more of the entry-letters, 15x15 will not fill; say so up front.
+   `xw layout --want 5:8,7:4` biases layouts toward the slot lengths the must-list needs.
 4. **Clues** with `xw clue NAME 17A "..."`; `xw list` to review. `puzzles/index.json` refreshes on every edit.
 5. Commit `crossword/puzzles/` and `crossword/wordlists/custom.txt`; never commit `wordlists/vendor` or `wordlists/built`.
 
