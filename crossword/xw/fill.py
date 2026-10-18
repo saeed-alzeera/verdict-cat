@@ -9,6 +9,13 @@ import random, time
 from .words import Lexicon
 
 
+HARD_LETTERS = set('JWFHGKMYZXQV')
+
+
+def hardness(w):
+    return sum(ch in HARD_LETTERS for ch in w)
+
+
 class Result:
     def __init__(self):
         self.ok = False
@@ -83,6 +90,17 @@ def autofill(p, lex_args, timeout=60, branch=30, jitter=8, seed=1, restart_nodes
             return res
         pre_done = sum(done)
         nodes = [0]
+        hard_at = []          # centers of placed hard required words, to keep new ones far away
+
+        def center(i):
+            cs = slots[i].cells
+            return (sum(r for r, _ in cs) / len(cs), sum(c for _, c in cs) / len(cs))
+
+        def far(i):
+            if not hard_at:
+                return 0.0
+            ci = center(i)
+            return min(abs(ci[0] - r) + abs(ci[1] - c) for r, c in hard_at)
 
         def options(grp):
             out = []
@@ -142,6 +160,8 @@ def autofill(p, lex_args, timeout=60, branch=30, jitter=8, seed=1, restart_nodes
                         best = (gi, opts)
                 gsel, opts = best
                 rng.shuffle(opts)
+                if hard_at:    # hard words (J, W, F, ...) go far from ones already placed
+                    opts.sort(key=lambda o: -(far(o[0]) if hardness(o[1]) >= 2 else 0) + rng.random() * 3)
                 opts = opts[:branch]
             else:
                 i = choose()
@@ -170,6 +190,9 @@ def autofill(p, lex_args, timeout=60, branch=30, jitter=8, seed=1, restart_nodes
                     done[i] = True
                     added = [x for x in ((w,) if gsel is None else required[gsel]) if x not in used]
                     used.update(added)
+                    pushed = gsel is not None and hardness(w) >= 2
+                    if pushed:
+                        hard_at.append(center(i))
                     flipped = []
                     for gi, grp in enumerate(required):   # a plain slot choice may satisfy a group
                         if not sat[gi] and w in grp:
@@ -183,6 +206,8 @@ def autofill(p, lex_args, timeout=60, branch=30, jitter=8, seed=1, restart_nodes
                         return True
                     for x in added:
                         used.discard(x)
+                    if pushed:
+                        hard_at.pop()
                     for gi in flipped:
                         sat[gi] = False
                     done[i] = False
