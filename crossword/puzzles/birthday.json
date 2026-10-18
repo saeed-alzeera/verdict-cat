@@ -4,32 +4,32 @@
  "date": "2026-10-18",
  "size": 15,
  "grid": [
-  "SOW#KIR##ABEER#",
-  "WHERETO#OVERSEA",
-  "AYEAYES#WASATCH",
-  "REKT#MADE#STROM",
-  "MALAK##ESAI#EVE",
-  "SHY#OFST#SEALED",
-  "###SOLARAS#DLR#",
-  "#HAPPYBIRTHDAY#",
-  "#INU#RAMADAN###",
-  "SAIDNO#EGAD#SUM",
-  "SWS#ODEN##JWANA",
-  "SAEED#STOW#IBEG",
-  "STOMATA#GHUFRAN",
-  "SHIATSU#RELEASE",
-  "#ALJAR##ETE#SET"
+  "GIGI##ESTE#AWOL",
+  "TRAC#SAEED#NENA",
+  "GAZE#OVERT#JEST",
+  "#NEPALESE##OKIE",
+  "#ILLS##ASSAULTS",
+  "MALAK#JWANA#YET",
+  "ONENAME##OHM###",
+  "ESSE#ABOVO#EHOW",
+  "###TYR#WAP#TANA",
+  "CHE#ALONG#AHMED",
+  "RAMADAN#ABSORBS",
+  "AMEBA#BIRTHDAY#",
+  "DORE#KATIE#IDOL",
+  "LOGE#ESSEN#SING",
+  "EDER#YEAS##TOES"
  ],
  "clues": {},
  "theme": [
   {
-   "word": "HAPPYBIRTHDAY",
+   "word": "BIRTHDAY",
    "at": [
-    7,
-    1
+    11,
+    6
    ],
    "dir": "A",
-   "note": "center"
+   "note": "theme"
   }
  ],
  "notes": "",
@@ -40,7 +40,7 @@
   "RAMADAN",
   "ALJAR/HAMOOD",
   "AHMED",
-  "GHUFRAN",
+  "GHUFRAN/GIGI",
   "ABEER",
   "MALAK",
   "JWANA"
