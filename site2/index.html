@@ -102,7 +102,8 @@
   <span class="brand">CW V2</span>
   <button class="btn sm" id="bNew">New</button>
   <button class="btn sm" id="bOpen">Import</button>
-  <button class="btn sm" id="bExport">Export</button>
+  <button class="btn sm" id="bExport" title="Download an Across Lite .puz file">Export .puz</button>
+  <button class="btn sm" id="bJson" title="Save the puzzle as JSON (keeps banned words, re-importable)">Save JSON</button>
   <button class="btn sm" id="bClear" title="Remove every letter and black square">Clear board</button>
   <label class="tg"><input type="checkbox" id="sym" checked /> symmetry</label>
   <label class="tg"><input type="checkbox" id="auto" checked /> autofill</label>
@@ -827,10 +828,47 @@ function loadPuzzle(p) {
 $('#bNew').onclick = () => $('#dlgNew').showModal();
 $('#nCancel').onclick = () => $('#dlgNew').close();
 $('#nGo').onclick = () => { const n = Math.max(5, Math.min(25, +$('#nSize').value || 15)); $('#dlgNew').close(); loadPuzzle({ size: n, grid: [], clues: {} }); persistSoon(); };
-$('#bExport').onclick = () => {
-  const blob = new Blob([JSON.stringify(exportObj(), null, 1) + '\n'], { type: 'application/json' });
+function download(blob, ext) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = ((title || 'cw-v2').replace(/[^\w-]+/g, '-')) + '.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  a.download = ((title || 'cw-v2').replace(/[^\w-]+/g, '-')) + ext; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$('#bJson').onclick = () => download(new Blob([JSON.stringify(exportObj(), null, 1) + '\n'], { type: 'application/json' }), '.json');
+
+/* ---------- .puz (Across Lite v1.3) ---------- */
+function puzBytes() {
+  const lat = s => Array.from(String(s), ch => { const c = ch.charCodeAt(0); return c < 256 ? c : 63; });   // latin-1, '?' for the rest
+  const sol = [], state = [];
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const ch = G[r][c];
+    sol.push(ch === '#' ? 46 : ch === '.' ? 45 : ch.charCodeAt(0));
+    state.push(ch === '#' ? 46 : 45);
+  }
+  const clueList = slots.map(sl => String(clues[sl.key] || '').replace(/\s+/g, ' ').trim());
+  const cks = (bytes, c) => { for (const b of bytes) { c = (c & 1 ? (c >>> 1) | 0x8000 : c >>> 1); c = (c + b) & 0xffff; } return c; };
+  const T = lat(title), A = lat(author), C = lat(''), notes = lat('');
+  const cib = [N, N, slots.length & 255, slots.length >> 8, 1, 0, 0, 0];
+  const cCib = cks(cib, 0);
+  const part = (c) => {
+    if (T.length) c = cks(T.concat(0), c); if (A.length) c = cks(A.concat(0), c); if (C.length) c = cks(C.concat(0), c);
+    for (const cl of clueList) if (cl) c = cks(lat(cl), c);
+    return c;
+  };
+  let main = cks(sol, cCib); main = cks(state, main); main = part(main);
+  const cSol = cks(sol, 0), cGrid = cks(state, 0), cPart = part(0);
+  const mask = 'ICHEATED';
+  const lo = [cCib & 255, cSol & 255, cGrid & 255, cPart & 255], hi = [cCib >> 8, cSol >> 8, cGrid >> 8, cPart >> 8];
+  const out = [main & 255, main >> 8, ...lat('ACROSS&DOWN'), 0, cCib & 255, cCib >> 8,
+    ...lo.map((v, i) => mask.charCodeAt(i) ^ v), ...hi.map((v, i) => mask.charCodeAt(4 + i) ^ v),
+    ...lat('1.3'), 0, 0, 0, 0, 0, ...Array(12).fill(0), ...cib];
+  out.push(...sol, ...state, ...T, 0, ...A, 0, ...C, 0);
+  for (const cl of clueList) out.push(...lat(cl), 0);
+  out.push(...notes, 0);
+  return new Uint8Array(out);
+}
+$('#bExport').onclick = () => {
+  const blank = G.flat().filter(ch => ch === '.').length;
+  download(new Blob([puzBytes()], { type: 'application/octet-stream' }), '.puz');
+  toast(blank ? `Exported .puz with ${blank} empty square${blank === 1 ? '' : 's'}` : 'Exported .puz');
 };
 $('#bOpen').onclick = () => $('#file').click();
 $('#file').addEventListener('change', async e => {

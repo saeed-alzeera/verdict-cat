@@ -12,6 +12,10 @@ served from `/site2/` by the existing Pages deploy.
 
 - `blackfill.js`: black-square autofiller (see below). Pure functions, also loadable from Node.
 
+## Export
+
+**Export .puz** downloads an Across Lite v1.3 file (checksums included; empty squares are written as `-`). **Save JSON** keeps the editable puzzle, including banned words, and is what **Import** reads.
+
 ## Eliminating autofill
 
 When autofill proposes a fill, each proposed word shows as a chip in the Autofill panel. **✕** bans that word and refills without it; banned words show struck through, and **↺** allows one again. Bans are saved with the puzzle (`banned` in the exported JSON, the same key `xw nix` uses).
