@@ -67,6 +67,9 @@
   .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   #fillState { font-size: 13px; margin: 0 0 8px; color: var(--muted); }
   #fillState.ok { color: var(--ok); } #fillState.bad { color: var(--err); }
+  .place-in { flex: 1; min-width: 0; padding: 6px 9px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--bg); text-transform: uppercase; }
+  #placeMsg { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+  #placeMsg.bad { color: var(--err); } #placeMsg.ok { color: var(--ok); }
   .cand { display: flex; flex-wrap: wrap; gap: 5px; max-height: 260px; overflow: auto; }
   .cand button { border: 1px solid var(--line-strong); background: var(--bg); border-radius: 6px; padding: 2px 7px; cursor: pointer; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
   .cand button:hover { border-color: var(--accent); }
@@ -124,6 +127,19 @@
       <div class="row">
         <button class="btn sm primary" id="bAccept" disabled>Fill grid</button>
         <button class="btn sm" id="bAgain" disabled title="Search again with fresh noise">Another fill</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3><span>Add a word</span><span id="placeInfo" class="mono"></span></h3>
+      <form id="placeForm" class="row" style="flex-wrap:nowrap">
+        <input id="wordIn" class="place-in" placeholder="Word to place, e.g. UNDERTHEWEATHER" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-label="Word to place" />
+        <button class="btn sm primary" type="submit">Place</button>
+      </form>
+      <p id="placeMsg">Puts it in the entry where it costs the crossings the fewest options.</p>
+      <div class="row">
+        <button class="btn sm" id="bNext" type="button" disabled>Next best spot</button>
+        <button class="btn sm" id="bUndo" type="button" disabled>Undo</button>
       </div>
     </div>
 
@@ -390,7 +406,7 @@ function renderChecks() {
 }
 
 /* ---------- editing ---------- */
-function afterEdit() { computeSlots(); if (!curSlot()) fixCursor(); render(); requestFill(); persistSoon(); }
+function afterEdit(keepPlace) { if (!keepPlace) { place = null; renderPlaceButtons(); } computeSlots(); if (!curSlot()) fixCursor(); render(); requestFill(); persistSoon(); }
 function fixCursor() { const s = slots[0]; if (s) { cur = s.cells[0].slice(); dir = s.dir; } }
 function move(dr, dc) { let [r, c] = cur; for (let i = 0; i < N; i++) { r += dr; c += dc; if (!inb(r, c)) return; if (!isB(r, c)) { cur = [r, c]; return; } } }
 function step(fwd = true) { const A = curSlot(); if (!A) return; const i = A.cells.findIndex(([r, c]) => r === cur[0] && c === cur[1]); const j = i + (fwd ? 1 : -1); if (j >= 0 && j < A.cells.length) cur = A.cells[j].slice(); }
@@ -406,11 +422,81 @@ function toggleBlack() {
   set(r, c); if ($('#sym').checked) { const [a, b] = mir(r, c); set(a, b); }
   afterEdit();
 }
-function placeWord(w) { const A = curSlot(); if (!A) return; A.cells.forEach(([r, c], i) => { G[r][c] = w[i]; }); afterEdit(); }
+function fillEntry(w) { const A = curSlot(); if (!A) return; A.cells.forEach(([r, c], i) => { G[r][c] = w[i]; }); afterEdit(); }
+
+
+/* ---------- add a word: place it where it costs the crossings the fewest options ---------- */
+let place = null;      // {word, options: [{slot, impact, fresh}], i, changed: [[r,c]]} for the last placement
+const matchCount = pat => db.numMatches(db.matchingBitmap(pat));
+
+function rankPlacements(word) {
+  const len = word.length, out = [];
+  for (const s of slots) {
+    if (s.cells.length !== len) continue;
+    const pat = patOf(s);
+    if ([...pat].some((ch, i) => ch !== '?' && ch !== word[i])) continue;       // clashes with letters already placed
+    let impact = 0, ok = true, fresh = 0, n = 0, worst = 1;
+    s.cells.forEach(([r, c], i) => {
+      if (G[r][c] !== '.') return;
+      fresh++;
+      const X = slotAt(r, c, s.dir === 'A' ? 'D' : 'A');
+      if (!X || X.cells.length < 3 || !db.has(X.cells.length)) return;
+      const chars = patOf(X).split(''), pos = X.cells.findIndex(([a, b]) => a === r && b === c);
+      const before = matchCount(chars.join(''));
+      chars[pos] = word[i];
+      const after = matchCount(chars.join(''));
+      if (!after) { ok = false; return; }                                          // would leave that crossing with no word
+      impact += Math.log(before / after);                                          // 0 = no options lost
+      n++; worst = Math.min(worst, after / before);
+    });
+    if (ok) out.push({ slot: s, impact, fresh, avg: n ? Math.exp(-impact / n) : 1, worst });
+  }
+  return out.sort((a, b) => a.impact - b.impact || a.fresh - b.fresh || a.slot.num - b.slot.num);
+}
+function applyPlacement(word, o) {
+  const changed = [];
+  o.slot.cells.forEach(([r, c], i) => { if (G[r][c] === '.') { G[r][c] = word[i]; changed.push([r, c]); } });
+  dir = o.slot.dir; cur = o.slot.cells[0].slice();
+  return changed;
+}
+function revertPlacement() { if (place) place.changed.forEach(([r, c]) => { G[r][c] = '.'; }); }
+function setPlaceMsg(t, cls) { const m = $('#placeMsg'); m.textContent = t; m.className = cls || ''; }
+function renderPlaceButtons() { $('#bNext').disabled = !place || place.options.length < 2; $('#bUndo').disabled = !place; }
+function describe(o) { const pc = x => Math.round(x * 100) + '%'; return o.slot.id + ' (' + (o.impact < 0.005 ? 'no crossing options lost' : 'each crossing keeps about ' + pc(o.avg) + ' of its options, worst ' + pc(o.worst)) + ')'; }
+
+function placeWord(raw) {
+  const word = raw.toUpperCase().replace(/[^A-Z]/g, '');
+  if (word.length < 3) { setPlaceMsg('Enter a word of at least 3 letters.', 'bad'); return; }
+  if (!db || !db.total) { setPlaceMsg('Load a word list first: the placement check needs it.', 'bad'); return; }
+  if (slots.some(s => patOf(s) === word)) { setPlaceMsg(word + ' is already in the grid.', 'bad'); return; }
+  if (!slots.some(s => s.cells.length === word.length)) { setPlaceMsg('No ' + word.length + '-letter entry in this grid. Move a black square to make one.', 'bad'); return; }
+  const options = rankPlacements(word);
+  if (!options.length) { setPlaceMsg('No ' + word.length + '-letter entry fits ' + word + ': each clashes with a letter already there or leaves a crossing with no possible word.', 'bad'); return; }
+  const changed = applyPlacement(word, options[0]);
+  place = { word, options, i: 0, changed };
+  afterEdit(true); renderPlaceButtons();
+  setPlaceMsg(`Placed ${word} at ${describe(options[0])}. ${options.length > 1 ? 'Best of ' + options.length + ' spots.' : 'Only one spot fits.'}`, 'ok');
+  $('#wordIn').value = '';
+}
+$('#placeForm').addEventListener('submit', e => { e.preventDefault(); placeWord($('#wordIn').value); });
+$('#bNext').onclick = () => {
+  if (!place || place.options.length < 2) return;
+  revertPlacement();
+  place.i = (place.i + 1) % place.options.length;
+  const o = place.options[place.i];
+  place.changed = applyPlacement(place.word, o);
+  afterEdit(true); renderPlaceButtons();
+  setPlaceMsg(`${place.word} at ${describe(o)}. Spot ${place.i + 1} of ${place.options.length}.`, 'ok');
+};
+$('#bUndo').onclick = () => {
+  if (!place) return;
+  revertPlacement(); const w = place.word; place = null;
+  afterEdit(true); renderPlaceButtons(); setPlaceMsg('Removed ' + w + '.', '');
+};
 
 /* ---------- input ---------- */
 document.addEventListener('keydown', e => {
-  if (e.target.id === 'cbIn' || e.target.closest('dialog') || e.target.id === 'ttl' || e.target.id === 'by' || e.metaKey || e.ctrlKey || e.altKey) return;
+  if ((e.target.tagName === 'INPUT' && e.target.id !== 'hin') || e.target.closest('dialog') || e.metaKey || e.ctrlKey || e.altKey) return;
   const k = e.key; let handled = true;
   if (/^[a-zA-Z]$/.test(k)) setLetter(k.toUpperCase());
   else if (k === '.') toggleBlack();
@@ -438,7 +524,7 @@ $('#clues').addEventListener('click', e => {
   const t = e.target.closest('.cl'); if (!t) return;
   const s = slots.find(x => x.id === t.dataset.id); if (!s) return; dir = s.dir; cur = (s.cells.find(([r, c]) => G[r][c] === '.') || s.cells[0]).slice(); render();
 });
-$('#cand').addEventListener('click', e => { const b = e.target.closest('button[data-w]'); if (b) placeWord(b.dataset.w); });
+$('#cand').addEventListener('click', e => { const b = e.target.closest('button[data-w]'); if (b) fillEntry(b.dataset.w); });
 $('#cbIn').addEventListener('input', e => { const A = curSlot(); if (!A) return; const v = e.target.value.trim(); if (v) clues[A.key] = v; else delete clues[A.key]; persistSoon(); renderClues(); });
 $('#ttl').addEventListener('input', e => { title = e.target.value; persistSoon(); });
 $('#by').addEventListener('input', e => { author = e.target.value; persistSoon(); });
@@ -459,7 +545,7 @@ function loadPuzzle(p) {
   (p.grid || []).forEach((row, r) => { if (r < N) [...row].forEach((ch, c) => { if (c < N) G[r][c] = ch === '#' ? '#' : /[A-Za-z]/.test(ch) ? ch.toUpperCase() : '.'; }); });
   clues = p.clues && typeof p.clues === 'object' ? { ...p.clues } : {};
   title = p.title || ''; author = p.author || ''; $('#ttl').value = title; $('#by').value = author;
-  ghost = null; computeSlots(); fixCursor(); render(); requestFill();
+  ghost = null; place = null; renderPlaceButtons(); computeSlots(); fixCursor(); render(); requestFill();
 }
 $('#bNew').onclick = () => $('#dlgNew').showModal();
 $('#nCancel').onclick = () => $('#dlgNew').close();
