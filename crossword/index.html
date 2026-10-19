@@ -19,6 +19,7 @@
   --accent:#6aa0f0; --panel:#1b1b1b;
 }
 * { box-sizing:border-box; margin:0; padding:0; }
+html { overflow-y:scroll; scrollbar-gutter:stable; overflow-anchor:none; }
 html,body { background:var(--bg); color:var(--ink); font-family:var(--sans); }
 body { min-height:100vh; }
 button { font:inherit; color:inherit; cursor:pointer; }
@@ -39,18 +40,19 @@ select.btn { appearance:none; padding-right:14px; max-width:220px; }
 .seg button.on { background:var(--ink); color:var(--bg); }
 
 /* title block */
-.titleblock { max-width:1100px; margin:0 auto; padding:14px 16px 4px; display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
-.titleblock h1 { font-family:var(--serif); font-size:1.5rem; font-weight:700; }
-.titleblock .by { color:var(--muted); font-size:.9rem; }
-.titleblock .timer { margin-left:auto; font-variant-numeric:tabular-nums; font-weight:600; }
+.titleblock { max-width:1100px; margin:0 auto; padding:14px 16px 4px; height:48px; display:flex; align-items:baseline; gap:14px; flex-wrap:nowrap; overflow:hidden; }
+.titleblock h1 { font-family:var(--serif); font-size:1.5rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.titleblock .by { color:var(--muted); font-size:.9rem; white-space:nowrap; }
+.titleblock .timer { margin-left:auto; min-width:5ch; text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; font-weight:600; }
 
 /* layout */
 main { max-width:1100px; margin:0 auto; padding:6px 16px 40px; display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:24px; align-items:start; }
 @media (max-width:860px) { main { grid-template-columns:1fr; } }
 .board { min-width:0; }
-.clue-bar { background:var(--bar); display:flex; align-items:center; gap:12px; padding:10px 14px; min-height:54px; font-size:1.02rem; margin-bottom:8px; border-radius:2px; }
+.clue-bar { background:var(--bar); display:flex; align-items:center; gap:12px; padding:6px 14px; height:64px; overflow:hidden; font-size:1.02rem; margin-bottom:8px; border-radius:2px; }
+#cbTx { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.3; min-width:0; }
 .clue-bar .no { font-weight:700; min-width:3.2ch; }
-.clue-bar input { flex:1; font:inherit; background:transparent; border:0; border-bottom:1px dashed var(--muted); color:inherit; padding:2px 0; outline:0; }
+.clue-bar input { flex:1; min-width:0; font:inherit; background:transparent; border:0; border-bottom:1px dashed var(--muted); color:inherit; padding:2px 0; outline:0; }
 .clue-bar .arrows button { border:0; background:none; font-size:1.1rem; padding:0 4px; }
 
 #gridwrap { --n:15; --cs:calc((100vw - 32px - var(--n) * 1px - 4px) / var(--n)); }
@@ -92,7 +94,7 @@ aside { display:flex; flex-direction:column; gap:14px; min-width:0; }
 label.tg { font-size:.8rem; display:flex; gap:6px; align-items:center; }
 .toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:8px 16px; border-radius:999px; font-size:.84rem; opacity:0; pointer-events:none; transition:opacity .2s; z-index:50; }
 .toast.on { opacity:1; }
-.hidden-input { position:fixed; left:-1000px; top:0; opacity:0; width:1px; height:1px; }
+.hidden-input { position:fixed; left:-1000px; top:0; opacity:0; width:1px; height:1px; font-size:16px; }
 dialog { border:1px solid var(--line-strong); border-radius:8px; padding:20px; background:var(--bg); color:var(--ink); max-width:420px; width:calc(100% - 32px); }
 dialog::backdrop { background:rgba(0,0,0,.4); }
 dialog h2 { font-family:var(--serif); margin-bottom:10px; }
@@ -425,7 +427,12 @@ function renderClues(A) {
     h += '</div>';
   }
   box.innerHTML = h;
-  const curEl = box.querySelector('.cl.cur'); if (curEl) curEl.scrollIntoView({ block: 'nearest' });
+  const curEl = box.querySelector('.cl.cur');
+  if (curEl && box.scrollHeight > box.clientHeight) {   // scroll only the clue list; scrollIntoView would also scroll the page
+    const top = curEl.offsetTop - box.offsetTop, bot = top + curEl.offsetHeight, hd = 28;
+    if (top - hd < box.scrollTop) box.scrollTop = Math.max(0, top - hd);
+    else if (bot > box.scrollTop + box.clientHeight) box.scrollTop = bot - box.clientHeight;
+  }
 }
 const esc = s => String(s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
 
@@ -543,17 +550,17 @@ function startTimer() {
 $('#grid').addEventListener('click', e => {
   const d = e.target.closest('.c'); if (!d) return;
   const r = +d.dataset.r, c = +d.dataset.c;
-  if (mode === 'build' && isB(r, c)) { cur = [r, c]; $('#hin').focus(); render(); return; }
+  if (mode === 'build' && isB(r, c)) { cur = [r, c]; $('#hin').focus({ preventScroll: true }); render(); return; }
   if (isB(r, c)) return;
   if (r === cur[0] && c === cur[1]) dir = dir === 'A' ? 'D' : 'A';
   else { cur = [r, c]; if (!slotAt(r, c, dir)) dir = dir === 'A' ? 'D' : 'A'; }
-  $('#hin').focus(); render();
+  $('#hin').focus({ preventScroll: true }); render();
 });
 $('#clues').addEventListener('click', e => {
   const d = e.target.closest('.cl'); if (!d) return;
   const s = slots.find(x => x.id === d.dataset.id); dir = s.dir;
   const W = mode === 'build' ? G : S; cur = (s.cells.find(([r, c]) => W[r][c] === '.') || s.cells[0]).slice();
-  $('#hin').focus(); render();
+  $('#hin').focus({ preventScroll: true }); render();
 });
 $('#cand').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -681,7 +688,7 @@ document.addEventListener('visibilitychange', async () => {
     refreshPicker();
   }
 });
-document.addEventListener('keydown', e => { if (e.target === document.body && P && /^[a-z]$/i.test(e.key) && !e.metaKey && !e.ctrlKey) { hin.focus(); } });
+document.addEventListener('keydown', e => { if (e.target === document.body && P && /^[a-z]$/i.test(e.key) && !e.metaKey && !e.ctrlKey) { hin.focus({ preventScroll: true }); } });
 })();
 </script>
 </body>
