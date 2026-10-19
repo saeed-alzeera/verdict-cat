@@ -13,14 +13,7 @@
     --ink: #1c1c1c; --muted: #6f6c63; --accent: #2f6fb5; --accent-ink: #ffffff;
     --cell: #ffffff; --black: #1c1c1c; --word: #cfe0f4; --sel: #f7d44c; --ghost: #7a99c2;
     --ok: #2f8f4e; --warn: #b8791a; --err: #c0392b;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0f1117; --panel: #1a1d23; --line: #2e3238; --line-strong: #454a52;
-      --ink: #e8eaed; --muted: #8b9099; --accent: #5b9bd5; --accent-ink: #0f1117;
-      --cell: #20242b; --black: #05060a; --word: #27405c; --sel: #8a6d10; --ghost: #5f86b5;
-      --ok: #5cb97a; --warn: #e8a730; --err: #e05c5c;
-    }
+    color-scheme: light;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--ink);
@@ -63,15 +56,16 @@
 
   aside { display: grid; gap: 12px; min-width: 0; }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
-  .panel h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-weight: 600; }
+  .panel h3 { line-height: 18px; margin: 0 0 8px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-weight: 600; }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: none; letter-spacing: 0; }
   .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  #fillState { font-size: 13px; margin: 0 0 8px; color: var(--muted); }
+  #fillState { font-size: 13px; line-height: 18px; min-height: 36px; margin: 0 0 8px; color: var(--muted); }   /* two lines reserved so status changes don't shift the page */
   #fillState.ok { color: var(--ok); } #fillState.bad { color: var(--err); }
   .place-in { width: 100%; resize: vertical; font: inherit; padding: 6px 9px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--bg); text-transform: uppercase; }
   #placeMsg { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
   #placeMsg.bad { color: var(--err); } #placeMsg.ok { color: var(--ok); }
-  .cand { display: flex; flex-wrap: wrap; gap: 5px; max-height: 260px; overflow: auto; }
+  .cand { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 5px; height: 260px; overflow: auto; }   /* fixed height so the panels below never move */
+  #candInfo { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .cand button { border: 1px solid var(--line-strong); background: var(--bg); border-radius: 6px; padding: 2px 7px; cursor: pointer; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
   .cand button:hover { border-color: var(--accent); }
   .cand button i { color: var(--muted); font-style: normal; font-size: 10.5px; margin-left: 5px; }
@@ -361,8 +355,8 @@ function renderClues() {
     }
     h += '</div>';
   }
-  $('#clues').innerHTML = h;
-  const el = $('#clues .cl.cur'); if (el) el.scrollIntoView({ block: 'nearest' });
+  const box = $('#clues'), top = box.scrollTop;                                  // never scroll the list or the page on navigation
+  box.innerHTML = h; box.scrollTop = top;
 }
 
 /* Side word list: pattern match, then drop words that would leave a crossing entry with no fill, and words already in the grid. */
