@@ -29,6 +29,7 @@ header.mast { border-bottom:1px solid var(--line-strong); }
 .brand { font-family:var(--serif); font-weight:700; font-size:1.55rem; letter-spacing:-.02em; margin-right:auto; }
 .brand small { font-family:var(--sans); font-weight:500; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-left:10px; }
 .btn { border:1px solid var(--line-strong); background:var(--bg); padding:6px 14px; border-radius:999px; font-size:.82rem; font-weight:600; }
+a.btn { text-decoration:none; color:inherit; display:inline-block; }
 .btn:hover { background:var(--panel); }
 .btn.primary { background:var(--ink); color:var(--bg); }
 .btn.sm { padding:3px 10px; font-size:.75rem; }
@@ -102,13 +103,14 @@ dialog input[type=number], dialog input[type=text] { font:inherit; padding:5px 8
 <body>
 
 <header class="mast"><div class="mast-in">
+  <a class="btn" id="btnHub" href="../index.html" title="Back to the hub">← Hub</a>
   <div class="brand">Crossword<small>constructor &amp; solver</small></div>
   <select id="pick" class="btn" title="Puzzles in crossword/puzzles"></select>
   <div class="seg" id="modeSeg"><button data-m="solve" class="on">Solve</button><button data-m="build">Build</button></div>
   <button class="btn" id="btnNew">New</button>
   <button class="btn" id="btnOpen">Open file</button>
   <button class="btn" id="btnExport">Export</button>
-  <button class="btn" id="btnTheme" title="Light / dark">Theme</button>
+  <button class="btn" id="btnTheme" title="Switch light / dark theme">Dark</button>
 </div></header>
 
 <div class="titleblock">
@@ -564,8 +566,9 @@ $('#nGo').onclick = () => {
   load({ title: $('#nTitle').value || 'Untitled', author: $('#nAuthor').value, date: new Date().toISOString().slice(0, 10), size: n, grid: Array(n).fill('.'.repeat(n)), clues: {}, theme: [] }, id);
   $('#dlgNew').close();
 };
-$('#btnTheme').onclick = () => { const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = t; LS.set('xw_theme', t); };
-document.documentElement.dataset.theme = LS.get('xw_theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+const setTheme = t => { document.documentElement.dataset.theme = t; $('#btnTheme').textContent = t === 'dark' ? 'Light' : 'Dark'; };
+$('#btnTheme').onclick = () => { const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; setTheme(t); LS.set('xw_theme', t); };
+setTheme(LS.get('xw_theme', 'light'));
 
 /* puzzle picker */
 let index = [];
