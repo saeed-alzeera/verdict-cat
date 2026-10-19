@@ -28,6 +28,7 @@ The **Add words** box understands `or` and `and`:
 - `SAEED or ALJAR` places exactly one of the two (the layout that costs the grid the fewest options). `|` and `/` also mean or.
 - `HAPPY and BIRTHDAY` places both; if either cannot be placed the whole placement is refused instead of dropping one. `&` also means and.
 - `or` binds tighter than `and`: `SAEED or ALJAR and HAPPY` is (SAEED or ALJAR) and HAPPY.
+- Parentheses group and nest to any depth: `HAPPY and (BIRTHDAY or CAKES)`, `A or (B and (C or D))`. A group with `and` inside is placed all-or-nothing.
 - Plain lists (commas / new lines) behave as before: placed as far as they fit.
 
 ## Word list
