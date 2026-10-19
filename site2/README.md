@@ -12,6 +12,10 @@ served from `/site2/` by the existing Pages deploy.
 
 - `blackfill.js`: black-square autofiller (see below). Pure functions, also loadable from Node.
 
+## Eliminating autofill
+
+When autofill proposes a fill, each proposed word shows as a chip in the Autofill panel. **✕** bans that word and refills without it; banned words show struck through, and **↺** allows one again. Bans are saved with the puzzle (`banned` in the exported JSON, the same key `xw nix` uses).
+
 ## Custom list and black squares
 
 Words typed into **Add a word** (Place, or **Add to list**) join a custom list kept in this browser. **Place** with an empty box places the words already on the list. Each chip shows how many entries of its length the current grid has. **Generate black squares**
