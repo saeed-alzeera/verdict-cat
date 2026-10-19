@@ -68,7 +68,7 @@
   .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   #fillState { font-size: 13px; margin: 0 0 8px; color: var(--muted); }
   #fillState.ok { color: var(--ok); } #fillState.bad { color: var(--err); }
-  .place-in { flex: 1; min-width: 0; padding: 6px 9px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--bg); text-transform: uppercase; }
+  .place-in { width: 100%; resize: vertical; font: inherit; padding: 6px 9px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--bg); text-transform: uppercase; }
   #placeMsg { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
   #placeMsg.bad { color: var(--err); } #placeMsg.ok { color: var(--ok); }
   .cand { display: flex; flex-wrap: wrap; gap: 5px; max-height: 260px; overflow: auto; }
@@ -141,15 +141,14 @@
     </div>
 
     <div class="panel">
-      <h3><span>Add a word</span><span id="placeInfo" class="mono"></span></h3>
-      <form id="placeForm" class="row" style="flex-wrap:nowrap">
-        <input id="wordIn" class="place-in" placeholder="Word to place, e.g. UNDERTHEWEATHER" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-label="Word to place" />
-        <button class="btn sm primary" type="submit">Place</button>
-        <button class="btn sm" id="bList" type="button" title="Add to the custom list without placing it">Add to list</button>
+      <h3><span>Add words</span><span id="placeInfo" class="mono"></span></h3>
+      <form id="placeForm" style="display:grid;gap:8px">
+        <textarea id="wordIn" class="place-in" rows="2" placeholder="Words to place, one per line or separated by commas" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-label="Words to place"></textarea>
+        <div class="row"><button class="btn sm primary" type="submit">Place</button><button class="btn sm" id="bList" type="button" title="Add to the custom list without placing">Add to list</button></div>
       </form>
-      <p id="placeMsg">Puts it in the entry where it costs the crossings the fewest options.</p>
+      <p id="placeMsg">Finds the layout that costs the whole grid the fewest options. <kbd>Enter</kbd> places, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line.</p>
       <div class="row">
-        <button class="btn sm" id="bNext" type="button" disabled>Next best spot</button>
+        <button class="btn sm" id="bNext" type="button" disabled>Next best layout</button>
         <button class="btn sm" id="bUndo" type="button" disabled>Undo</button>
         <button class="btn sm" id="bCust" type="button" title="Add every word in custom.txt to the list">Use custom.txt</button>
         <button class="btn sm" id="bListClear" type="button">Clear list</button>
@@ -286,7 +285,7 @@ async function loadDB() {
   }
   const extra = await fetchText('custom.txt'); customText = extra;
   if (!src) { src = ''; label = 'custom words only'; }
-  db = new WordDB(src, extra); dbSource = label; dbLoading = false; renderDbInfo();
+  db = new WordDB(src, extra); dbSource = label; dbLoading = false; renderDbInfo(); memo.clear();
   startWorker(); worker.postMessage({ type: 'loaddb', src, extra });
   renderSide(); requestFill();
 }
@@ -450,17 +449,26 @@ function toggleBlack() {
 function fillEntry(w) { const A = curSlot(); if (!A) return; A.cells.forEach(([r, c], i) => { G[r][c] = w[i]; }); afterEdit(); }
 
 
-/* ---------- add a word: place it where it costs the crossings the fewest options ---------- */
-let place = null;      // {word, options: [{slot, impact, fresh}], i, changed: [[r,c]]} for the last placement
-const matchCount = pat => db.numMatches(db.matchingBitmap(pat));
+/* ---------- add words: find the layout that costs the whole grid the fewest options ---------- */
+let place = null;      // {solutions: [{assign, skipped, cost, avg, worst}], i, changed: [[r,c]]} for the last placement
+const memo = new Map();
+const matchCount = pat => {
+  let v = memo.get(pat);
+  if (v === undefined) { if (memo.size > 60000) memo.clear(); v = db.numMatches(db.matchingBitmap(pat)); memo.set(pat, v); }
+  return v;
+};
+const SKIP_PENALTY = 50, TOP_SPOTS = 5, MAX_NODES = 800, MAX_MS = 1500, KEEP = 8;
 
+// Spots for one word in the grid as it stands: entries of its length that agree with the letters there, scored by
+// how many options each crossing entry loses (log of matches before / after). Spots that leave a crossing with no word are dropped.
 function rankPlacements(word) {
   const len = word.length, out = [];
   for (const s of slots) {
     if (s.cells.length !== len) continue;
     const pat = patOf(s);
     if ([...pat].some((ch, i) => ch !== '?' && ch !== word[i])) continue;       // clashes with letters already placed
-    let impact = 0, ok = true, fresh = 0, n = 0, worst = 1;
+    if (!pat.includes('?')) continue;                                            // taken by a word already
+    let impact = 0, ok = true, fresh = 0;
     s.cells.forEach(([r, c], i) => {
       if (G[r][c] !== '.') return;
       fresh++;
@@ -471,53 +479,137 @@ function rankPlacements(word) {
       chars[pos] = word[i];
       const after = matchCount(chars.join(''));
       if (!after) { ok = false; return; }                                          // would leave that crossing with no word
-      impact += Math.log(before / after);                                          // 0 = no options lost
-      n++; worst = Math.min(worst, after / before);
+      impact += Math.log(before / after);
     });
-    if (ok) out.push({ slot: s, impact, fresh, avg: n ? Math.exp(-impact / n) : 1, worst });
+    if (ok) out.push({ slot: s, impact, fresh });
   }
   return out.sort((a, b) => a.impact - b.impact || a.fresh - b.fresh || a.slot.num - b.slot.num);
 }
-function applyPlacement(word, o) {
+function fillSlot(word, slot) {
   const changed = [];
-  o.slot.cells.forEach(([r, c], i) => { if (G[r][c] === '.') { G[r][c] = word[i]; changed.push([r, c]); } });
-  dir = o.slot.dir; cur = o.slot.cells[0].slice();
+  slot.cells.forEach(([r, c], i) => { if (G[r][c] === '.') { G[r][c] = word[i]; changed.push([r, c]); } });
   return changed;
 }
-function revertPlacement() { if (place) place.changed.forEach(([r, c]) => { G[r][c] = '.'; }); }
-function setPlaceMsg(t, cls) { const m = $('#placeMsg'); m.textContent = t; m.className = cls || ''; }
-function renderPlaceButtons() { $('#bNext').disabled = !place || place.options.length < 2; $('#bUndo').disabled = !place; }
-function describe(o) { const pc = x => Math.round(x * 100) + '%'; return o.slot.id + ' (' + (o.impact < 0.005 ? 'no crossing options lost' : 'each crossing keeps about ' + pc(o.avg) + ' of its options, worst ' + pc(o.worst)) + ')'; }
+const clearCells = cells => cells.forEach(([r, c]) => { G[r][c] = '.'; });
 
-function placeWord(raw) {
-  const word = raw.toUpperCase().replace(/[^A-Z]/g, '');
-  if (word.length < 3) { setPlaceMsg('Enter a word of at least 3 letters.', 'bad'); return; }
+// Whole-grid cost of the current letters: for every entry that is not one of the placed words, how many of its original
+// options are gone (sum of log(before / after)). Infinity if some entry is left with no possible word.
+function gridImpact(base, assign) {
+  const placed = new Set(assign.map(a => a.slot.key));
+  let cost = 0, n = 0, worst = 1;
+  for (const s of slots) {
+    if (placed.has(s.key) || s.cells.length < 3 || !db.has(s.cells.length)) continue;
+    const before = base.get(s.key); if (!before) continue;
+    const after = matchCount(patOf(s));
+    if (!after) return { cost: Infinity };
+    if (after < before) { cost += Math.log(before / after); n++; worst = Math.min(worst, after / before); }
+  }
+  return { cost, avg: n ? Math.exp(-cost / n) : 1, worst };
+}
+
+// Size of the largest set of words that can each take a different entry (lists[i] = entry keys word i could go in).
+function maxMatch(lists) {
+  const owner = new Map(); let n = 0;
+  const augment = (i, seen) => {
+    for (const k of lists[i]) {
+      if (seen.has(k)) continue; seen.add(k);
+      const o = owner.get(k);
+      if (o === undefined || augment(o, seen)) { owner.set(k, i); return true; }
+    }
+    return false;
+  };
+  for (let i = 0; i < lists.length; i++) if (augment(i, new Set())) n++;
+  return n;
+}
+
+// Depth-first search over where each word goes (most constrained word first, best few spots each, within a node/time
+// budget). The first descent is the greedy layout, so there is always an answer; further layouts are scored on the whole grid.
+function searchLayouts(words) {
+  const base = new Map(slots.map(s => [s.key, s.cells.length >= 3 && db.has(s.cells.length) ? matchCount(patOf(s)) : 0]));
+  const sols = [], assign = [], skipped = [], seen = new Set(), t0 = performance.now(); let nodes = 0;
+  const over = () => sols.length > 0 && (nodes > MAX_NODES || performance.now() - t0 > MAX_MS);
+  const dfs = i => {
+    if (i === words.length) {
+      const g = gridImpact(base, assign); if (g.cost === Infinity) return;
+      const key = assign.map(a => a.word + '@' + a.slot.id).sort().join('|'); if (seen.has(key)) return; seen.add(key);
+      sols.push({ assign: assign.slice(), skipped: skipped.slice(), cost: g.cost + SKIP_PENALTY * skipped.length, avg: g.avg, worst: g.worst });
+      return;
+    }
+    nodes++;
+    const w = words[i], all = rankPlacements(w);
+    // Keep as many words placeable as possible: only take an entry if the words still to come can still all find one,
+    // and skip a word only when that costs nothing.
+    const lists = words.slice(i).map(x => x === w ? all.map(o => o.slot.key) : rankPlacements(x).map(o => o.slot.key));
+    const full = maxMatch(lists), rest = lists.slice(1);
+    let opts = all.filter(o => 1 + maxMatch(rest.map(l => l.filter(k => k !== o.slot.key))) >= full).slice(0, TOP_SPOTS);
+    if (!opts.length && maxMatch(rest) < full) opts = all.slice(0, TOP_SPOTS);        // skipping would cost another word its place
+    if (!opts.length) { skipped.push(w); dfs(i + 1); skipped.pop(); return; }
+    for (const o of opts) {
+      const changed = fillSlot(w, o.slot); assign.push({ word: w, slot: o.slot });
+      dfs(i + 1);
+      assign.pop(); clearCells(changed);
+      if (over()) return;
+    }
+  };
+  dfs(0);
+  return sols.sort((a, b) => a.cost - b.cost).slice(0, KEEP);
+}
+function applyLayout(sol) {
+  const changed = [];
+  sol.assign.forEach(a => changed.push(...fillSlot(a.word, a.slot)));
+  if (sol.assign.length) { dir = sol.assign[0].slot.dir; cur = sol.assign[0].slot.cells[0].slice(); }
+  return changed;
+}
+function setPlaceMsg(t, cls) { const m = $('#placeMsg'); m.textContent = t; m.className = cls || ''; }
+function renderPlaceButtons() { $('#bNext').disabled = !place || place.solutions.length < 2; $('#bUndo').disabled = !place; }
+function summary(sol) {
+  const pc = x => x < 0.01 ? '<1%' : '~' + Math.round(x * 100) + '%';
+  const where = sol.assign.map(a => `${a.word} at ${a.slot.id}`).join(', ');
+  const cost = sol.cost - SKIP_PENALTY * sol.skipped.length;
+  return where + (cost < 0.005 ? '. No crossing options lost.' : `. Affected entries keep ${pc(sol.avg)} of their options on average (worst ${pc(sol.worst)}).`);
+}
+
+function placeWords(raw) {
+  const wanted = [...new Set(raw.split(/[\n,;]+/).map(w => w.toUpperCase().replace(/[^A-Z]/g, '')).filter(Boolean))];
+  if (!wanted.length) { setPlaceMsg('Enter one or more words.', 'bad'); return; }
   if (!db || !db.total) { setPlaceMsg('Load a word list first: the placement check needs it.', 'bad'); return; }
-  if (slots.some(s => patOf(s) === word)) { setPlaceMsg(word + ' is already in the grid.', 'bad'); return; }
-  if (!slots.some(s => s.cells.length === word.length)) { setPlaceMsg('No ' + word.length + '-letter entry in this grid. Move a black square to make one.', 'bad'); return; }
-  const options = rankPlacements(word);
-  if (!options.length) { setPlaceMsg('No ' + word.length + '-letter entry fits ' + word + ': each clashes with a letter already there or leaves a crossing with no possible word.', 'bad'); return; }
-  const changed = applyPlacement(word, options[0]);
-  place = { word, options, i: 0, changed };
-  addToList(word);
+  const notes = [], words = [];
+  for (const w of wanted) {
+    if (w.length < 3) notes.push(`${w}: needs at least 3 letters`);
+    else if (slots.some(s => patOf(s) === w)) notes.push(`${w}: already in the grid`);
+    else if (!slots.some(s => s.cells.length === w.length)) notes.push(`${w}: no ${w.length}-letter entry in this grid`);
+    else if (!rankPlacements(w).length) notes.push(`${w}: no ${w.length}-letter entry fits it (a clash with a letter there, or a crossing would have no word)`);
+    else words.push(w);
+  }
+  if (!words.length) { setPlaceMsg('Nothing could be placed. ' + notes.join('; ') + '.', 'bad'); return; }
+  // most constrained words first: fewest spots, then longest
+  const spots = Object.fromEntries(words.map(w => [w, rankPlacements(w).length]));
+  words.sort((a, b) => spots[a] - spots[b] || b.length - a.length);
+  const solutions = searchLayouts(words).filter(x => x.assign.length);
+  if (!solutions.length) { setPlaceMsg('No layout works for these words together. ' + notes.join('; ') + '.', 'bad'); return; }
+  const best = solutions[0], changed = applyLayout(best);
+  place = { solutions, i: 0, changed };
+  addToList(best.assign.map(x => x.word).join('\n'));
   afterEdit(true); renderPlaceButtons();
-  setPlaceMsg(`Placed ${word} at ${describe(options[0])}. ${options.length > 1 ? 'Best of ' + options.length + ' spots.' : 'Only one spot fits.'}`, 'ok');
+  const left = [...notes, ...best.skipped.map(w => `${w}: no spot left once the others are placed`)];
+  setPlaceMsg(`Placed ${best.assign.length} of ${wanted.length}: ${summary(best)}` + (solutions.length > 1 ? ` Best of ${solutions.length} layouts.` : '') + (left.length ? ' Not placed: ' + left.join('; ') + '.' : ''), left.length ? '' : 'ok');
   $('#wordIn').value = '';
 }
-$('#placeForm').addEventListener('submit', e => { e.preventDefault(); placeWord($('#wordIn').value); });
+$('#placeForm').addEventListener('submit', e => { e.preventDefault(); placeWords($('#wordIn').value); });
+$('#wordIn').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); placeWords($('#wordIn').value); } });
 $('#bNext').onclick = () => {
-  if (!place || place.options.length < 2) return;
-  revertPlacement();
-  place.i = (place.i + 1) % place.options.length;
-  const o = place.options[place.i];
-  place.changed = applyPlacement(place.word, o);
+  if (!place || place.solutions.length < 2) return;
+  clearCells(place.changed);
+  place.i = (place.i + 1) % place.solutions.length;
+  const sol = place.solutions[place.i];
+  place.changed = applyLayout(sol);
   afterEdit(true); renderPlaceButtons();
-  setPlaceMsg(`${place.word} at ${describe(o)}. Spot ${place.i + 1} of ${place.options.length}.`, 'ok');
+  setPlaceMsg(`Layout ${place.i + 1} of ${place.solutions.length}: ${summary(sol)}`, 'ok');
 };
 $('#bUndo').onclick = () => {
   if (!place) return;
-  revertPlacement(); const w = place.word; place = null;
-  afterEdit(true); renderPlaceButtons(); setPlaceMsg('Removed ' + w + '.', '');
+  clearCells(place.changed); const n = place.solutions[place.i].assign.length; place = null;
+  afterEdit(true); renderPlaceButtons(); setPlaceMsg(`Removed ${n} word${n === 1 ? '' : 's'}.`, '');
 };
 
 /* ---------- custom list and the black-square autofiller ---------- */
@@ -581,7 +673,7 @@ $('#bBlackUndo').onclick = () => {
 
 /* ---------- input ---------- */
 document.addEventListener('keydown', e => {
-  if ((e.target.tagName === 'INPUT' && e.target.id !== 'hin') || e.target.closest('dialog') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (((e.target.tagName === 'INPUT' && e.target.id !== 'hin') || e.target.tagName === 'TEXTAREA') || e.target.closest('dialog') || e.metaKey || e.ctrlKey || e.altKey) return;
   const k = e.key; let handled = true;
   if (/^[a-zA-Z]$/.test(k)) setLetter(k.toUpperCase());
   else if (k === '.') toggleBlack();
