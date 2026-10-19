@@ -144,7 +144,6 @@
       <div class="row">
         <button class="btn sm" id="bNext" type="button" disabled>Next best layout</button>
         <button class="btn sm" id="bUndo" type="button" disabled>Undo</button>
-        <button class="btn sm" id="bCust" type="button" title="Add every word in custom.txt to the list">Use custom.txt</button>
         <button class="btn sm" id="bListClear" type="button">Clear list</button>
       </div>
       <div class="chips" id="custList"></div>
@@ -277,7 +276,7 @@ async function loadDB() {
       } catch { src = await fetchText('words.txt'); label = 'words.txt'; }
     }
   }
-  const extra = await fetchText('custom.txt'); customText = extra;
+  const extra = '';
   if (!src) { src = ''; label = 'custom words only'; }
   db = new WordDB(src, extra); dbSource = label; dbLoading = false; renderDbInfo(); memo.clear();
   startWorker(); worker.postMessage({ type: 'loaddb', src, extra });
@@ -567,8 +566,9 @@ function summary(sol) {
 }
 
 function placeWords(raw) {
+  if (!raw.trim()) raw = custom.join('\n');
   const wanted = [...new Set(raw.split(/[\n,;]+/).map(w => w.toUpperCase().replace(/[^A-Z]/g, '')).filter(Boolean))];
-  if (!wanted.length) { setPlaceMsg('Enter one or more words.', 'bad'); return; }
+  if (!wanted.length) { setPlaceMsg('Enter one or more words, or add some to the list.', 'bad'); return; }
   if (!db || !db.total) { setPlaceMsg('Load a word list first: the placement check needs it.', 'bad'); return; }
   const notes = [], words = [];
   for (const w of wanted) {
@@ -611,7 +611,7 @@ $('#bUndo').onclick = () => {
 };
 
 /* ---------- custom list and the black-square autofiller ---------- */
-let custom = LS.get('cwv2_custom', []).filter(w => typeof w === 'string'), customText = '';
+let custom = LS.get('cwv2_custom', []).filter(w => typeof w === 'string');
 const cleanWord = w => w.toUpperCase().replace(/[^A-Z]/g, '');
 function addToList(raw) {
   const words = String(raw).split(/[,;\n]+/).map(cleanWord).filter(w => w.length >= 3 && !custom.includes(w));
@@ -631,11 +631,6 @@ $('#bList').onclick = () => {
   const n = addToList($('#wordIn').value);
   if (n) { $('#wordIn').value = ''; setPlaceMsg('Added ' + n + (n === 1 ? ' word' : ' words') + ' to the list.', 'ok'); }
   else setPlaceMsg('Enter a word of at least 3 letters that is not on the list yet.', 'bad');
-};
-$('#bCust').onclick = () => {
-  const words = customText.split('\n').filter(l => l.trim() && l[0] !== '#' && !/;\s*0\s*$/.test(l)).map(l => l.split(';')[0]);
-  const n = addToList(words.join('\n'));
-  setPlaceMsg(n ? 'Added ' + n + ' words from custom.txt.' : customText ? 'Everything in custom.txt is already on the list.' : 'custom.txt could not be loaded.', n ? 'ok' : 'bad');
 };
 $('#bListClear').onclick = () => { custom = []; LS.set('cwv2_custom', custom); renderList(); };
 $('#custList').addEventListener('click', e => { const b = e.target.closest('button[data-w]'); if (b) { custom = custom.filter(w => w !== b.dataset.w); LS.set('cwv2_custom', custom); renderList(); } });
