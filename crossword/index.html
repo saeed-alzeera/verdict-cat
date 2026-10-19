@@ -148,7 +148,7 @@ dialog input[type=number], dialog input[type=text] { font:inherit; padding:5px 8
       <div class="row" style="margin-top:8px">
         <button class="btn sm" id="bSave">Save draft</button>
         <button class="btn sm" id="bCopy">Copy JSON</button>
-        <button class="btn sm" id="bWipe">Clear letters</button>
+        <button class="btn sm" id="bWipe">Clear board</button>
         <button class="btn sm" id="bHist">History</button>
       </div>
       <div class="hint" id="asState" style="margin-top:6px">Autosave every 30s</div>
@@ -604,7 +604,7 @@ function initSolverBlank() { S = P.grid.map(r => r.split('').map(ch => ch === '#
 $('#bSave').onclick = saveDraft;
 $('#bHist').onclick = openHistory; $('#hClose').onclick = () => $('#dlgHist').close();
 $('#bCopy').onclick = async () => { const t = JSON.stringify(exportObj(), null, 1); try { await navigator.clipboard.writeText(t); toast('JSON copied'); } catch { prompt('Copy this JSON:', t); } };
-$('#bWipe').onclick = () => { if (!confirm('Erase all letters (keeps black squares)?')) return; snapshot(true); G = G.map(r => r.map(ch => ch === '#' ? '#' : '.')); S = G; render(); };
+$('#bWipe').onclick = () => { if (!confirm('Clear the whole board (letters and black squares)?')) return; snapshot(true); G = G.map(r => r.map(() => '.')); S = G; render(); };
 
 /* header */
 function setMode(m) {
