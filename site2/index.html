@@ -228,14 +228,26 @@ function startWorker() {
   worker = new Worker('autofill-worker.js');
   worker.onmessage = onWorker;
 }
+const DB_VERSION = 1;                       // bump when worddb.json changes so cached copies are replaced
+let dbLoading = false;
 async function loadDB() {
-  let text = await idbGet('wordlist'), src = 'your list';
-  if (!text) { text = await fetchText('words.txt'); src = 'words.txt'; }
-  const custom = await fetchText('custom.txt');
-  if (!text) { src = 'custom words only'; }
-  text = (text || '') + '\n' + custom;
-  db = new WordDB(text); dbSource = src;
-  startWorker(); worker.postMessage({ type: 'loaddb', text });
+  dbLoading = true; renderDbInfo(); renderFill();
+  let src = await idbGet('wordlist'), label = 'your list';
+  if (!src) {
+    const cached = await idbGet('worddb');
+    if (cached && cached.version === DB_VERSION && cached.data) { src = cached.data; label = 'worddb.json'; }
+    else {
+      try {
+        const r = await fetch('worddb.json'); if (!r.ok) throw 0;
+        src = await r.json(); label = 'worddb.json';
+        idbSet('worddb', { version: DB_VERSION, data: src });
+      } catch { src = await fetchText('words.txt'); label = 'words.txt'; }
+    }
+  }
+  const extra = await fetchText('custom.txt');
+  if (!src) { src = ''; label = 'custom words only'; }
+  db = new WordDB(src, extra); dbSource = label; dbLoading = false; renderDbInfo();
+  startWorker(); worker.postMessage({ type: 'loaddb', src, extra });
   renderSide(); requestFill();
 }
 
@@ -261,7 +273,8 @@ function renderFill() {
   const el = $('#fillState'); el.className = '';
   const complete = fillStatus === 'done';
   let txt = '';
-  if (fillStatus === 'off') txt = $('#auto').checked ? 'Waiting for a word list.' : 'Autofill is off.';
+  if (dbLoading) txt = 'Loading the word database…';
+  else if (fillStatus === 'off') txt = $('#auto').checked ? 'Waiting for a word list.' : 'Autofill is off.';
   else if (fillStatus === 'nodb') txt = 'Load a word list to enable autofill.';
   else if (fillStatus === 'invalid') txt = 'Fix the grid problems below first.';
   else if (fillStatus === 'searching') txt = ghost ? 'Found a fill, looking for a better one…' : 'Searching…';
@@ -319,7 +332,7 @@ function renderSide() {
   if (!db || !db.total) { box.innerHTML = '<div class="empty-db">No word list loaded. Use <b>Word list</b> to load one (one word per line, optional <code>;score</code>).</div>'; $('#candInfo').textContent = ''; return; }
   if (!A || A.cells.length < 3) { box.innerHTML = ''; $('#candInfo').textContent = ''; return; }
   const pat = patOf(A), len = A.cells.length;
-  if (!pat.includes('?')) { const sc = db.index.get(pat); box.innerHTML = `<span class="hint">${sc ? 'Filled: in the word list (score ' + sc + ').' : 'Filled: <b>not in the word list</b>.'}</span>`; $('#candInfo').textContent = ''; return; }
+  if (!pat.includes('?')) { const sc = db.score(pat); box.innerHTML = `<span class="hint">${sc ? 'Filled: in the word list (score ' + db.label(sc) + ').' : 'Filled: <b>not in the word list</b>.'}</span>`; $('#candInfo').textContent = ''; return; }
   const bm = db.matchingBitmap(pat), total = db.numMatches(bm), all = db.matchingWords(len, bm);
   const usedWords = new Set(slots.filter(s => s.id !== A.id).map(patOf).filter(p => !p.includes('?')));
   const memo = new Map();                                       // (crossing pattern with letter) -> fits?
@@ -340,10 +353,10 @@ function renderSide() {
     if (!ok) { blocked++; continue; }
     if (out.length < 120) out.push([w, sc]);
   }
-  box.innerHTML = out.length ? out.map(([w, sc]) => `<button data-w="${w}">${w}<i>${sc}</i></button>`).join('') : '<span class="hint">No word fits here and keeps every crossing fillable.</span>';
+  box.innerHTML = out.length ? out.map(([w, sc]) => `<button data-w="${w}">${w}<i>${db.label(sc)}</i></button>`).join('') : '<span class="hint">No word fits here and keeps every crossing fillable.</span>';
   $('#candInfo').textContent = `${all.length - blocked - dupes} fit · ${total} match` + (blocked ? ` · ${blocked} would block a crossing` : '');
 }
-function renderDbInfo() { $('#dbInfo').textContent = db && db.total ? `${db.total.toLocaleString()} words (${dbSource})` : 'No word list'; }
+function renderDbInfo() { $('#dbInfo').textContent = dbLoading ? 'Loading word database…' : db && db.total ? `${db.total.toLocaleString()} words (${dbSource})` : 'No word list'; }
 
 /* ---------- checks ---------- */
 function validate() {

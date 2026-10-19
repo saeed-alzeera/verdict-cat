@@ -1,6 +1,6 @@
 /* Autofill worker: best-first, cost-minimising backtracking over the word DB.
  *
- * In:   {type:'loaddb', text} · {type:'autofill', id, grid, width, height} · {type:'cancel'}
+ * In:   {type:'loaddb', src, extra} · {type:'autofill', id, grid, width, height} · {type:'cancel'}
  * Out:  {type:'dbloaded', total} · {type:'autofill-result', id, grid, cost, forGrid}
  *       · {type:'autofill-complete', id, ok, forGrid, nodes}
  *
@@ -27,7 +27,7 @@ self.onmessage = function (e) {
   var m = e.data;
   if (m.type === 'loaddb') {
     solver = null; cache = null;
-    db = new WordDB(m.text);
+    db = new WordDB(m.src, m.extra);
     self.postMessage({ type: 'dbloaded', total: db.total });
   } else if (m.type === 'cancel') {
     solver = null;

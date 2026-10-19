@@ -12,11 +12,14 @@ served from `/site2/` by the existing Pages deploy.
 
 ## Word list
 
-`words.txt` is not committed (same reason as `crossword/wordlists/built/`: one upstream source has no licence).
-Either build one locally (`python3 crossword/xw.py setup`, then copy `crossword/wordlists/built/master.txt` to
-`site2/words.txt`), or use the **Word list** button to load any `WORD;score` text file. It is stored in
-IndexedDB in that browser. `custom.txt` (committed) is always merged in.
-Score 0 bans a word; scores map to cost on a log scale (60 and above is cheapest).
+`worddb.json` is the word database: Crosshare's `{"words": {"3": [[word, tier], ...], ...}}` (lengths 3-15, tiers 0-3,
+about 497k words) with the precomputed bitmaps removed, because they are rebuilt on load. It is fetched once, then kept in
+IndexedDB (bump `DB_VERSION` in `index.html` when the file changes). Tier 0 is the worst but still usable (cost 10); 1, 2, 3
+cost 1, 0.1, 0.01. `custom.txt` is merged on top (score 0 bans a word). Entries longer than 15 letters have no words.
+
+The **Word list** button replaces the database with your own `WORD;score` text file (0 bans, 60+ is cheapest), stored in
+IndexedDB in that browser; **Use default** goes back. `words.txt` (gitignored) is only a local fallback if `worddb.json` is
+missing.
 
 ## Not implemented
 

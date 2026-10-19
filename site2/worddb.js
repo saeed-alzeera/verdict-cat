@@ -17,33 +17,57 @@
     return Math.pow(10, 1 - 3 * s / 60);
   }
 
-  function WordDB(text) {
+  // Crosshare worddb.json scores are tiers 0-3; map them onto the 0-60 scale so costOf gives 10, 1, 0.1, 0.01 (tier 0 is
+  // the worst but still usable, so it maps to 1 rather than 0 = banned).
+  var TIER_SCORE = [1, 20, 40, 60];
+
+  // src: word list text ("WORD;score" lines) or a Crosshare worddb object ({words: {len: [[word, tier], ...]}}).
+  // extra: optional text merged on top (custom words; score 0 bans).
+  function WordDB(src, extra) {
     this.words = [];            // len -> [[word, score]]
     this.bm = [];               // len -> Uint32Array[pos * 26 + letter]
     this.nwords = [];           // len -> count
-    this.index = new Map();     // word -> score
     this.total = 0;
-    this.parse(text);
+    this.tiered = typeof src !== 'string';
+    this._index = null;
+    var best = new Map();
+    if (typeof src === 'string') addText(best, src); else addObject(best, src);
+    if (extra) addText(best, extra);
+    this.build(best);
   }
 
-  WordDB.prototype.parse = function (text) {
-    var best = new Map(), lines = text.split('\n'), i, line, semi, w, sc, j, ch, clean;
+  function clean(w) {
+    var out = '', j, ch;
+    for (j = 0; j < w.length; j++) { ch = w.charCodeAt(j); if (ch >= 97 && ch <= 122) ch -= 32; if (ch >= A && ch <= A + 25) out += String.fromCharCode(ch); }
+    return out;
+  }
+  function put(best, w, sc) {
+    if (w.length < 3 || w.length > 25) return;
+    if (sc <= 0) { best.set(w, 0); return; }                  // ban
+    if (best.get(w) === 0) return;
+    if (!best.has(w) || sc > best.get(w)) best.set(w, sc);
+  }
+  function addObject(best, obj) {
+    var ws = obj.words || obj;
+    Object.keys(ws).forEach(function (len) {
+      var arr = ws[len];
+      for (var i = 0; i < arr.length; i++) put(best, clean(arr[i][0]), TIER_SCORE[arr[i][1]] || 1);
+    });
+  }
+  function addText(best, text) {
+    var lines = text.split('\n'), i, line, semi, w, sc;
     for (i = 0; i < lines.length; i++) {
       line = lines[i];
       if (!line || line.charCodeAt(0) === 35) continue;        // blank / '#'
-      semi = line.lastIndexOf(';');
-      sc = 90;
+      semi = line.lastIndexOf(';'); sc = 90; w = line;
       if (semi >= 0) { sc = parseInt(line.slice(semi + 1), 10); w = line.slice(0, semi); if (isNaN(sc)) { sc = 90; w = line; } }
-      else w = line;
-      clean = '';
-      for (j = 0; j < w.length; j++) { ch = w.charCodeAt(j); if (ch >= 97 && ch <= 122) ch -= 32; if (ch >= A && ch <= A + 25) clean += String.fromCharCode(ch); }
-      if (clean.length < 2 || clean.length > 25) continue;
-      if (sc <= 0) { best.set(clean, 0); continue; }            // ban
-      if (best.get(clean) === 0) continue;
-      if (!best.has(clean) || sc > best.get(clean)) best.set(clean, sc);
+      put(best, clean(w), sc);
     }
+  }
+
+  WordDB.prototype.build = function (best) {
     var byLen = [];
-    best.forEach(function (s, w) { if (s > 0) { (byLen[w.length] = byLen[w.length] || []).push([w, s]); this.index.set(w, s); } }, this);
+    best.forEach(function (s, w) { if (s > 0) (byLen[w.length] = byLen[w.length] || []).push([w, s]); });
     for (var L = 0; L < byLen.length; L++) {
       var ws = byLen[L];
       if (!ws) continue;
@@ -57,6 +81,17 @@
       this.words[L] = ws; this.bm[L] = maps; this.nwords[L] = n; this.total += n;
     }
   };
+
+  // Score of a word (0 if absent). The word -> score map is built on first use.
+  WordDB.prototype.score = function (w) {
+    if (!this._index) {
+      this._index = new Map();
+      for (var L = 0; L < this.words.length; L++) if (this.words[L]) for (var i = 0; i < this.words[L].length; i++) this._index.set(this.words[L][i][0], this.words[L][i][1]);
+    }
+    return this._index.get(w) || 0;
+  };
+  // Score as shown to the user: tier 0-3 for a Crosshare db, the raw score otherwise.
+  WordDB.prototype.label = function (sc) { return this.tiered ? (sc >= 60 ? 3 : sc >= 40 ? 2 : sc >= 20 ? 1 : 0) : sc; };
 
   WordDB.prototype.has = function (len) { return !!this.words[len]; };
 
