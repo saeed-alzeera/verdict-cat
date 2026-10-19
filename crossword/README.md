@@ -30,6 +30,7 @@ xw check mypuzzle                            # symmetry, connectivity, min lengt
 xw fill mypuzzle --min-score 40 --partial    # autofill; keeps every letter already placed
 xw fill mypuzzle --must JWANA ALJAR/HAMOOD   # words that must appear (A/B = exactly one); saved in the puzzle
 xw layout mypuzzle --want 5:8,7:4            # favor layouts with enough slots of the lengths you need
+xw nix mypuzzle 17A SOMEWORD                 # eliminate fill you dislike: bans it (saved in the puzzle), blanks it, refills
 xw quality mypuzzle                          # weakest entries -> swap with xw cands 17A / xw put
 xw clue mypuzzle 17A "..." ; xw list mypuzzle
 ```

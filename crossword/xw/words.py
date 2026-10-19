@@ -125,7 +125,7 @@ class Lexicon:
     `seed`), so the lowest set bit of any candidate mask is the best word.
     """
 
-    def __init__(self, min_score=25, themes=(), seed=0, extra=None):
+    def __init__(self, min_score=25, themes=(), seed=0, extra=None, banned=()):
         if not os.path.exists(MASTER) or os.path.getmtime(MASTER) < os.path.getmtime(CUSTOM if os.path.exists(CUSTOM) else MASTER):
             build(verbose=False)
         self.scores = {}
@@ -136,6 +136,8 @@ class Lexicon:
                 self.scores[w] = max(self.scores.get(w, 0), sc)
         for w, sc in (extra or {}).items():
             self.scores[w] = sc
+        for w in banned:
+            self.scores.pop(w, None)
         self.min_score = min_score
         self.seed = seed
         self._by_len = {}
