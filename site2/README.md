@@ -21,6 +21,15 @@ patterns, scoring the slots of each length the list needs (strong penalty for fe
 patterns exactly: how many words fit in the grid at once with their crossings agreeing, and how many (word, entry) placements
 belong to such an arrangement. The words are not placed; use Add a word for that.
 
+## OR / AND in Add words
+
+The **Add words** box understands `or` and `and`:
+
+- `SAEED or ALJAR` places exactly one of the two (the layout that costs the grid the fewest options). `|` and `/` also mean or.
+- `HAPPY and BIRTHDAY` places both; if either cannot be placed the whole placement is refused instead of dropping one. `&` also means and.
+- `or` binds tighter than `and`: `SAEED or ALJAR and HAPPY` is (SAEED or ALJAR) and HAPPY.
+- Plain lists (commas / new lines) behave as before: placed as far as they fit.
+
 ## Word list
 
 `worddb.json` is the word database: Crosshare's `{"words": {"3": [[word, tier], ...], ...}}` (lengths 3-15, tiers 0-3,

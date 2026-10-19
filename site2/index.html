@@ -137,10 +137,10 @@
     <div class="panel">
       <h3><span>Add words</span><span id="placeInfo" class="mono"></span></h3>
       <form id="placeForm" style="display:grid;gap:8px">
-        <textarea id="wordIn" class="place-in" rows="2" placeholder="Words to place, one per line or separated by commas" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-label="Words to place"></textarea>
+        <textarea id="wordIn" class="place-in" rows="2" placeholder="Words to place, one per line or separated by commas. Use OR / AND: SAEED or ALJAR, HAPPY and BIRTHDAY" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-label="Words to place"></textarea>
         <div class="row"><button class="btn sm primary" type="submit">Place</button><button class="btn sm" id="bList" type="button" title="Add to the custom list without placing">Add to list</button></div>
       </form>
-      <p id="placeMsg">Finds the layout that costs the whole grid the fewest options. <kbd>Enter</kbd> places, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line.</p>
+      <p id="placeMsg">Finds the layout that costs the whole grid the fewest options. <kbd>Enter</kbd> places, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line. <b>A or B</b> places only one of them; <b>A and B</b> must both be placed.</p>
       <div class="row">
         <button class="btn sm" id="bNext" type="button" disabled>Next best layout</button>
         <button class="btn sm" id="bUndo" type="button" disabled>Undo</button>
@@ -517,11 +517,12 @@ function maxMatch(lists) {
 
 // Depth-first search over where each word goes (most constrained word first, best few spots each, within a node/time
 // budget). The first descent is the greedy layout, so there is always an answer; further layouts are scored on the whole grid.
-function searchLayouts(words) {
+function searchLayouts(words, req = new Set(), ms = MAX_MS) {
   const base = new Map(slots.map(s => [s.key, s.cells.length >= 3 && db.has(s.cells.length) ? matchCount(patOf(s)) : 0]));
   const sols = [], assign = [], skipped = [], seen = new Set(), t0 = performance.now(); let nodes = 0;
   let cap = MAX_NODES;       // node budget of the current first-word spot, so every top spot gets explored, not just the first
-  const over = () => sols.length > 0 && (nodes > cap || performance.now() - t0 > MAX_MS);
+  const over = () => sols.length > 0 && (nodes > cap || performance.now() - t0 > ms);
+  const hard = () => performance.now() - t0 > 4 * ms + 500;       // required words can leave no layout at all, so cap the search outright
   const dfs = i => {
     if (i === words.length) {
       const g = gridImpact(base, assign); if (g.cost === Infinity) return;
@@ -529,6 +530,7 @@ function searchLayouts(words) {
       sols.push({ assign: assign.slice(), skipped: skipped.slice(), cost: g.cost + SKIP_PENALTY * skipped.length, avg: g.avg, worst: g.worst });
       return;
     }
+    if (hard()) return;
     nodes++;
     const w = words[i], all = rankPlacements(w);
     // Keep as many words placeable as possible: only take an entry if the words still to come can still all find one,
@@ -537,14 +539,14 @@ function searchLayouts(words) {
     const full = maxMatch(lists), rest = lists.slice(1);
     let opts = all.filter(o => 1 + maxMatch(rest.map(l => l.filter(k => k !== o.slot.key))) >= full).slice(0, TOP_SPOTS);
     if (!opts.length && maxMatch(rest) < full) opts = all.slice(0, TOP_SPOTS);        // skipping would cost another word its place
-    if (!opts.length) { skipped.push(w); dfs(i + 1); skipped.pop(); return; }
+    if (!opts.length) { if (req.has(w)) return; skipped.push(w); dfs(i + 1); skipped.pop(); return; }
     for (let k = 0; k < opts.length; k++) {
       const o = opts[k];
       if (i === 0) { nodes = 0; cap = Math.ceil(MAX_NODES / opts.length); }
       const changed = fillSlot(w, o.slot); assign.push({ word: w, slot: o.slot });
       dfs(i + 1);
       assign.pop(); clearCells(changed);
-      if (i === 0 ? sols.length > 0 && performance.now() - t0 > MAX_MS : over()) return;
+      if (i === 0 ? sols.length > 0 && performance.now() - t0 > ms : over()) return;
     }
   };
   dfs(0);
@@ -565,31 +567,76 @@ function summary(sol) {
   return where + (cost < 0.005 ? '. No crossing options lost.' : `. Affected entries keep ${pc(sol.avg)} of their options on average (worst ${pc(sol.worst)}).`);
 }
 
+// "A or B" = place exactly one of them. "A and B" = both must be placed. Plain lists (commas / lines) are placed as far as they fit.
+// "or" binds tighter than "and": "SAEED or ALJAR and HAPPY" is (SAEED or ALJAR) and HAPPY. "|" and "/" also mean or, "&" also means and.
+function parseWords(raw) {
+  const units = [], seen = new Set();
+  for (const seg of raw.split(/[\n,;]+/)) {
+    const parts = seg.split(/\s+and\s+|\s*&\s*/i), req = parts.length > 1;
+    for (const part of parts) {
+      const alts = [...new Set(part.split(/\s+or\s+|\s*[|\/]\s*/i).map(cleanWord).filter(Boolean))].filter(w => !seen.has(w));
+      if (!alts.length) continue;
+      alts.forEach(w => seen.add(w));
+      units.push({ alts, req });
+    }
+  }
+  return units;
+}
+const choices = units => {      // every way to pick one word from each unit, capped
+  let out = [[]];
+  for (const u of units) {
+    const next = [];
+    for (const c of out) for (const w of u.alts) if (next.length < 24) next.push([...c, w]);
+    out = next;
+  }
+  return out;
+};
+
 function placeWords(raw) {
   if (!raw.trim()) raw = custom.join('\n');
-  const wanted = [...new Set(raw.split(/[\n,;]+/).map(w => w.toUpperCase().replace(/[^A-Z]/g, '')).filter(Boolean))];
-  if (!wanted.length) { setPlaceMsg('Enter one or more words, or add some to the list.', 'bad'); return; }
+  const units = parseWords(raw);
+  if (!units.length) { setPlaceMsg('Enter one or more words, or add some to the list.', 'bad'); return; }
   if (!db || !db.total) { setPlaceMsg('Load a word list first: the placement check needs it.', 'bad'); return; }
-  const notes = [], words = [];
-  for (const w of wanted) {
-    if (w.length < 3) notes.push(`${w}: needs at least 3 letters`);
-    else if (slots.some(s => patOf(s) === w)) notes.push(`${w}: already in the grid`);
-    else if (!slots.some(s => s.cells.length === w.length)) notes.push(`${w}: no ${w.length}-letter entry in this grid`);
-    else if (!rankPlacements(w).length) notes.push(`${w}: no ${w.length}-letter entry fits it (a clash with a letter there, or a crossing would have no word)`);
-    else words.push(w);
+  const notes = [], live = [], fail = [];
+  for (const u of units) {
+    const why = [], ok = [];
+    let inGrid = false;
+    for (const w of u.alts) {
+      if (w.length < 3) why.push(`${w}: needs at least 3 letters`);
+      else if (slots.some(s => patOf(s) === w)) { inGrid = true; why.push(`${w}: already in the grid`); }
+      else if (!slots.some(s => s.cells.length === w.length)) why.push(`${w}: no ${w.length}-letter entry in this grid`);
+      else if (!rankPlacements(w).length) why.push(`${w}: no ${w.length}-letter entry fits it (a clash with a letter there, or a crossing would have no word)`);
+      else ok.push(w);
+    }
+    if (inGrid && u.alts.length > 1) continue;                               // the "or" is already satisfied
+    if (ok.length) live.push({ alts: ok, req: u.req });
+    else if (u.req && !inGrid) fail.push(...why);
+    else notes.push(...why);
   }
-  if (!words.length) { setPlaceMsg('Nothing could be placed. ' + notes.join('; ') + '.', 'bad'); return; }
-  // most constrained words first: fewest spots, then longest
-  const spots = Object.fromEntries(words.map(w => [w, rankPlacements(w).length]));
-  words.sort((a, b) => spots[a] - spots[b] || b.length - a.length);
-  const solutions = searchLayouts(words).filter(x => x.assign.length);
-  if (!solutions.length) { setPlaceMsg('No layout works for these words together. ' + notes.join('; ') + '.', 'bad'); return; }
+  if (fail.length) { setPlaceMsg('A required word cannot be placed. ' + fail.join('; ') + '.', 'bad'); return; }
+  if (!live.length) { setPlaceMsg('Nothing could be placed. ' + notes.join('; ') + '.', 'bad'); return; }
+  const combos = choices(live).filter(c => new Set(c).size === c.length);
+  const req = new Set(live.flatMap(u => u.req ? u.alts : []));
+  const ms = Math.max(250, MAX_MS / combos.length), t0 = performance.now();
+  let solutions = [];
+  for (const combo of combos) {
+    // most constrained words first: fewest spots, then longest
+    const spots = Object.fromEntries(combo.map(w => [w, rankPlacements(w).length]));
+    const words = combo.slice().sort((a, b) => spots[a] - spots[b] || b.length - a.length);
+    const need = new Set(live.filter(u => u.req).map(u => u.alts.find(w => combo.includes(w))));
+    solutions.push(...searchLayouts(words, need, ms).filter(x => x.assign.length));
+    if (performance.now() - t0 > 6000) break;
+  }
+  const keyOf = x => x.assign.map(a => a.word + '@' + a.slot.id).sort().join('|');
+  const dedup = new Map(); solutions.forEach(x => { if (!dedup.has(keyOf(x))) dedup.set(keyOf(x), x); });
+  solutions = [...dedup.values()].sort((a, b) => a.cost - b.cost).slice(0, KEEP);
+  if (!solutions.length) { setPlaceMsg((req.size ? 'No layout fits all the required words together. ' : 'No layout works for these words together. ') + notes.join('; ') + '.', 'bad'); return; }
   const best = solutions[0], changed = applyLayout(best);
   place = { solutions, i: 0, changed };
   addToList(best.assign.map(x => x.word).join('\n'));
   afterEdit(true); renderPlaceButtons();
   const left = [...notes, ...best.skipped.map(w => `${w}: no spot left once the others are placed`)];
-  setPlaceMsg(`Placed ${best.assign.length} of ${wanted.length}: ${summary(best)}` + (solutions.length > 1 ? ` Best of ${solutions.length} layouts.` : '') + (left.length ? ' Not placed: ' + left.join('; ') + '.' : ''), left.length ? '' : 'ok');
+  setPlaceMsg(`Placed ${best.assign.length} of ${units.length}: ${summary(best)}` + (solutions.length > 1 ? ` Best of ${solutions.length} layouts.` : '') + (left.length ? ' Not placed: ' + left.join('; ') + '.' : ''), left.length ? '' : 'ok');
   $('#wordIn').value = '';
 }
 $('#placeForm').addEventListener('submit', e => { e.preventDefault(); placeWords($('#wordIn').value); });
