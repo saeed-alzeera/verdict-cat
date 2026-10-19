@@ -462,6 +462,18 @@
       return false;
     },
 
+    // ── Raw namespace access (worker only) ─────────────────────────────────
+    // For pages that keep their own per-key {value, ts} state (e.g. crossword).
+    // pullNs returns null when sync is unavailable or fails.
+    pullNs: async function(ns) {
+      if (mode() !== 'worker') return null;
+      try { return await workerGetNs(ns); } catch(e) { return null; }
+    },
+    pushNs: async function(ns, entries) {
+      if (mode() !== 'worker') return false;
+      try { await workerPostNs(ns, entries); return true; } catch(e) { return false; }
+    },
+
     // ── One-time import from the old gist into the worker ─────────────────
     // Safe to run repeatedly: entries merge by timestamp. Pass a GitHub token
     // to import on a device that has a sync key but never had the gist set up.
