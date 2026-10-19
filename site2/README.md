@@ -14,8 +14,7 @@ served from `/site2/` by the existing Pages deploy.
 
 ## Custom list and black squares
 
-Words typed into **Add a word** (Place, or **Add to list**) join a custom list kept in this browser; **Use custom.txt** adds every
-word from `custom.txt`, and each chip shows how many entries of its length the current grid has. **Generate black squares**
+Words typed into **Add a word** (Place, or **Add to list**) join a custom list kept in this browser. **Place** with an empty box places the words already on the list. Each chip shows how many entries of its length the current grid has. **Generate black squares**
 replaces the black pattern (and clears letters and clues; **Undo** restores them) with a symmetric NYT-style one: 180° symmetry,
 all entries 3+ letters, connected, no 2x2 black blocks, at most 78 entries on a 15x15 (140 on a 21x21). It anneals over
 patterns, scoring the slots of each length the list needs (strong penalty for fewer slots than words), then checks the best
@@ -27,7 +26,7 @@ belong to such an arrangement. The words are not placed; use Add a word for that
 `worddb.json` is the word database: Crosshare's `{"words": {"3": [[word, tier], ...], ...}}` (lengths 3-15, tiers 0-3,
 about 497k words) with the precomputed bitmaps removed, because they are rebuilt on load. It is fetched once, then kept in
 IndexedDB (bump `DB_VERSION` in `index.html` when the file changes). Tier 0 is the worst but still usable (cost 10); 1, 2, 3
-cost 1, 0.1, 0.01. `custom.txt` is merged on top (score 0 bans a word). Entries longer than 15 letters have no words.
+cost 1, 0.1, 0.01. Entries longer than 15 letters have no words.
 
 The **Word list** button replaces the database with your own `WORD;score` text file (0 bans, 60+ is cheapest), stored in
 IndexedDB in that browser; **Use default** goes back. `words.txt` (gitignored) is only a local fallback if `worddb.json` is
