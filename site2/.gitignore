@@ -1,0 +1,3 @@
+# Local word list, not committed (same policy as crossword/wordlists/built).
+# Load one in the app with "Word list", or build it with: python3 crossword/xw.py setup
+words.txt

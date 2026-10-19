@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>CW V2</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="../favicon-180.png" />
+<style>
+  :root {
+    --bg: #f6f5f1; --panel: #ffffff; --line: #d9d6cc; --line-strong: #b9b5a8;
+    --ink: #1c1c1c; --muted: #6f6c63; --accent: #2f6fb5; --accent-ink: #ffffff;
+    --cell: #ffffff; --black: #1c1c1c; --word: #cfe0f4; --sel: #f7d44c; --ghost: #7a99c2;
+    --ok: #2f8f4e; --warn: #b8791a; --err: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1117; --panel: #1a1d23; --line: #2e3238; --line-strong: #454a52;
+      --ink: #e8eaed; --muted: #8b9099; --accent: #5b9bd5; --accent-ink: #0f1117;
+      --cell: #20242b; --black: #05060a; --word: #27405c; --sel: #8a6d10; --ghost: #5f86b5;
+      --ok: #5cb97a; --warn: #e8a730; --err: #e05c5c;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  button, select, input { font: inherit; color: inherit; }
+  .btn { background: var(--panel); border: 1px solid var(--line-strong); border-radius: 7px; padding: 6px 11px; cursor: pointer; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .btn.sm { padding: 3px 8px; font-size: 13px; }
+  .btn:disabled { opacity: .45; cursor: default; }
+
+  header { border-bottom: 1px solid var(--line); background: var(--panel); }
+  .bar { max-width: 1120px; margin: 0 auto; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .brand { font-weight: 700; letter-spacing: -.01em; margin-right: 6px; font-size: 17px; }
+  .tg { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted); cursor: pointer; }
+  .spacer { flex: 1; }
+
+  main { max-width: 1120px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: minmax(0, 560px) minmax(280px, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); } }
+
+  .titles { display: flex; gap: 8px; margin-bottom: 10px; }
+  .titles input { flex: 1; min-width: 0; padding: 6px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); }
+
+  .clue-bar { display: flex; gap: 8px; align-items: center; padding: 6px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; min-height: 40px; }
+  .clue-bar .no { font-weight: 700; min-width: 34px; }
+  .clue-bar input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; padding: 4px 0; }
+
+  #gridwrap { --n: 15; --cellpx: calc(min(100vw - 32px, 560px) / var(--n)); }
+  #grid { display: grid; grid-template-columns: repeat(var(--n), 1fr); width: min(100%, 560px); aspect-ratio: 1; border: 2px solid var(--black); background: var(--black); gap: 1px; user-select: none; touch-action: manipulation; }
+  .c { position: relative; background: var(--cell); display: flex; align-items: center; justify-content: center; cursor: pointer; container-type: size; }
+  .c.b { background: var(--black); }
+  .c.w { background: var(--word); }
+  .c.s { background: var(--sel); }
+  .c .n { position: absolute; top: 1px; left: 2px; font-size: 28cqh; line-height: 1; color: var(--ink); opacity: .75; }
+  .c .l { font-size: 62cqh; font-weight: 600; line-height: 1; }
+  .c .g { font-size: 62cqh; font-weight: 500; line-height: 1; color: var(--ghost); }
+  .hint { color: var(--muted); font-size: 12.5px; margin: 8px 0 0; }
+  kbd { border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; font-size: 11.5px; background: var(--panel); }
+
+  aside { display: grid; gap: 12px; min-width: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .panel h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-weight: 600; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: none; letter-spacing: 0; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  #fillState { font-size: 13px; margin: 0 0 8px; color: var(--muted); }
+  #fillState.ok { color: var(--ok); } #fillState.bad { color: var(--err); }
+  .cand { display: flex; flex-wrap: wrap; gap: 5px; max-height: 260px; overflow: auto; }
+  .cand button { border: 1px solid var(--line-strong); background: var(--bg); border-radius: 6px; padding: 2px 7px; cursor: pointer; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+  .cand button:hover { border-color: var(--accent); }
+  .cand button i { color: var(--muted); font-style: normal; font-size: 10.5px; margin-left: 5px; }
+  ul.chk { margin: 0; padding: 0; list-style: none; font-size: 13px; }
+  ul.chk li.err { color: var(--err); } ul.chk li.warn { color: var(--warn); } ul.chk li.ok { color: var(--ok); }
+  .stats { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+  .clues { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-height: 340px; overflow: auto; }
+  .clues h4 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .cl { display: flex; gap: 6px; padding: 2px 4px; border-radius: 5px; cursor: pointer; font-size: 13px; }
+  .cl .no { font-weight: 700; min-width: 22px; text-align: right; }
+  .cl .tx.empty { color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+  .cl.cur { background: var(--sel); } .cl.alt { background: var(--word); }
+  .empty-db { border: 1px dashed var(--line-strong); border-radius: 8px; padding: 10px; font-size: 13px; color: var(--muted); }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 7px 14px; border-radius: 8px; opacity: 0; pointer-events: none; transition: opacity .2s; font-size: 13px; }
+  .toast.on { opacity: 1; }
+  .hidden-input { position: fixed; left: -100px; top: 0; width: 1px; height: 1px; opacity: 0; }
+  dialog { background: var(--panel); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 12px; padding: 18px; max-width: 340px; }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog h2 { margin: 0 0 10px; font-size: 18px; }
+  dialog input[type=number] { width: 80px; padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--bg); }
+</style>
+</head>
+<body>
+<header><div class="bar">
+  <span class="brand">CW V2</span>
+  <button class="btn sm" id="bNew">New</button>
+  <button class="btn sm" id="bOpen">Import</button>
+  <button class="btn sm" id="bExport">Export</button>
+  <button class="btn sm" id="bClear" title="Remove every letter, keep the black squares">Clear letters</button>
+  <label class="tg"><input type="checkbox" id="sym" checked /> symmetry</label>
+  <label class="tg"><input type="checkbox" id="auto" checked /> autofill</label>
+  <span class="spacer"></span>
+  <button class="btn sm" id="bWords" title="Load your own word list (stored in this browser)">Word list</button>
+</div></header>
+
+<main>
+  <section>
+    <div class="titles">
+      <input id="ttl" placeholder="Title" aria-label="Title" />
+      <input id="by" placeholder="Constructor" aria-label="Constructor" />
+    </div>
+    <div class="clue-bar">
+      <span class="no" id="cbNo"></span>
+      <input id="cbIn" placeholder="Write a clue…" disabled />
+    </div>
+    <div id="gridwrap"><div id="grid" role="grid" aria-label="Crossword grid"></div></div>
+    <p class="hint"><kbd>.</kbd> toggles a black square · <kbd>Space</kbd> or click again flips direction · <kbd>Tab</kbd> next entry · arrows move · <kbd>⌫</kbd> clears · <kbd>Enter</kbd> accepts the autofill preview</p>
+  </section>
+
+  <aside>
+    <div class="panel">
+      <h3><span>Autofill</span><span id="fillCost" class="mono"></span></h3>
+      <p id="fillState">Autofill is off.</p>
+      <div class="row">
+        <button class="btn sm primary" id="bAccept" disabled>Fill grid</button>
+        <button class="btn sm" id="bAgain" disabled title="Search again with fresh noise">Another fill</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3><span>Words <span id="candPat" class="mono"></span></span><span id="candInfo" class="mono"></span></h3>
+      <div class="cand" id="cand"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Grid</h3>
+      <ul class="chk" id="chk"></ul><div class="stats" id="stats"></div>
+      <div class="stats" id="dbInfo"></div>
+    </div>
+
+    <div class="panel clues" id="clues"></div>
+  </aside>
+</main>
+
+<input id="hin" class="hidden-input" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="crossword input" />
+<input id="file" type="file" accept=".json,application/json" style="display:none" />
+<input id="wfile" type="file" accept=".txt,text/plain" style="display:none" />
+<div class="toast" id="toast"></div>
+
+<dialog id="dlgNew">
+  <h2>New grid</h2>
+  <label class="tg">Size <input type="number" id="nSize" value="15" min="5" max="25" /> (15 daily · 21 Sunday)</label>
+  <div class="row" style="margin-top:14px;justify-content:flex-end"><button class="btn" id="nCancel">Cancel</button><button class="btn primary" id="nGo">Create</button></div>
+</dialog>
+<dialog id="dlgWords">
+  <h2>Word list</h2>
+  <p class="hint" style="margin-top:0">One word per line, optionally <code>WORD;score</code> (0 bans a word, higher is better; scores above 60 count as 60). Stored in this browser only.</p>
+  <div class="row" style="margin-top:12px;justify-content:flex-end">
+    <button class="btn" id="wReset">Use default</button>
+    <button class="btn" id="wClose">Close</button>
+    <button class="btn primary" id="wLoad">Choose file…</button>
+  </div>
+</dialog>
+
+<script src="worddb.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const LS = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+             set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } } };
+const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 1800); };
+const esc = s => String(s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
+const key = (r, c) => r + ',' + c;
+
+/* ---------- state ---------- */
+let N = 15, G = [], clues = {}, title = '', author = '';
+let cur = [0, 0], dir = 'A';
+let slots = [], cellSlot = new Map();
+let db = null, dbSource = '';
+let ghost = null, ghostCost = 0, fillId = 0, fillStatus = 'off';   // autofill preview
+
+const inb = (r, c) => r >= 0 && c >= 0 && r < N && c < N;
+const isB = (r, c) => G[r][c] === '#';
+const mir = (r, c) => [N - 1 - r, N - 1 - c];
+const rows = () => G.map(r => r.join(''));
+const gridKey = () => rows().join('/');
+
+function blankGrid(n) { return Array.from({ length: n }, () => Array(n).fill('.')); }
+
+function computeSlots() {
+  slots = []; cellSlot = new Map(); let num = 0;
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    if (isB(r, c)) continue;
+    const sa = (c === 0 || isB(r, c - 1)) && c + 1 < N && !isB(r, c + 1);
+    const sd = (r === 0 || isB(r - 1, c)) && r + 1 < N && !isB(r + 1, c);
+    if (!sa && !sd) continue;
+    num++;
+    for (const [d, on] of [['A', sa], ['D', sd]]) {
+      if (!on) continue;
+      const cells = []; let rr = r, cc = c;
+      while (rr < N && cc < N && !isB(rr, cc)) { cells.push([rr, cc]); d === 'A' ? cc++ : rr++; }
+      const s = { num, dir: d, cells, key: d + r + ',' + c, id: num + d };
+      slots.push(s);
+      for (const [a, b] of cells) cellSlot.set(a + ',' + b + d, s);
+    }
+  }
+}
+const slotAt = (r, c, d) => cellSlot.get(r + ',' + c + d);
+const curSlot = () => slotAt(cur[0], cur[1], dir) || slotAt(cur[0], cur[1], dir === 'A' ? 'D' : 'A');
+const patOf = s => s.cells.map(([r, c]) => G[r][c] === '.' ? '?' : G[r][c]).join('');
+
+/* ---------- word list (IndexedDB cache, like Crosshare's worddb) ---------- */
+function idb() {
+  return new Promise((res, rej) => {
+    const q = indexedDB.open('cwv2', 1);
+    q.onupgradeneeded = () => q.result.createObjectStore('kv');
+    q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error);
+  });
+}
+async function idbGet(k) { try { const d = await idb(); return await new Promise(r => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => r(q.result); q.onerror = () => r(undefined); }); } catch { return undefined; } }
+async function idbSet(k, v) { try { const d = await idb(); await new Promise((res, rej) => { const t = d.transaction('kv', 'readwrite'); v === undefined ? t.objectStore('kv').delete(k) : t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); return true; } catch { return false; } }
+async function fetchText(url) { try { const r = await fetch(url, { cache: 'no-cache' }); return r.ok ? await r.text() : ''; } catch { return ''; } }
+
+let worker = null;
+function startWorker() {
+  if (worker) worker.terminate();
+  worker = new Worker('autofill-worker.js');
+  worker.onmessage = onWorker;
+}
+const DB_VERSION = 1;                       // bump when worddb.json changes so cached copies are replaced
+let dbLoading = false;
+async function loadDB() {
+  dbLoading = true; renderDbInfo(); renderFill();
+  let src = await idbGet('wordlist'), label = 'your list';
+  if (!src) {
+    const cached = await idbGet('worddb');
+    if (cached && cached.version === DB_VERSION && cached.data) { src = cached.data; label = 'worddb.json'; }
+    else {
+      try {
+        const r = await fetch('worddb.json'); if (!r.ok) throw 0;
+        src = await r.json(); label = 'worddb.json';
+        idbSet('worddb', { version: DB_VERSION, data: src });
+      } catch { src = await fetchText('words.txt'); label = 'words.txt'; }
+    }
+  }
+  const extra = await fetchText('custom.txt');
+  if (!src) { src = ''; label = 'custom words only'; }
+  db = new WordDB(src, extra); dbSource = label; dbLoading = false; renderDbInfo();
+  startWorker(); worker.postMessage({ type: 'loaddb', src, extra });
+  renderSide(); requestFill();
+}
+
+/* ---------- autofill wiring ---------- */
+const consistent = (g1, g2) => g1 && g1.length === g2.length && g1.every((row, r) => [...row].every((ch, c) => g2[r][c] === '.' ? ch !== '#' : g2[r][c] === ch));
+function requestFill(fresh) {
+  const on = $('#auto').checked;
+  if (!on || !worker || !db || !db.total) { if (worker) worker.postMessage({ type: 'cancel' }); fillStatus = on ? (db && db.total ? 'off' : 'nodb') : 'off'; ghost = null; renderFill(); return; }
+  if (ghost && !consistent(ghost, rows()) || fresh) ghost = null;
+  const v = validate();
+  if (v.errs.length) { worker.postMessage({ type: 'cancel' }); fillStatus = 'invalid'; ghost = null; renderFill(); return; }
+  fillStatus = 'searching'; renderFill();
+  worker.postMessage({ type: 'autofill', id: ++fillId, grid: rows(), width: N, height: N, fresh: !!fresh });
+}
+function onWorker(e) {
+  const m = e.data;
+  if (m.type === 'dbloaded') { renderDbInfo(); return; }
+  if (m.id !== fillId || m.forGrid !== gridKey()) return;            // stale: the grid changed since this was solved
+  if (m.type === 'autofill-result') { ghost = m.grid; ghostCost = m.cost; renderGrid(); renderFill(); }
+  else if (m.type === 'autofill-complete') { fillStatus = m.ok ? 'done' : (m.reason === 'nofill' ? 'nofill' : 'dead'); renderFill(); }
+}
+function renderFill() {
+  const el = $('#fillState'); el.className = '';
+  const complete = fillStatus === 'done';
+  let txt = '';
+  if (dbLoading) txt = 'Loading the word database…';
+  else if (fillStatus === 'off') txt = $('#auto').checked ? 'Waiting for a word list.' : 'Autofill is off.';
+  else if (fillStatus === 'nodb') txt = 'Load a word list to enable autofill.';
+  else if (fillStatus === 'invalid') txt = 'Fix the grid problems below first.';
+  else if (fillStatus === 'searching') txt = ghost ? 'Found a fill, looking for a better one…' : 'Searching…';
+  else if (fillStatus === 'done') { txt = ghost ? 'Fill found.' : 'Grid is already full.'; el.className = 'ok'; }
+  else if (fillStatus === 'nofill') { txt = 'No fill found with this word list. Change a black square or a letter.'; el.className = 'bad'; }
+  else if (fillStatus === 'dead') { txt = 'An entry has no possible word.'; el.className = 'bad'; }
+  el.textContent = txt;
+  $('#fillCost').textContent = ghost ? 'cost ' + ghostCost.toFixed(2) : '';
+  $('#bAccept').disabled = !ghost; $('#bAgain').disabled = !(complete || fillStatus === 'nofill');
+}
+function acceptGhost() {
+  if (!ghost) return;
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (G[r][c] === '.' && ghost[r][c] !== '.' && ghost[r][c] !== '#') G[r][c] = ghost[r][c];
+  ghost = null; afterEdit();
+}
+
+/* ---------- rendering ---------- */
+function render() { renderGrid(); renderBar(); renderClues(); renderSide(); renderChecks(); }
+function renderGrid() {
+  const A = curSlot(), inWord = new Set(A ? A.cells.map(c => key(...c)) : []);
+  const nums = new Map(); slots.forEach(s => { const k = key(...s.cells[0]); if (!nums.has(k)) nums.set(k, s.num); });
+  $('#gridwrap').style.setProperty('--n', N);
+  let html = '';
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const k = key(r, c), b = isB(r, c), ch = G[r][c];
+    let cls = 'c' + (b ? ' b' : '');
+    if (!b) { if (r === cur[0] && c === cur[1]) cls += ' s'; else if (inWord.has(k)) cls += ' w'; }
+    html += `<div class="${cls}" data-r="${r}" data-c="${c}">` + (nums.has(k) ? `<span class="n">${nums.get(k)}</span>` : '') +
+      (!b && ch !== '.' ? `<span class="l">${ch}</span>` : (!b && ghost && ghost[r][c] >= 'A' ? `<span class="g">${ghost[r][c]}</span>` : '')) + '</div>';
+  }
+  $('#grid').innerHTML = html;
+}
+function renderBar() {
+  const A = curSlot(); $('#cbNo').textContent = A ? A.id : '';
+  const inp = $('#cbIn'); inp.disabled = !A; if (document.activeElement !== inp) inp.value = A ? (clues[A.key] || '') : '';
+}
+function renderClues() {
+  const A = curSlot(); let h = '';
+  for (const [d, name] of [['A', 'Across'], ['D', 'Down']]) {
+    h += `<div><h4>${name}</h4>`;
+    for (const s of slots.filter(x => x.dir === d)) {
+      const cl = clues[s.key], cross = A && A.id !== s.id && s.cells.some(([r, c]) => A.cells.some(([a, b]) => a === r && b === c));
+      h += `<div class="cl${A && A.id === s.id ? ' cur' : cross ? ' alt' : ''}" data-id="${s.id}"><span class="no">${s.num}</span><span class="tx${cl ? '' : ' empty'}">${esc(cl || patOf(s).replace(/\?/g, '·'))}</span></div>`;
+    }
+    h += '</div>';
+  }
+  $('#clues').innerHTML = h;
+  const el = $('#clues .cl.cur'); if (el) el.scrollIntoView({ block: 'nearest' });
+}
+
+/* Side word list: pattern match, then drop words that would leave a crossing entry with no fill, and words already in the grid. */
+function renderSide() {
+  const box = $('#cand'), A = curSlot();
+  $('#candPat').textContent = A ? patOf(A) : '';
+  if (!db || !db.total) { box.innerHTML = '<div class="empty-db">No word list loaded. Use <b>Word list</b> to load one (one word per line, optional <code>;score</code>).</div>'; $('#candInfo').textContent = ''; return; }
+  if (!A || A.cells.length < 3) { box.innerHTML = ''; $('#candInfo').textContent = ''; return; }
+  const pat = patOf(A), len = A.cells.length;
+  if (!pat.includes('?')) { const sc = db.score(pat); box.innerHTML = `<span class="hint">${sc ? 'Filled: in the word list (score ' + db.label(sc) + ').' : 'Filled: <b>not in the word list</b>.'}</span>`; $('#candInfo').textContent = ''; return; }
+  const bm = db.matchingBitmap(pat), total = db.numMatches(bm), all = db.matchingWords(len, bm);
+  const usedWords = new Set(slots.filter(s => s.id !== A.id).map(patOf).filter(p => !p.includes('?')));
+  const memo = new Map();                                       // (crossing pattern with letter) -> fits?
+  const cross = A.cells.map(([r, c]) => G[r][c] !== '.' ? null : (() => {
+    const X = slotAt(r, c, A.dir === 'A' ? 'D' : 'A'); if (!X || X.cells.length < 3) return null;
+    return { chars: patOf(X).split(''), pos: X.cells.findIndex(([a, b]) => a === r && b === c) };
+  })());
+  const fits = (i, ch) => {
+    const x = cross[i]; if (!x) return true;
+    const k = i * 32 + ch.charCodeAt(0) - 65; let v = memo.get(k);
+    if (v === undefined) { const p = x.chars.slice(); p[x.pos] = ch; v = db.anyMatch(db.matchingBitmap(p.join(''))); memo.set(k, v); }
+    return v;
+  };
+  const out = []; let blocked = 0, dupes = 0;
+  for (const [w, sc] of all) {
+    if (usedWords.has(w)) { dupes++; continue; }
+    let ok = true; for (let i = 0; i < len; i++) if (cross[i] && !fits(i, w[i])) { ok = false; break; }
+    if (!ok) { blocked++; continue; }
+    if (out.length < 120) out.push([w, sc]);
+  }
+  box.innerHTML = out.length ? out.map(([w, sc]) => `<button data-w="${w}">${w}<i>${db.label(sc)}</i></button>`).join('') : '<span class="hint">No word fits here and keeps every crossing fillable.</span>';
+  $('#candInfo').textContent = `${all.length - blocked - dupes} fit · ${total} match` + (blocked ? ` · ${blocked} would block a crossing` : '');
+}
+function renderDbInfo() { $('#dbInfo').textContent = dbLoading ? 'Loading word database…' : db && db.total ? `${db.total.toLocaleString()} words (${dbSource})` : 'No word list'; }
+
+/* ---------- checks ---------- */
+function validate() {
+  const errs = [], warns = []; let asym = 0, first = null;
+  if ($('#sym').checked) for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) { const [mr, mc] = mir(r, c); if ((r < mr || (r === mr && c < mc)) && isB(r, c) !== isB(mr, mc)) { asym++; first = first || `(${r},${c}) vs (${mr},${mc})`; } }
+  if (asym) warns.push(`${asym} asymmetric pair(s), e.g. ${first}`);
+  for (const d of ['A', 'D']) for (let i = 0; i < N; i++) {
+    let run = [];
+    for (let j = 0; j <= N; j++) {
+      const r = d === 'A' ? i : j, c = d === 'A' ? j : i;
+      if (j < N && !isB(r, c)) run.push([r, c]);
+      else { if (run.length === 2) errs.push(`Entry under 3 letters at row ${run[0][0] + 1}, col ${run[0][1] + 1} (${d === 'A' ? 'across' : 'down'})`); run = []; }
+    }
+  }
+  const white = []; for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (!isB(r, c)) white.push([r, c]);
+  if (white.length) {
+    const seen = new Set([key(...white[0])]), q = [white[0]];
+    while (q.length) { const [r, c] = q.pop(); for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const x = r + a, y = c + b; if (inb(x, y) && !isB(x, y) && !seen.has(key(x, y))) { seen.add(key(x, y)); q.push([x, y]); } } }
+    if (seen.size !== white.length) errs.push(`Grid not connected (${white.length - seen.size} squares cut off)`);
+  }
+  const seenW = {}; for (const s of slots) { const p = patOf(s); if (!p.includes('?')) (seenW[p] = seenW[p] || []).push(s.id); }
+  for (const [w, ids] of Object.entries(seenW)) if (ids.length > 1) errs.push(`Duplicate ${w}: ${ids.join(', ')}`);
+  return { errs, warns, nb: N * N - white.length, entries: slots.length, filled: white.filter(([r, c]) => G[r][c] !== '.').length, white: white.length };
+}
+function renderChecks() {
+  const v = validate();
+  $('#chk').innerHTML = [...v.errs.map(e => `<li class="err">✗ ${esc(e)}</li>`), ...v.warns.map(e => `<li class="warn">! ${esc(e)}</li>`),
+    v.errs.length ? '' : '<li class="ok">✓ connected · all entries ≥ 3 · no duplicates</li>'].join('');
+  $('#stats').textContent = `${v.entries} entries · ${v.nb} blacks · ${v.filled}/${v.white} letters`;
+  renderDbInfo();
+}
+
+/* ---------- editing ---------- */
+function afterEdit() { computeSlots(); if (!curSlot()) fixCursor(); render(); requestFill(); persistSoon(); }
+function fixCursor() { const s = slots[0]; if (s) { cur = s.cells[0].slice(); dir = s.dir; } }
+function move(dr, dc) { let [r, c] = cur; for (let i = 0; i < N; i++) { r += dr; c += dc; if (!inb(r, c)) return; if (!isB(r, c)) { cur = [r, c]; return; } } }
+function step(fwd = true) { const A = curSlot(); if (!A) return; const i = A.cells.findIndex(([r, c]) => r === cur[0] && c === cur[1]); const j = i + (fwd ? 1 : -1); if (j >= 0 && j < A.cells.length) cur = A.cells[j].slice(); }
+function jump(delta) {
+  const order = slots.filter(s => s.dir === 'A').concat(slots.filter(s => s.dir === 'D')); if (!order.length) return;
+  const A = curSlot(); let i = order.findIndex(s => A && s.id === A.id); i = (i + delta + order.length) % order.length;
+  const s = order[i]; dir = s.dir; cur = (s.cells.find(([r, c]) => G[r][c] === '.') || s.cells[0]).slice();
+}
+function setLetter(ch) { const [r, c] = cur; if (isB(r, c)) return; G[r][c] = ch; if (ch !== '.') step(); afterEdit(); }
+function toggleBlack() {
+  const [r, c] = cur, to = !isB(r, c) ? '#' : '.';
+  const set = (a, b) => { G[a][b] = to; };
+  set(r, c); if ($('#sym').checked) { const [a, b] = mir(r, c); set(a, b); }
+  afterEdit();
+}
+function placeWord(w) { const A = curSlot(); if (!A) return; A.cells.forEach(([r, c], i) => { G[r][c] = w[i]; }); afterEdit(); }
+
+/* ---------- input ---------- */
+document.addEventListener('keydown', e => {
+  if (e.target.id === 'cbIn' || e.target.closest('dialog') || e.target.id === 'ttl' || e.target.id === 'by' || e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key; let handled = true;
+  if (/^[a-zA-Z]$/.test(k)) setLetter(k.toUpperCase());
+  else if (k === '.') toggleBlack();
+  else if (k === 'Backspace') { const [r, c] = cur; if (G[r][c] === '.') { step(false); const [a, b] = cur; if (!isB(a, b)) { G[a][b] = '.'; } } else G[r][c] = '.'; afterEdit(); }
+  else if (k === 'Delete') setLetter('.');
+  else if (k === 'ArrowLeft') { if (dir === 'D') dir = 'A'; else move(0, -1); render(); }
+  else if (k === 'ArrowRight') { if (dir === 'D') dir = 'A'; else move(0, 1); render(); }
+  else if (k === 'ArrowUp') { if (dir === 'A') dir = 'D'; else move(-1, 0); render(); }
+  else if (k === 'ArrowDown') { if (dir === 'A') dir = 'D'; else move(1, 0); render(); }
+  else if (k === ' ') { dir = dir === 'A' ? 'D' : 'A'; render(); }
+  else if (k === 'Tab') { jump(e.shiftKey ? -1 : 1); render(); }
+  else if (k === 'Enter') { if (ghost) acceptGhost(); else handled = false; }
+  else handled = false;
+  if (handled) e.preventDefault();
+});
+$('#hin').addEventListener('input', e => { const v = e.target.value; e.target.value = ''; const ch = v.slice(-1).toUpperCase(); if (/^[A-Z]$/.test(ch)) setLetter(ch); });
+$('#grid').addEventListener('click', e => {
+  const t = e.target.closest('.c'); if (!t) return;
+  const r = +t.dataset.r, c = +t.dataset.c; if (isB(r, c)) return;
+  if (r === cur[0] && c === cur[1]) dir = dir === 'A' ? 'D' : 'A';
+  else { cur = [r, c]; if (!slotAt(r, c, dir)) dir = dir === 'A' ? 'D' : 'A'; }
+  render(); $('#hin').focus({ preventScroll: true });
+});
+$('#clues').addEventListener('click', e => {
+  const t = e.target.closest('.cl'); if (!t) return;
+  const s = slots.find(x => x.id === t.dataset.id); if (!s) return; dir = s.dir; cur = (s.cells.find(([r, c]) => G[r][c] === '.') || s.cells[0]).slice(); render();
+});
+$('#cand').addEventListener('click', e => { const b = e.target.closest('button[data-w]'); if (b) placeWord(b.dataset.w); });
+$('#cbIn').addEventListener('input', e => { const A = curSlot(); if (!A) return; const v = e.target.value.trim(); if (v) clues[A.key] = v; else delete clues[A.key]; persistSoon(); renderClues(); });
+$('#ttl').addEventListener('input', e => { title = e.target.value; persistSoon(); });
+$('#by').addEventListener('input', e => { author = e.target.value; persistSoon(); });
+$('#bAccept').onclick = acceptGhost;
+$('#bAgain').onclick = () => requestFill(true);
+$('#auto').addEventListener('change', () => { LS.set('cwv2_prefs', { auto: $('#auto').checked, sym: $('#sym').checked }); requestFill(); });
+$('#sym').addEventListener('change', () => { LS.set('cwv2_prefs', { auto: $('#auto').checked, sym: $('#sym').checked }); renderChecks(); });
+$('#bClear').onclick = () => { if (!confirm('Remove every letter?')) return; for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (G[r][c] !== '#') G[r][c] = '.'; afterEdit(); };
+
+/* ---------- save / load ---------- */
+let persistT = 0;
+function exportObj() { return { title, author, date: new Date().toISOString().slice(0, 10), size: N, grid: rows(), clues, theme: [], notes: '' }; }
+function persistSoon() { clearTimeout(persistT); persistT = setTimeout(() => LS.set('cwv2_puzzle', exportObj()), 400); }
+function loadPuzzle(p) {
+  const n = p.size || (p.grid && p.grid.length) || 15;
+  N = Math.max(5, Math.min(25, n));
+  G = blankGrid(N);
+  (p.grid || []).forEach((row, r) => { if (r < N) [...row].forEach((ch, c) => { if (c < N) G[r][c] = ch === '#' ? '#' : /[A-Za-z]/.test(ch) ? ch.toUpperCase() : '.'; }); });
+  clues = p.clues && typeof p.clues === 'object' ? { ...p.clues } : {};
+  title = p.title || ''; author = p.author || ''; $('#ttl').value = title; $('#by').value = author;
+  ghost = null; computeSlots(); fixCursor(); render(); requestFill();
+}
+$('#bNew').onclick = () => $('#dlgNew').showModal();
+$('#nCancel').onclick = () => $('#dlgNew').close();
+$('#nGo').onclick = () => { const n = Math.max(5, Math.min(25, +$('#nSize').value || 15)); $('#dlgNew').close(); loadPuzzle({ size: n, grid: [], clues: {} }); persistSoon(); };
+$('#bExport').onclick = () => {
+  const blob = new Blob([JSON.stringify(exportObj(), null, 1) + '\n'], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = ((title || 'cw-v2').replace(/[^\w-]+/g, '-')) + '.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$('#bOpen').onclick = () => $('#file').click();
+$('#file').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { const p = JSON.parse(await f.text()); if (!Array.isArray(p.grid)) throw 0; loadPuzzle(p); persistSoon(); toast('Imported'); } catch { toast('Not a puzzle file'); }
+});
+
+/* ---------- word list dialog ---------- */
+$('#bWords').onclick = () => $('#dlgWords').showModal();
+$('#wClose').onclick = () => $('#dlgWords').close();
+$('#wLoad').onclick = () => $('#wfile').click();
+$('#wfile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const text = await f.text();
+  if (!(await idbSet('wordlist', text))) toast('Could not store the list (loaded for this session only)');
+  $('#dlgWords').close(); await loadDB(); toast('Loaded ' + db.total.toLocaleString() + ' words');
+});
+$('#wReset').onclick = async () => { await idbSet('wordlist', undefined); $('#dlgWords').close(); await loadDB(); toast('Using the default list'); };
+
+/* ---------- boot ---------- */
+(function boot() {
+  const pr = LS.get('cwv2_prefs', {}); if (pr.auto === false) $('#auto').checked = false; if (pr.sym === false) $('#sym').checked = false;
+  const saved = LS.get('cwv2_puzzle', null);
+  loadPuzzle(saved && Array.isArray(saved.grid) ? saved : { size: 15, grid: [], clues: {} });
+  loadDB();
+  window.__cwv2 = { get G() { return G; }, get ghost() { return ghost; }, get status() { return fillStatus; }, get db() { return db; }, rows, loadPuzzle, requestFill };
+})();
+})();
+</script>
+</body>
+</html>
