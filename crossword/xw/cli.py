@@ -1,4 +1,4 @@
-import argparse, glob, json, os, sys, time
+import argparse, glob, json, os, re, sys, time
 from . import words as W
 from .grid import Puzzle, PUZZLES, ROOT
 from .fill import autofill
@@ -170,6 +170,7 @@ def c_fill(a):
         print('fix grid errors first:'); [print('  ', e) for e in errs]; return 1
     la = lex_args(a)
     la['extra'] = {W.norm(w): 90 for w in (p.data.get('words') or [])}
+    la['banned'] = frozenset(p.data.get('banned') or ())
     t = time.time()
 
     def prog(att, best, total, el):
@@ -178,7 +179,7 @@ def c_fill(a):
     if a.must:
         p.data['must'] = a.must
     groups = [tuple(W.norm(x) for x in m.split('/')) for m in (p.data.get('must') or [])]
-    la['extra'].update({w: 90 for g in groups for w in g})
+    la['extra'].update({w: 90 for g in groups for w in g if w not in la['banned']})
     res = autofill(p, la, timeout=a.timeout, seed=a.seed, branch=a.branch, required=groups, on_progress=prog)
     if res.unplaced:
         print('missing must-includes in best attempt:', ', '.join('/'.join(g) for g in res.unplaced))
@@ -190,12 +191,48 @@ def c_fill(a):
         q = Puzzle({'size': p.size, 'grid': [''.join(r) for r in res.grid]})
         print(q.render())
         quality(q, W.Lexicon(min_score=0, themes=tuple(a.theme or ()), extra=la['extra']))
+    if la['banned']:
+        print('banned fill: ' + ', '.join(sorted(la['banned'])))
     if not res.ok:
         print('\nmost-contested entries (consider moving blacks near these):', ', '.join(res.stuck) or '-')
         if not a.partial:
             print('(grid unchanged; use --partial to save the best attempt)')
         return 2
     return 0
+
+
+def c_nix(a):
+    """Eliminate autofill you don't like: ban the words (by entry number or by word),
+    blank them, and refill without them. Bans are saved in the puzzle and honored by later fills."""
+    p = load(a)
+    banned = set(p.data.get('banned') or ())
+    if a.unban:
+        for t in a.targets:
+            banned.discard(W.norm(t))
+        p.data['banned'] = sorted(banned)
+        p.save()
+        print('banned fill: ' + (', '.join(sorted(banned)) or '-'))
+        return 0
+    words = set()
+    for t in a.targets:
+        if re.fullmatch(r'\d+[AaDd]', t):
+            w = p.word(p.slot(t))
+            if not w:
+                raise SystemExit(f'{t.upper()} is not fully filled; name the word instead')
+            words.add(w)
+        else:
+            words.add(W.norm(t))
+    hits = [s for s in p.slots() if p.word(s) in words]
+    for s in hits:
+        p.clear_entry(s, keep_crossed=False)
+    banned |= words
+    p.data['banned'] = sorted(banned)
+    p.save()
+    print(f'banned {", ".join(sorted(words))}; cleared {", ".join(s.id for s in hits) or "nothing (not in the grid)"}')
+    a.must, a.partial = None, True
+    if a.no_fill:
+        show(p); return 0
+    return c_fill(a)
 
 
 def c_must(a):
@@ -312,6 +349,10 @@ def main(argv=None):
     s.add_argument('--branch', type=int, default=30); s.add_argument('--partial', action='store_true')
     s.add_argument('--must', nargs='+', help='words that must appear; A/B means exactly one of A or B (saved in the puzzle)')
     s = cmd('clue', c_clue, 'set a clue'); s.add_argument('slot'); s.add_argument('text')
+    s = cmd('nix', c_nix, 'ban autofill words (17A or WORD), blank them, refill without them'); lexopts(s)
+    s.add_argument('targets', nargs='+', help='entries (17A) or words to eliminate'); s.add_argument('--unban', action='store_true', help='lift the ban instead')
+    s.add_argument('--no-fill', action='store_true', help='ban and clear only; skip the refill')
+    s.add_argument('--timeout', type=int, default=60); s.add_argument('--seed', type=int, default=1); s.add_argument('--branch', type=int, default=30)
     s = cmd('must', c_must, 'place must-include words where a full fill still exists'); s.add_argument('words', nargs='+'); lexopts(s)
     s.add_argument('--tries', type=int, default=12); s.add_argument('--timeout', type=int, default=6); s.add_argument('--seed', type=int, default=1)
     s = cmd('quality', c_quality, 'score the current fill, list weakest entries'); s.add_argument('-n', type=int, default=10); lexopts(s)
@@ -325,6 +366,6 @@ def main(argv=None):
         r = a.fn(a)
     except (KeyError, ValueError) as e:
         raise SystemExit(f'error: {e.args[0] if e.args else e}')
-    if a.cmd in ('black', 'white', 'put', 'clear', 'theme', 'layout', 'fill', 'clue', 'must') and getattr(a, 'puzzle', None):
+    if a.cmd in ('black', 'white', 'put', 'clear', 'theme', 'layout', 'fill', 'nix', 'clue', 'must') and getattr(a, 'puzzle', None):
         reindex()
     return r or 0
