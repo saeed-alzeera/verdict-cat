@@ -68,10 +68,10 @@
   async function workerGetNs(ns) {
     return (await wfetch('/sync/' + ns)).entries || {};
   }
-  async function workerPostNs(ns, entries) {
+  async function workerPostNs(ns, entries, keepalive) {
     return (await wfetch('/sync/' + ns, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ entries: entries })
+      body: JSON.stringify({ entries: entries }), keepalive: !!keepalive
     })).entries || {};
   }
 
@@ -469,9 +469,10 @@
       if (mode() !== 'worker') return null;
       try { return await workerGetNs(ns); } catch(e) { return null; }
     },
-    pushNs: async function(ns, entries) {
+    // keepalive lets the request finish while the page is unloading.
+    pushNs: async function(ns, entries, keepalive) {
       if (mode() !== 'worker') return false;
-      try { await workerPostNs(ns, entries); return true; } catch(e) { return false; }
+      try { await workerPostNs(ns, entries, keepalive); return true; } catch(e) { return false; }
     },
 
     // ── One-time import from the old gist into the worker ─────────────────

@@ -149,7 +149,9 @@ dialog input[type=number], dialog input[type=text] { font:inherit; padding:5px 8
         <button class="btn sm" id="bSave">Save draft</button>
         <button class="btn sm" id="bCopy">Copy JSON</button>
         <button class="btn sm" id="bWipe">Clear letters</button>
+        <button class="btn sm" id="bHist">History</button>
       </div>
+      <div class="hint" id="asState" style="margin-top:6px">Autosave every 30s</div>
     </div>
 
     <div class="panel" id="candPanel" style="display:none">
@@ -165,6 +167,12 @@ dialog input[type=number], dialog input[type=text] { font:inherit; padding:5px 8
 <input id="file" type="file" accept=".json,application/json" style="display:none"/>
 <div class="toast" id="toast"></div>
 
+<dialog id="dlgHist">
+  <h2>History</h2>
+  <p class="hint">Automatic snapshots of this puzzle (this browser and the sync server). Restoring keeps your current version in the list.</p>
+  <div id="histList" style="display:grid;gap:6px;max-height:50vh;overflow:auto"></div>
+  <div class="row"><button class="btn" id="hClose">Close</button></div>
+</dialog>
 <dialog id="dlgNew">
   <h2>New puzzle</h2>
   <div style="display:grid;gap:10px">
@@ -181,7 +189,7 @@ dialog input[type=number], dialog input[type=text] { font:inherit; padding:5px 8
 'use strict';
 const $ = s => document.querySelector(s);
 const LS = { get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
-             set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+             set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } } };
 
 /* ---------- state ---------- */
 let P = null;            // puzzle {id,title,author,date,size,grid[],clues{},theme[],notes}
@@ -224,6 +232,7 @@ const curSlot = () => slotAt(cur[0], cur[1], dir) || slotAt(cur[0], cur[1], dir 
 
 /* ---------- load / save ---------- */
 function load(p, id) {
+  if (P) autosave();   // never drop unsaved build edits when switching puzzles
   P = JSON.parse(JSON.stringify(p));
   P.id = id || P.id || 'untitled';
   P.clues = P.clues || {}; P.theme = P.theme || [];
@@ -235,6 +244,7 @@ function load(p, id) {
   $('#gridwrap').style.setProperty('--n', P.size);
   $('#ttl').textContent = P.title || 'Untitled';
   $('#by').textContent = [P.author && 'By ' + P.author, P.date && fmtDate(P.date)].filter(Boolean).join(' · ');
+  baseline = lastSaved = JSON.stringify(exportObj());
   startTimer(); render();
 }
 function fmtDate(d) { const x = new Date(d + 'T12:00:00'); return isNaN(x) ? d : x.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }); }
@@ -258,10 +268,10 @@ function pushSoon(k, v) {
   if (!canSync()) return;
   pending[k] = { value: v, ts: v.ts }; clearTimeout(pushT); pushT = setTimeout(flushPush, 1500);
 }
-async function flushPush() {
+async function flushPush(keepalive) {
   clearTimeout(pushT); const batch = pending; pending = {};
   if (!Object.keys(batch).length || !canSync()) return;
-  if (!(await Gist.pushNs(XW_NS, batch))) pending = Object.assign(batch, pending);
+  if (!(await Gist.pushNs(XW_NS, batch, keepalive))) pending = Object.assign(batch, pending);
 }
 // Merge newer remote entries into localStorage; returns true if anything changed.
 async function pullSync() {
@@ -304,13 +314,70 @@ function download() {
   a.download = (P.id || 'puzzle').replace(/[^\w-]+/g, '-') + '.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 function saveDraft() {
-  const drafts = LS.get('xw_drafts', {}); const d = exportObj(); d.ts = Date.now(); drafts[P.id] = d; LS.set('xw_drafts', drafts);
-  pushSoon('d:' + P.id, d);
+  if (!autosave(true)) { toast('Could not save — browser storage is full. Use Copy JSON.'); return; }
+  snapshot(true); flushPush();
   refreshPicker(); toast(canSync() ? 'Draft saved and synced' : 'Draft saved in this browser');
 }
 
+/* ---------- autosave + history ---------- */
+let baseline = '', lastSaved = '', localT = 0;
+const histKey = id => 'xw_hist_' + id;
+const clock = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+// Writes the current build to the drafts store (and queues a sync push) when it changed.
+// Returns false only if the write failed.
+function autosave(force) {
+  if (mode !== 'build' || !P) return true;
+  const o = exportObj(), s = JSON.stringify(o), drafts = LS.get('xw_drafts', {});
+  if (!force && s === lastSaved) return true;
+  if (!drafts[P.id] && s === baseline) return true;   // untouched published puzzle: no draft needed
+  o.ts = Date.now(); drafts[P.id] = o;
+  if (!LS.set('xw_drafts', drafts)) { $('#asState').textContent = '⚠ Autosave failed (storage full) — use Copy JSON'; return false; }
+  lastSaved = s; LS.set('xw_last', 'd:' + P.id);
+  snapshot(); pushSoon('d:' + P.id, o);
+  $('#asState').textContent = 'Autosaved ' + clock() + (canSync() ? ' · synced' : ' · this browser only');
+  return true;
+}
+// Rolling history: local (30 newest) + bounded server slots (20 x 10 min, 14 daily) so old work can't be lost to one bad edit.
+function snapshot(force) {
+  if (mode !== 'build' || !P) return;
+  const o = exportObj(), s = JSON.stringify(o), h = LS.get(histKey(P.id), []), ts = Date.now();
+  if (h.length && h[0].s === s) return;
+  if (!force && h.length && ts - h[0].ts < 120000) return;
+  h.unshift({ ts, s }); LS.set(histKey(P.id), h.slice(0, 30));
+  const v = Object.assign(o, { ts });
+  pushSoon('h:' + P.id + ':m' + (Math.floor(ts / 600000) % 20), v);
+  pushSoon('h:' + P.id + ':d' + (Math.floor(ts / 864e5) % 14), v);
+}
+function scheduleLocalSave() { clearTimeout(localT); localT = setTimeout(() => autosave(), 2000); }
+async function openHistory() {
+  if (!P) return;
+  const list = $('#histList'); list.textContent = 'Loading…'; $('#dlgHist').showModal();
+  const seen = new Map();
+  for (const e of LS.get(histKey(P.id), [])) seen.set(e.ts, e.s);
+  if (canSync()) {
+    const remote = await Gist.pullNs(XW_NS);
+    for (const [k, e] of Object.entries(remote || {})) if (k.startsWith('h:' + P.id + ':') && e && e.value && !seen.has(e.ts)) { const v = Object.assign({}, e.value); delete v.ts; seen.set(e.ts, JSON.stringify(v)); }
+  }
+  const items = [...seen.entries()].sort((a, b) => b[0] - a[0]);
+  list.innerHTML = '';
+  if (!items.length) { list.textContent = 'No snapshots yet.'; return; }
+  for (const [ts, s] of items) {
+    const b = document.createElement('button'); b.className = 'btn';
+    let info = ''; try { const o = JSON.parse(s); info = ' · ' + o.grid.join('').replace(/[#.]/g, '').length + ' letters'; } catch {}
+    b.textContent = new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + info;
+    b.onclick = () => {
+      snapshot(true);
+      try { const o = JSON.parse(s); const id = P.id; setMode('build'); load(o, id); autosave(true); } catch { toast('Could not restore'); return; }
+      $('#dlgHist').close(); toast('Restored');
+    };
+    list.appendChild(b);
+  }
+}
+function flushAll() { autosave(); saveProgress(); flushPush(true); }
+
 /* ---------- render ---------- */
 function render() {
+  if (mode === 'build') scheduleLocalSave();
   const n = P.size, grid = $('#grid'), A = curSlot();
   const inWord = new Set(A ? A.cells.map(c => key(...c)) : []);
   const nums = new Map(); slots.forEach(s => { if (!nums.has(key(...s.cells[0]))) nums.set(key(...s.cells[0]), s.num); });
@@ -535,11 +602,13 @@ function initSolverBlank() { S = P.grid.map(r => r.split('').map(ch => ch === '#
 
 /* build tools */
 $('#bSave').onclick = saveDraft;
+$('#bHist').onclick = openHistory; $('#hClose').onclick = () => $('#dlgHist').close();
 $('#bCopy').onclick = async () => { const t = JSON.stringify(exportObj(), null, 1); try { await navigator.clipboard.writeText(t); toast('JSON copied'); } catch { prompt('Copy this JSON:', t); } };
-$('#bWipe').onclick = () => { if (!confirm('Erase all letters (keeps black squares)?')) return; G = G.map(r => r.map(ch => ch === '#' ? '#' : '.')); S = G; render(); };
+$('#bWipe').onclick = () => { if (!confirm('Erase all letters (keeps black squares)?')) return; snapshot(true); G = G.map(r => r.map(ch => ch === '#' ? '#' : '.')); S = G; render(); };
 
 /* header */
 function setMode(m) {
+  if (mode === 'build' && m !== 'build') autosave();
   mode = m; document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
   $('#solveTools').style.display = m === 'solve' ? '' : 'none';
   $('#buildTools').style.display = m === 'build' ? '' : 'none';
@@ -597,10 +666,13 @@ $('#pick').onchange = e => openPick(e.target.value);
   if (pick) { sel.value = pick.value; openPick(pick.value); }
   else { $('#ttl').textContent = 'No puzzles yet'; $('#by').textContent = 'Create one with “New”, or ask Claude to build one.'; }
 })();
-window.addEventListener('beforeunload', () => { saveProgress(); flushPush(); });
+window.addEventListener('beforeunload', flushAll);
+window.addEventListener('pagehide', flushAll);
+setInterval(() => { autosave(); if (Object.keys(pending).length) flushPush(); }, 30000);
+try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
 // Coming back to the tab: pick up solving done on another device (solve mode only, so build edits aren't clobbered).
 document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState === 'hidden') { flushPush(); return; }
+  if (document.visibilityState === 'hidden') { flushAll(); return; }
   if (mode !== 'solve' || !P || solved) return;
   const before = LS.get('xw_prog_' + P.id, null);
   if (await pullSync()) {
