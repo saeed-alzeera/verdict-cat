@@ -173,6 +173,7 @@ dialog input[type=number], dialog input[type=text] { font:inherit; padding:5px 8
   <div class="row"><button class="btn" id="nCancel">Cancel</button><button class="btn primary" id="nGo">Create</button></div>
 </dialog>
 
+<script src="../gist.js?v=4"></script>
 <script>
 (() => {
 'use strict';
@@ -243,7 +244,53 @@ function initSolver() {
 }
 function saveProgress() {
   if (mode !== 'solve' || !P) return;
-  LS.set('xw_prog_' + P.id, { s: S.map(r => r.join('')), rev: [...rev], ms: Date.now() - t0 });
+  const o = { s: S.map(r => r.join('')), rev: [...rev], ms: Date.now() - t0, ts: Date.now() };
+  LS.set('xw_prog_' + P.id, o); pushSoon('p:' + P.id, o);
+}
+
+/* ---------- sync (verdict-cat-sync worker, same sync key as the library) ---------- */
+const XW_NS = 'crossword';
+const canSync = () => window.Gist && Gist.mode() === 'worker';
+let pending = {}, pushT = 0;
+function pushSoon(k, v) {
+  if (!canSync()) return;
+  pending[k] = { value: v, ts: v.ts }; clearTimeout(pushT); pushT = setTimeout(flushPush, 1500);
+}
+async function flushPush() {
+  clearTimeout(pushT); const batch = pending; pending = {};
+  if (!Object.keys(batch).length || !canSync()) return;
+  if (!(await Gist.pushNs(XW_NS, batch))) pending = Object.assign(batch, pending);
+}
+// Merge newer remote entries into localStorage; returns true if anything changed.
+async function pullSync() {
+  if (!canSync()) return false;
+  const remote = await Gist.pullNs(XW_NS); if (!remote) return false;
+  let changed = false; const drafts = LS.get('xw_drafts', {}); let draftsDirty = false;
+  for (const [k, e] of Object.entries(remote)) {
+    if (!e || !e.value || !(e.ts > 0)) continue;
+    const id = k.slice(2);
+    if (k.startsWith('p:')) {
+      const loc = LS.get('xw_prog_' + id, null);
+      if (e.ts > ((loc && loc.ts) || 0)) { LS.set('xw_prog_' + id, e.value); changed = true; }
+    } else if (k.startsWith('d:')) {
+      const loc = drafts[id];
+      if (e.ts > ((loc && loc.ts) || 0)) { drafts[id] = e.value; draftsDirty = changed = true; }
+    }
+  }
+  if (draftsDirty) LS.set('xw_drafts', drafts);
+  return changed;
+}
+// Push everything local that the server doesn't have a newer copy of.
+async function pushAllSync() {
+  if (!canSync()) return;
+  const remote = (await Gist.pullNs(XW_NS)) || {}, out = {};
+  const add = (k, v) => { if (v && v.ts && v.ts > ((remote[k] && remote[k].ts) || 0)) out[k] = { value: v, ts: v.ts }; };
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('xw_prog_')) add('p:' + k.slice(8), LS.get(k, null));
+  }
+  const drafts = LS.get('xw_drafts', {}); for (const id in drafts) add('d:' + id, drafts[id]);
+  if (Object.keys(out).length) await Gist.pushNs(XW_NS, out);
 }
 function exportObj() {
   const o = JSON.parse(JSON.stringify(P)); delete o.id;
@@ -255,8 +302,9 @@ function download() {
   a.download = (P.id || 'puzzle').replace(/[^\w-]+/g, '-') + '.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 function saveDraft() {
-  const drafts = LS.get('xw_drafts', {}); drafts[P.id] = exportObj(); LS.set('xw_drafts', drafts);
-  refreshPicker(); toast('Draft saved in this browser');
+  const drafts = LS.get('xw_drafts', {}); const d = exportObj(); d.ts = Date.now(); drafts[P.id] = d; LS.set('xw_drafts', drafts);
+  pushSoon('d:' + P.id, d);
+  refreshPicker(); toast(canSync() ? 'Draft saved and synced' : 'Draft saved in this browser');
 }
 
 /* ---------- render ---------- */
@@ -481,7 +529,7 @@ $('#bChkA').onclick = () => { const all = []; for (let r = 0; r < P.size; r++) f
 $('#bRevL').onclick = () => { const [r, c] = cur; if (isB(r, c)) return; S[r][c] = G[r][c]; rev.add(key(r, c)); bad.delete(key(r, c)); afterEdit(); };
 $('#bRevW').onclick = () => { const A = curSlot(); if (!A) return; A.cells.forEach(([r, c]) => { S[r][c] = G[r][c]; rev.add(key(r, c)); bad.delete(key(r, c)); }); afterEdit(); };
 $('#bClr').onclick = () => { if (!confirm('Clear all your entries?')) return; initSolverBlank(); };
-function initSolverBlank() { S = P.grid.map(r => r.split('').map(ch => ch === '#' ? '#' : '.')); rev = new Set(); bad = new Set(); solved = false; t0 = Date.now(); LS.set('xw_prog_' + P.id, null); startTimer(); render(); }
+function initSolverBlank() { S = P.grid.map(r => r.split('').map(ch => ch === '#' ? '#' : '.')); rev = new Set(); bad = new Set(); solved = false; t0 = Date.now(); const o = { cleared: true, ts: Date.now() }; LS.set('xw_prog_' + P.id, o); pushSoon('p:' + P.id, o); startTimer(); render(); }
 
 /* build tools */
 $('#bSave').onclick = saveDraft;
@@ -538,13 +586,26 @@ async function openPick(v) {
 $('#pick').onchange = e => openPick(e.target.value);
 (async function boot() {
   try { index = await (await fetch('puzzles/index.json', { cache: 'no-cache' })).json(); } catch { index = []; }
+  try { await pullSync(); } catch {}
+  pushAllSync().catch(() => {});
   await refreshPicker();
   const last = LS.get('xw_last', null), sel = $('#pick');
   const pick = [...sel.options].find(o => o.value === last) || [...sel.options].find(o => o.value);
   if (pick) { sel.value = pick.value; openPick(pick.value); }
   else { $('#ttl').textContent = 'No puzzles yet'; $('#by').textContent = 'Create one with “New”, or ask Claude to build one.'; }
 })();
-window.addEventListener('beforeunload', saveProgress);
+window.addEventListener('beforeunload', () => { saveProgress(); flushPush(); });
+// Coming back to the tab: pick up solving done on another device (solve mode only, so build edits aren't clobbered).
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'hidden') { flushPush(); return; }
+  if (mode !== 'solve' || !P || solved) return;
+  const before = LS.get('xw_prog_' + P.id, null);
+  if (await pullSync()) {
+    const after = LS.get('xw_prog_' + P.id, null);
+    if (after && (!before || after.ts !== before.ts)) { initSolver(); render(); toast('Synced from another device'); }
+    refreshPicker();
+  }
+});
 document.addEventListener('keydown', e => { if (e.target === document.body && P && /^[a-z]$/i.test(e.key) && !e.metaKey && !e.ctrlKey) { hin.focus(); } });
 })();
 </script>
