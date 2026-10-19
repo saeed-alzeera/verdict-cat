@@ -1,6 +1,6 @@
 /* Autofill worker: best-first, cost-minimising backtracking over the word DB.
  *
- * In:   {type:'loaddb', src, extra} · {type:'autofill', id, grid, width, height} · {type:'cancel'}
+ * In:   {type:'loaddb', src, extra} · {type:'autofill', id, grid, width, height, banned:[WORD,...]} · {type:'cancel'}
  * Out:  {type:'dbloaded', total} · {type:'autofill-result', id, grid, cost, forGrid}
  *       · {type:'autofill-complete', id, ok, forGrid, nodes}
  *
@@ -12,6 +12,7 @@ importScripts('worddb.js');
 
 var db = null;
 var solver = null;           // active generator
+var banned = new Set();      // words the user eliminated; never placed
 var cache = null;            // {blacks, sol:Uint8Array(letters), cost} of the last complete solution
 var chan = new MessageChannel();
 var SLICE_MS = 50;
@@ -88,9 +89,11 @@ function* run(m) {
   var P = parseGrid(m.grid, w, h), g = P.g, ents = P.ents, black = P.black;
   var blacks = Array.from(black).join('');
   var nodes = 0;
+  var bkey = (m.banned || []).join(',');
+  banned = new Set(m.banned || []);
 
   // Reuse a cached solution when the new grid only adds letters it already contains.
-  if (!m.fresh && cache && cache.blacks === blacks) {
+  if (!m.fresh && cache && cache.blacks === blacks && cache.bkey === bkey) {
     var okc = true;
     for (var i = 0; i < g.length; i++) if (g[i] && g[i] !== cache.sol[i]) { okc = false; break; }
     if (okc) {
@@ -155,7 +158,7 @@ function* run(m) {
     total += best.cost;
     post(null, total);
   }
-  cache = { blacks: blacks, sol: (function () { var s = g.slice(); return s; })(), cost: total };
+  cache = { blacks: blacks, bkey: bkey, sol: (function () { var s = g.slice(); return s; })(), cost: total };
   self.postMessage({ type: 'autofill-complete', id: m.id, ok: true, forGrid: forGrid, nodes: nodes });
 
   function* dfs(depth, cost, st, disc) {
@@ -188,7 +191,7 @@ function* run(m) {
     var dead = {}, taken = 0;
     cand: for (j = 0; j < noisy.length; j++) {
       var word = noisy[j][0], wc = noisy[j][1];
-      if (used.has(word) || cost + wc >= best.cost) continue;
+      if (used.has(word) || banned.has(word) || cost + wc >= best.cost) continue;
       var upd = [], p, cell, ch, cr;
       for (p = 0; p < len; p++) {                      // letters must agree with what is placed
         cell = en.cells[p]; ch = word.charCodeAt(p);

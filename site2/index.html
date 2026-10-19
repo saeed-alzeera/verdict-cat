@@ -132,6 +132,9 @@
         <button class="btn sm primary" id="bAccept" disabled>Fill grid</button>
         <button class="btn sm" id="bAgain" disabled title="Search again with fresh noise">Another fill</button>
       </div>
+      <p class="hint" id="elimHint" style="display:none">Click ✕ on any word you don't like to eliminate it and refill without it.</p>
+      <div class="chips" id="fillWords"></div>
+      <div class="chips" id="bannedList"></div>
     </div>
 
     <div class="panel">
@@ -210,6 +213,7 @@ let N = 15, G = [], clues = {}, title = '', author = '';
 let cur = [0, 0], dir = 'A';
 let slots = [], cellSlot = new Map();
 let db = null, dbSource = '';
+let banned = [];                                                   // eliminated autofill words (saved with the puzzle)
 let ghost = null, ghostCost = 0, fillId = 0, fillStatus = 'off';   // autofill preview
 
 const inb = (r, c) => r >= 0 && c >= 0 && r < N && c < N;
@@ -292,7 +296,7 @@ function requestFill(fresh) {
   const v = validate();
   if (v.errs.length) { worker.postMessage({ type: 'cancel' }); fillStatus = 'invalid'; ghost = null; renderFill(); return; }
   fillStatus = 'searching'; renderFill();
-  worker.postMessage({ type: 'autofill', id: ++fillId, grid: rows(), width: N, height: N, fresh: !!fresh });
+  worker.postMessage({ type: 'autofill', id: ++fillId, grid: rows(), width: N, height: N, fresh: !!fresh, banned });
 }
 function onWorker(e) {
   const m = e.data;
@@ -315,8 +319,23 @@ function renderFill() {
   else if (fillStatus === 'dead') { txt = 'An entry has no possible word.'; el.className = 'bad'; }
   el.textContent = txt;
   $('#fillCost').textContent = ghost ? 'cost ' + ghostCost.toFixed(2) : '';
+  renderElim();
   $('#bAccept').disabled = !ghost; $('#bAgain').disabled = !(complete || fillStatus === 'nofill');
 }
+function ghostWords() {                       // words the autofill is proposing (entries not fully typed yet)
+  if (!ghost) return [];
+  return slots.filter(s => patOf(s).includes('?')).map(s => ({ id: s.id, w: s.cells.map(([r, c]) => ghost[r][c]).join('') }))
+    .filter(x => /^[A-Z]+$/.test(x.w));
+}
+function renderElim() {
+  const gw = ghostWords();
+  $('#fillWords').innerHTML = gw.map(x => `<span class="chip" title="${x.id}">${esc(x.w)} <i>${x.id}</i><button data-ban="${esc(x.w)}" title="Eliminate ${esc(x.w)} and refill" aria-label="Eliminate ${esc(x.w)}">✕</button></span>`).join('');
+  $('#elimHint').style.display = gw.length ? '' : 'none';
+  $('#bannedList').innerHTML = banned.map(w => `<span class="chip off">${esc(w)}<button data-unban="${esc(w)}" title="Allow ${esc(w)} again" aria-label="Allow ${esc(w)} again">↺</button></span>`).join('');
+}
+function setBanned(list) { banned = [...new Set(list)].sort(); ghost = null; persistSoon(); renderElim(); requestFill(true); }
+$('#fillWords').addEventListener('click', e => { const b = e.target.closest('button[data-ban]'); if (b) setBanned([...banned, b.dataset.ban]); });
+$('#bannedList').addEventListener('click', e => { const b = e.target.closest('button[data-unban]'); if (b) setBanned(banned.filter(w => w !== b.dataset.unban)); });
 function acceptGhost() {
   if (!ghost) return;
   for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (G[r][c] === '.' && ghost[r][c] !== '.' && ghost[r][c] !== '#') G[r][c] = ghost[r][c];
@@ -793,7 +812,7 @@ $('#bClear').onclick = () => { if (!confirm('Clear the whole board (letters and 
 
 /* ---------- save / load ---------- */
 let persistT = 0;
-function exportObj() { return { title, author, date: new Date().toISOString().slice(0, 10), size: N, grid: rows(), clues, theme: [], notes: '' }; }
+function exportObj() { return { title, author, date: new Date().toISOString().slice(0, 10), size: N, grid: rows(), clues, theme: [], notes: '', banned }; }
 function persistSoon() { clearTimeout(persistT); persistT = setTimeout(() => LS.set('cwv2_puzzle', exportObj()), 400); }
 function loadPuzzle(p) {
   const n = p.size || (p.grid && p.grid.length) || 15;
@@ -801,6 +820,7 @@ function loadPuzzle(p) {
   G = blankGrid(N);
   (p.grid || []).forEach((row, r) => { if (r < N) [...row].forEach((ch, c) => { if (c < N) G[r][c] = ch === '#' ? '#' : /[A-Za-z]/.test(ch) ? ch.toUpperCase() : '.'; }); });
   clues = p.clues && typeof p.clues === 'object' ? { ...p.clues } : {};
+  banned = Array.isArray(p.banned) ? p.banned.map(w => String(w).toUpperCase().replace(/[^A-Z]/g, '')).filter(Boolean) : [];
   title = p.title || ''; author = p.author || ''; $('#ttl').value = title; $('#by').value = author;
   ghost = null; place = null; bfPrev = null; $('#bBlackUndo').disabled = true; renderPlaceButtons(); computeSlots(); fixCursor(); render(); requestFill();
 }
