@@ -521,7 +521,8 @@ function maxMatch(lists) {
 function searchLayouts(words) {
   const base = new Map(slots.map(s => [s.key, s.cells.length >= 3 && db.has(s.cells.length) ? matchCount(patOf(s)) : 0]));
   const sols = [], assign = [], skipped = [], seen = new Set(), t0 = performance.now(); let nodes = 0;
-  const over = () => sols.length > 0 && (nodes > MAX_NODES || performance.now() - t0 > MAX_MS);
+  let cap = MAX_NODES;       // node budget of the current first-word spot, so every top spot gets explored, not just the first
+  const over = () => sols.length > 0 && (nodes > cap || performance.now() - t0 > MAX_MS);
   const dfs = i => {
     if (i === words.length) {
       const g = gridImpact(base, assign); if (g.cost === Infinity) return;
@@ -538,11 +539,13 @@ function searchLayouts(words) {
     let opts = all.filter(o => 1 + maxMatch(rest.map(l => l.filter(k => k !== o.slot.key))) >= full).slice(0, TOP_SPOTS);
     if (!opts.length && maxMatch(rest) < full) opts = all.slice(0, TOP_SPOTS);        // skipping would cost another word its place
     if (!opts.length) { skipped.push(w); dfs(i + 1); skipped.pop(); return; }
-    for (const o of opts) {
+    for (let k = 0; k < opts.length; k++) {
+      const o = opts[k];
+      if (i === 0) { nodes = 0; cap = Math.ceil(MAX_NODES / opts.length); }
       const changed = fillSlot(w, o.slot); assign.push({ word: w, slot: o.slot });
       dfs(i + 1);
       assign.pop(); clearCells(changed);
-      if (over()) return;
+      if (i === 0 ? sols.length > 0 && performance.now() - t0 > MAX_MS : over()) return;
     }
   };
   dfs(0);
@@ -555,7 +558,7 @@ function applyLayout(sol) {
   return changed;
 }
 function setPlaceMsg(t, cls) { const m = $('#placeMsg'); m.textContent = t; m.className = cls || ''; }
-function renderPlaceButtons() { $('#bNext').disabled = !place || place.solutions.length < 2; $('#bUndo').disabled = !place; }
+function renderPlaceButtons() { $('#bNext').disabled = !place; $('#bUndo').disabled = !place; }
 function summary(sol) {
   const pc = x => x < 0.01 ? '<1%' : '~' + Math.round(x * 100) + '%';
   const where = sol.assign.map(a => `${a.word} at ${a.slot.id}`).join(', ');
@@ -592,7 +595,8 @@ function placeWords(raw) {
 $('#placeForm').addEventListener('submit', e => { e.preventDefault(); placeWords($('#wordIn').value); });
 $('#wordIn').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); placeWords($('#wordIn').value); } });
 $('#bNext').onclick = () => {
-  if (!place || place.solutions.length < 2) return;
+  if (!place) return;
+  if (place.solutions.length < 2) { setPlaceMsg('That is the only layout that works for these words.', ''); return; }
   clearCells(place.changed);
   place.i = (place.i + 1) % place.solutions.length;
   const sol = place.solutions[place.i];
