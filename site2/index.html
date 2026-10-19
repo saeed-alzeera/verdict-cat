@@ -75,6 +75,15 @@
   .cand button { border: 1px solid var(--line-strong); background: var(--bg); border-radius: 6px; padding: 2px 7px; cursor: pointer; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
   .cand button:hover { border-color: var(--accent); }
   .cand button i { color: var(--muted); font-style: normal; font-size: 10.5px; margin-left: 5px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+  .chips:empty { display: none; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line-strong); background: var(--bg); border-radius: 6px; padding: 1px 3px 1px 7px; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+  .chip.off { opacity: .5; text-decoration: line-through; }
+  .chip i { color: var(--muted); font-style: normal; font-size: 10.5px; }
+  .chip button { border: 0; background: transparent; cursor: pointer; color: var(--muted); padding: 0 4px; line-height: 1.3; }
+  .chip button:hover { color: var(--err); }
+  #bfMsg { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+  #bfMsg.ok { color: var(--ok); } #bfMsg.bad { color: var(--err); }
   ul.chk { margin: 0; padding: 0; list-style: none; font-size: 13px; }
   ul.chk li.err { color: var(--err); } ul.chk li.warn { color: var(--warn); } ul.chk li.ok { color: var(--ok); }
   .stats { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
@@ -135,12 +144,24 @@
       <h3><span>Add words</span><span id="placeInfo" class="mono"></span></h3>
       <form id="placeForm" style="display:grid;gap:8px">
         <textarea id="wordIn" class="place-in" rows="2" placeholder="Words to place, one per line or separated by commas" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-label="Words to place"></textarea>
-        <div><button class="btn sm primary" type="submit">Place</button></div>
+        <div class="row"><button class="btn sm primary" type="submit">Place</button><button class="btn sm" id="bList" type="button" title="Add to the custom list without placing">Add to list</button></div>
       </form>
       <p id="placeMsg">Finds the layout that costs the whole grid the fewest options. <kbd>Enter</kbd> places, <kbd>Shift</kbd>+<kbd>Enter</kbd> adds a line.</p>
       <div class="row">
         <button class="btn sm" id="bNext" type="button" disabled>Next best layout</button>
         <button class="btn sm" id="bUndo" type="button" disabled>Undo</button>
+        <button class="btn sm" id="bCust" type="button" title="Add every word in custom.txt to the list">Use custom.txt</button>
+        <button class="btn sm" id="bListClear" type="button">Clear list</button>
+      </div>
+      <div class="chips" id="custList"></div>
+    </div>
+
+    <div class="panel">
+      <h3><span>Black squares</span><span id="bfInfo" class="mono"></span></h3>
+      <p id="bfMsg">Lays out a symmetric NYT-style pattern that gives your custom list the most places to go. Replaces the current black squares, letters and clues.</p>
+      <div class="row">
+        <button class="btn sm primary" id="bBlack" type="button">Generate black squares</button>
+        <button class="btn sm" id="bBlackUndo" type="button" disabled>Undo</button>
       </div>
     </div>
 
@@ -180,6 +201,7 @@
 </dialog>
 
 <script src="worddb.js"></script>
+<script src="blackfill.js"></script>
 <script>
 (() => {
 'use strict';
@@ -261,7 +283,7 @@ async function loadDB() {
       } catch { src = await fetchText('words.txt'); label = 'words.txt'; }
     }
   }
-  const extra = await fetchText('custom.txt');
+  const extra = await fetchText('custom.txt'); customText = extra;
   if (!src) { src = ''; label = 'custom words only'; }
   db = new WordDB(src, extra); dbSource = label; dbLoading = false; renderDbInfo(); memo.clear();
   startWorker(); worker.postMessage({ type: 'loaddb', src, extra });
@@ -309,7 +331,7 @@ function acceptGhost() {
 }
 
 /* ---------- rendering ---------- */
-function render() { renderGrid(); renderBar(); renderClues(); renderSide(); renderChecks(); }
+function render() { renderGrid(); renderBar(); renderClues(); renderSide(); renderChecks(); renderList(); }
 function renderGrid() {
   const A = curSlot(), inWord = new Set(A ? A.cells.map(c => key(...c)) : []);
   const nums = new Map(); slots.forEach(s => { const k = key(...s.cells[0]); if (!nums.has(k)) nums.set(k, s.num); });
@@ -567,6 +589,7 @@ function placeWords(raw) {
   if (!solutions.length) { setPlaceMsg('No layout works for these words together. ' + notes.join('; ') + '.', 'bad'); return; }
   const best = solutions[0], changed = applyLayout(best);
   place = { solutions, i: 0, changed };
+  addToList(best.assign.map(x => x.word).join('\n'));
   afterEdit(true); renderPlaceButtons();
   const left = [...notes, ...best.skipped.map(w => `${w}: no spot left once the others are placed`)];
   setPlaceMsg(`Placed ${best.assign.length} of ${wanted.length}: ${summary(best)}` + (solutions.length > 1 ? ` Best of ${solutions.length} layouts.` : '') + (left.length ? ' Not placed: ' + left.join('; ') + '.' : ''), left.length ? '' : 'ok');
@@ -587,6 +610,65 @@ $('#bUndo').onclick = () => {
   if (!place) return;
   clearCells(place.changed); const n = place.solutions[place.i].assign.length; place = null;
   afterEdit(true); renderPlaceButtons(); setPlaceMsg(`Removed ${n} word${n === 1 ? '' : 's'}.`, '');
+};
+
+/* ---------- custom list and the black-square autofiller ---------- */
+let custom = LS.get('cwv2_custom', []).filter(w => typeof w === 'string'), customText = '';
+const cleanWord = w => w.toUpperCase().replace(/[^A-Z]/g, '');
+function addToList(raw) {
+  const words = String(raw).split(/[,;\n]+/).map(cleanWord).filter(w => w.length >= 3 && !custom.includes(w));
+  custom.push(...new Set(words)); LS.set('cwv2_custom', custom); renderList();
+  return words.length;
+}
+function renderList() {
+  const fits = w => w.length >= 3 && w.length <= N;
+  $('#custList').innerHTML = custom.map(w => {
+    const n = slots.filter(s => s.cells.length === w.length).length;
+    return `<span class="chip${fits(w) ? '' : ' off'}" title="${fits(w) ? n + ' entries of this length in the grid' : 'Does not fit this grid size'}">${w}<i>${fits(w) ? n : ''}</i><button data-w="${w}" aria-label="Remove ${w}">×</button></span>`;
+  }).join('');
+  $('#bBlack').disabled = bfBusy;
+  $('#bfInfo').textContent = custom.length ? custom.filter(fits).length + ' words' : '';
+}
+$('#bList').onclick = () => {
+  const n = addToList($('#wordIn').value);
+  if (n) { $('#wordIn').value = ''; setPlaceMsg('Added ' + n + (n === 1 ? ' word' : ' words') + ' to the list.', 'ok'); }
+  else setPlaceMsg('Enter a word of at least 3 letters that is not on the list yet.', 'bad');
+};
+$('#bCust').onclick = () => {
+  const words = customText.split('\n').filter(l => l.trim() && l[0] !== '#' && !/;\s*0\s*$/.test(l)).map(l => l.split(';')[0]);
+  const n = addToList(words.join('\n'));
+  setPlaceMsg(n ? 'Added ' + n + ' words from custom.txt.' : customText ? 'Everything in custom.txt is already on the list.' : 'custom.txt could not be loaded.', n ? 'ok' : 'bad');
+};
+$('#bListClear').onclick = () => { custom = []; LS.set('cwv2_custom', custom); renderList(); };
+$('#custList').addEventListener('click', e => { const b = e.target.closest('button[data-w]'); if (b) { custom = custom.filter(w => w !== b.dataset.w); LS.set('cwv2_custom', custom); renderList(); } });
+
+let bfBusy = false, bfPrev = null;
+const setBf = (t, cls) => { const m = $('#bfMsg'); m.textContent = t; m.className = cls || ''; };
+function describeBf(r, skipped) {
+  const n = r.words.length;
+  let t = r.blacks + ' black squares, ' + r.entries + ' entries. ';
+  if (!n) t += 'No usable words on the list, so this is a general pattern.';
+  else if (r.maxPlaced === n) t += (n === 1 ? 'The word has ' : 'All ' + n + ' words fit together, with ') + r.live + ' placement' + (r.live === 1 ? '' : 's') + ' to choose from.';
+  else t += 'At most ' + r.maxPlaced + ' of ' + n + ' words fit together at once (their crossings clash); ' + r.live + ' placements in all.';
+  if (skipped) t += ' ' + skipped + ' word' + (skipped === 1 ? ' was' : 's were') + ' skipped (under 3 letters or longer than the grid).';
+  return t;
+}
+$('#bBlack').onclick = async () => {
+  if (bfBusy) return;
+  const n0 = N, skipped = custom.filter(w => w.length < 3 || w.length > N).length;
+  bfBusy = true; $('#bBlack').disabled = true; setBf('Searching…');
+  let r; try { r = await BlackFill.run({ N: n0, words: custom, onProgress: f => setBf('Searching… ' + Math.round(f * 100) + '%') }); } finally { bfBusy = false; renderList(); }
+  if (N !== n0) { setBf('The grid size changed, so the result was dropped.', 'bad'); renderList(); return; }
+  bfPrev = { G: G.map(row => row.slice()), clues: { ...clues } }; $('#bBlackUndo').disabled = false;
+  G = blankGrid(N); clues = {}; ghost = null;
+  r.black.forEach((v, i) => { if (v) G[(i / N) | 0][i % N] = '#'; });
+  computeSlots(); fixCursor(); afterEdit();
+  setBf(describeBf(r, skipped), 'ok');
+};
+$('#bBlackUndo').onclick = () => {
+  if (!bfPrev) return;
+  G = bfPrev.G; clues = bfPrev.clues; bfPrev = null; $('#bBlackUndo').disabled = true; ghost = null;
+  computeSlots(); fixCursor(); afterEdit(); setBf('Restored the previous grid.', '');
 };
 
 /* ---------- input ---------- */
@@ -644,7 +726,7 @@ function loadPuzzle(p) {
   (p.grid || []).forEach((row, r) => { if (r < N) [...row].forEach((ch, c) => { if (c < N) G[r][c] = ch === '#' ? '#' : /[A-Za-z]/.test(ch) ? ch.toUpperCase() : '.'; }); });
   clues = p.clues && typeof p.clues === 'object' ? { ...p.clues } : {};
   title = p.title || ''; author = p.author || ''; $('#ttl').value = title; $('#by').value = author;
-  ghost = null; place = null; renderPlaceButtons(); computeSlots(); fixCursor(); render(); requestFill();
+  ghost = null; place = null; bfPrev = null; $('#bBlackUndo').disabled = true; renderPlaceButtons(); computeSlots(); fixCursor(); render(); requestFill();
 }
 $('#bNew').onclick = () => $('#dlgNew').showModal();
 $('#nCancel').onclick = () => $('#dlgNew').close();
