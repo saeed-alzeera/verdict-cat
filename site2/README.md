@@ -10,6 +10,18 @@ served from `/site2/` by the existing Pages deploy.
 - `autofill-worker.js`: best-first, cost-minimising backtracking in a Web Worker (50ms slices, stale results
   dropped, cached solution reused when the grid only extends it).
 
+- `blackfill.js`: black-square autofiller (see below). Pure functions, also loadable from Node.
+
+## Custom list and black squares
+
+Words typed into **Add a word** (Place, or **Add to list**) join a custom list kept in this browser; **Use custom.txt** adds every
+word from `custom.txt`, and each chip shows how many entries of its length the current grid has. **Generate black squares**
+replaces the black pattern (and clears letters and clues; **Undo** restores them) with a symmetric NYT-style one: 180° symmetry,
+all entries 3+ letters, connected, no 2x2 black blocks, at most 78 entries on a 15x15 (140 on a 21x21). It anneals over
+patterns, scoring the slots of each length the list needs (strong penalty for fewer slots than words), then checks the best
+patterns exactly: how many words fit in the grid at once with their crossings agreeing, and how many (word, entry) placements
+belong to such an arrangement. The words are not placed; use Add a word for that.
+
 ## Word list
 
 `worddb.json` is the word database: Crosshare's `{"words": {"3": [[word, tier], ...], ...}}` (lengths 3-15, tiers 0-3,
