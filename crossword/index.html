@@ -385,11 +385,11 @@ function render() {
   if (mode === 'build') scheduleLocalSave();
   const n = P.size, grid = $('#grid'), A = curSlot();
   const inWord = new Set(A ? A.cells.map(c => key(...c)) : []);
-  const refCells = new Set();   // cells of entries the current clue points to, e.g. "17-, 24- and 48-Across"
-  for (const m of (A ? P.clues[A.key] || '' : '').matchAll(/((?:\d+-?,?\s*(?:and\s+|or\s+)?)*\d+)-?\s*(Across|Down)/gi)) {
-    const d = m[2][0].toUpperCase();
-    for (const num of m[1].match(/\d+/g)) { const t = slots.find(x => x.dir === d && x.num === +num); if (t) t.cells.forEach(c => refCells.add(key(...c))); }
-  }
+  const refCells = new Set();   // cells of entries the current clue points to, e.g. "16A", "22D" or "17-, 24- and 48-Across"
+  const clueText = A ? P.clues[A.key] || '' : '';
+  const addRef = (num, d) => { const t = slots.find(x => x.dir === d && x.num === +num); if (t) t.cells.forEach(c => refCells.add(key(...c))); };
+  for (const m of clueText.matchAll(/\b(\d+)([AD])\b/g)) addRef(m[1], m[2]);
+  for (const m of clueText.matchAll(/((?:\d+-?,?\s*(?:and\s+|or\s+)?)*\d+)-?\s*(Across|Down)/gi)) for (const num of m[1].match(/\d+/g)) addRef(num, m[2][0].toUpperCase());
   const nums = new Map(); slots.forEach(s => { if (!nums.has(key(...s.cells[0]))) nums.set(key(...s.cells[0]), s.num); });
   const W = mode === 'build' ? G : S;
   let html = '';
