@@ -57,8 +57,8 @@ main { max-width:1100px; margin:0 auto; padding:6px 16px 40px; display:grid; gri
 .clue-bar input { flex:1; min-width:0; font:inherit; background:transparent; border:0; border-bottom:1px dashed var(--muted); color:inherit; padding:2px 0; outline:0; }
 .clue-bar .arrows button { border:0; background:none; font-size:1.1rem; padding:0 4px; }
 
-#gridwrap { --n:15; --cs:calc((100vw - 32px - var(--n) * 1px - 4px) / var(--n)); }
-@media (min-width:861px) { #gridwrap { --cs:min(46px, calc((100vw - 380px - var(--n) * 1px - 4px) / var(--n)), calc((100vh - 230px - var(--n) * 1px) / var(--n))); } }
+#gridwrap { --n:15; --rows:15; --cs:calc((100vw - 32px - var(--n) * 1px - 4px) / var(--n)); }
+@media (min-width:861px) { #gridwrap { --cs:min(46px, calc((100vw - 380px - var(--n) * 1px - 4px) / var(--n)), calc((100vh - 230px - var(--rows) * 1px) / var(--rows))); } }
 #grid { display:grid; grid-template-columns:repeat(var(--n), var(--cs)); grid-auto-rows:var(--cs); border:2px solid var(--line-strong); width:max-content; max-width:100%; background:var(--line-strong); gap:1px; user-select:none; touch-action:manipulation; }
 .c { position:relative; min-width:0; overflow:hidden; background:var(--cell); display:flex; align-items:center; justify-content:center; font-size:calc(var(--cs) * .56); font-weight:500; cursor:pointer; line-height:1; }
 .c.b { background:var(--black); }
@@ -183,7 +183,7 @@ dialog input[type=number], dialog input[type=text] { font:inherit; padding:5px 8
   <div style="display:grid;gap:10px">
     <input type="text" id="nTitle" placeholder="Title"/>
     <input type="text" id="nAuthor" placeholder="Constructor"/>
-    <label class="tg">Size <input type="number" id="nSize" value="15" min="5" max="25" step="2" style="width:80px"/> (15 daily · 21 Sunday)</label>
+    <label class="tg">Grid <input type="number" id="nCols" value="15" min="3" max="40" style="width:64px"/> wide × <input type="number" id="nRows" value="15" min="3" max="40" style="width:64px"/> tall <span class="hint" style="margin:0">(15 daily · 21 Sunday)</span></label>
   </div>
   <div class="row"><button class="btn" id="nCancel">Cancel</button><button class="btn primary" id="nGo">Create</button></div>
 </dialog>
@@ -210,22 +210,22 @@ let words = null, wordsSrc = '';
 /* ---------- helpers ---------- */
 const toast = (m) => { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 1800); };
 const key = (r, c) => r + ',' + c;
-const inb = (r, c) => r >= 0 && c >= 0 && r < P.size && c < P.size;
+const inb = (r, c) => r >= 0 && c >= 0 && r < P.rows && c < P.cols;
 const isB = (r, c) => G[r][c] === '#';
-const mir = (r, c) => [P.size - 1 - r, P.size - 1 - c];
+const mir = (r, c) => [P.rows - 1 - r, P.cols - 1 - c];
 
 function computeSlots() {
-  const n = P.size; slots = []; cellSlot = new Map(); let num = 0;
-  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+  const R = P.rows, C = P.cols; slots = []; cellSlot = new Map(); let num = 0;
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
     if (isB(r, c)) continue;
-    const sa = (c === 0 || isB(r, c - 1)) && c + 1 < n && !isB(r, c + 1);
-    const sd = (r === 0 || isB(r - 1, c)) && r + 1 < n && !isB(r + 1, c);
+    const sa = (c === 0 || isB(r, c - 1)) && c + 1 < C && !isB(r, c + 1);
+    const sd = (r === 0 || isB(r - 1, c)) && r + 1 < R && !isB(r + 1, c);
     if (!sa && !sd) continue;
     num++;
     for (const [d, on] of [['A', sa], ['D', sd]]) {
       if (!on) continue;
       const cells = []; let rr = r, cc = c;
-      while (rr < n && cc < n && !isB(rr, cc)) { cells.push([rr, cc]); d === 'A' ? cc++ : rr++; }
+      while (rr < R && cc < C && !isB(rr, cc)) { cells.push([rr, cc]); d === 'A' ? cc++ : rr++; }
       const s = { num, dir: d, cells, key: d + r + ',' + c, id: num + d };
       slots.push(s);
       for (const [a, b] of cells) cellSlot.set(a + ',' + b + d, s);
@@ -241,12 +241,13 @@ function load(p, id) {
   P = JSON.parse(JSON.stringify(p));
   P.id = id || P.id || 'untitled';
   P.clues = P.clues || {}; P.theme = P.theme || [];
+  P.rows = P.grid.length; P.cols = P.grid[0].length; P.size = P.rows;
   G = P.grid.map(r => r.split(''));
   if (mode === 'build') S = G; else initSolver();
   rev = new Set(); bad = new Set(); solved = false;
   computeSlots();
   const first = slots[0]; cur = first ? first.cells[0].slice() : [0, 0]; dir = first ? first.dir : 'A';
-  $('#gridwrap').style.setProperty('--n', P.size);
+  $('#gridwrap').style.setProperty('--n', P.cols); $('#gridwrap').style.setProperty('--rows', P.rows);
   $('#ttl').textContent = P.title || 'Untitled';
   $('#by').textContent = [P.author && 'By ' + P.author, P.date && fmtDate(P.date)].filter(Boolean).join(' · ');
   baseline = lastSaved = JSON.stringify(exportObj());
@@ -257,7 +258,7 @@ function fmtDate(d) { const x = new Date(d + 'T12:00:00'); return isNaN(x) ? d :
 function initSolver() {
   const saved = LS.get('xw_prog_' + P.id, null);
   S = P.grid.map(r => r.split('').map(ch => ch === '#' ? '#' : '.'));
-  if (saved && saved.s && saved.s.length === P.size) { S = saved.s.map(r => r.split('')); rev = new Set(saved.rev || []); t0 = Date.now() - (saved.ms || 0); }
+  if (saved && saved.s && saved.s.length === P.rows && saved.s[0].length === P.cols) { S = saved.s.map(r => r.split('')); rev = new Set(saved.rev || []); t0 = Date.now() - (saved.ms || 0); }
 }
 function saveProgress() {
   if (mode !== 'solve' || !P) return;
@@ -383,7 +384,7 @@ function flushAll() { autosave(); saveProgress(); flushPush(true); }
 /* ---------- render ---------- */
 function render() {
   if (mode === 'build') scheduleLocalSave();
-  const n = P.size, grid = $('#grid'), A = curSlot();
+  const grid = $('#grid'), A = curSlot();
   const inWord = new Set(A ? A.cells.map(c => key(...c)) : []);
   const refCells = new Set();   // cells of entries the current clue points to, e.g. "16A", "22D" or "17-, 24- and 48-Across"
   const clueText = A ? P.clues[A.key] || '' : '';
@@ -393,7 +394,7 @@ function render() {
   const nums = new Map(); slots.forEach(s => { if (!nums.has(key(...s.cells[0]))) nums.set(key(...s.cells[0]), s.num); });
   const W = mode === 'build' ? G : S;
   let html = '';
-  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+  for (let r = 0; r < P.rows; r++) for (let c = 0; c < P.cols; c++) {
     const k = key(r, c), b = isB(r, c);
     let cls = 'c' + (b ? ' b' : '');
     if (!b) {
@@ -447,25 +448,25 @@ const esc = s => String(s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;',
 
 /* ---------- constructor checks (mirror of xw check) ---------- */
 function validate() {
-  const n = P.size, errs = [], warns = [];
+  const R = P.rows, C = P.cols, errs = [], warns = [];
   let asym = 0, firstAsym = null;
-  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) { const [mr, mc] = mir(r, c); if ((r < mr || (r === mr && c < mc)) && isB(r, c) !== isB(mr, mc)) { asym++; firstAsym = firstAsym || `(${r},${c}) vs (${mr},${mc})`; } }
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) { const [mr, mc] = mir(r, c); if ((r < mr || (r === mr && c < mc)) && isB(r, c) !== isB(mr, mc)) { asym++; firstAsym = firstAsym || `(${r},${c}) vs (${mr},${mc})`; } }
   if (asym) { const allow = P.allow_asym || 0; (asym > allow ? errs : warns).push(`${asym} asymmetric pair(s), e.g. ${firstAsym} (allowed ${allow})`); }
-  for (const d of ['A', 'D']) for (let i = 0; i < n; i++) {
-    let run = [];
-    for (let j = 0; j <= n; j++) {
+  for (const d of ['A', 'D']) for (let i = 0; i < (d === 'A' ? R : C); i++) {
+    const len = d === 'A' ? C : R; let run = [];
+    for (let j = 0; j <= len; j++) {
       const r = d === 'A' ? i : j, c = d === 'A' ? j : i;
-      if (j < n && !isB(r, c)) run.push([r, c]);
+      if (j < len && !isB(r, c)) run.push([r, c]);
       else { if (run.length > 0 && run.length < 3) errs.push(`Entry under 3 letters at ${run[0]} (${d === 'A' ? 'across' : 'down'})`); run = []; }
     }
   }
-  const white = []; for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (!isB(r, c)) white.push([r, c]);
+  const white = []; for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (!isB(r, c)) white.push([r, c]);
   if (white.length) {
     const seen = new Set([key(...white[0])]), q = [white[0]];
     while (q.length) { const [r, c] = q.pop(); for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const x = r + a, y = c + b; if (inb(x, y) && !isB(x, y) && !seen.has(key(x, y))) { seen.add(key(x, y)); q.push([x, y]); } } }
     if (seen.size !== white.length) errs.push(`Grid not connected (${white.length - seen.size} squares cut off)`);
   }
-  const nb = n * n - white.length, lw = n <= 15 ? 78 : 140, lb = n <= 15 ? 42 : 80;
+  const n = Math.max(R, C), nb = R * C - white.length, lw = n <= 15 ? 78 : 140, lb = Math.round((n <= 15 ? 42 : 80) * R * C / (n <= 15 ? 225 : 441));
   if (n <= 15 && slots.length > lw) warns.push(`${slots.length} entries (NYT daily max ${lw})`);
   if (nb > lb) warns.push(`${nb} black squares (guideline ~${lb})`);
   const seenW = {}; for (const s of slots) { const w = s.cells.map(([r, c]) => G[r][c]).join(''); if (!w.includes('.')) (seenW[w] = seenW[w] || []).push(s.id); }
@@ -514,7 +515,7 @@ function renderCands(A) {
 /* ---------- interaction ---------- */
 function move(dr, dc) {
   let [r, c] = cur;
-  for (let i = 0; i < P.size; i++) { r += dr; c += dc; if (!inb(r, c)) return; if (!isB(r, c)) { cur = [r, c]; return; } }
+  for (let i = 0, m = Math.max(P.rows, P.cols); i < m; i++) { r += dr; c += dc; if (!inb(r, c)) return; if (!isB(r, c)) { cur = [r, c]; return; } }
 }
 function step(fwd = true) {
   const A = curSlot(); if (!A) return;
@@ -544,7 +545,7 @@ function toggleBlack() {
 }
 function checkSolved() {
   if (solved) return;
-  for (let r = 0; r < P.size; r++) for (let c = 0; c < P.size; c++) { if (G[r][c] !== '#' && S[r][c] !== G[r][c]) return; }
+  for (let r = 0; r < P.rows; r++) for (let c = 0; c < P.cols; c++) { if (G[r][c] !== '#' && S[r][c] !== G[r][c]) return; }
   solved = true; clearInterval(tick); toast('Solved! ' + fmtTime(Date.now() - t0));
 }
 const fmtTime = ms => { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
@@ -610,7 +611,7 @@ $('#prevC').onclick = () => { jumpClue(-1); render(); }; $('#nextC').onclick = (
 /* solve tools */
 function flagBad(cells) { let any = false; for (const [r, c] of cells) { const v = S[r][c]; if (v !== '.' && v !== G[r][c]) { bad.add(key(r, c)); any = true; } } render(); toast(any ? 'Some letters are wrong' : 'Looking good so far'); }
 $('#bChkW').onclick = () => { const A = curSlot(); if (A) flagBad(A.cells); };
-$('#bChkA').onclick = () => { const all = []; for (let r = 0; r < P.size; r++) for (let c = 0; c < P.size; c++) if (!isB(r, c)) all.push([r, c]); flagBad(all); };
+$('#bChkA').onclick = () => { const all = []; for (let r = 0; r < P.rows; r++) for (let c = 0; c < P.cols; c++) if (!isB(r, c)) all.push([r, c]); flagBad(all); };
 $('#bRevL').onclick = () => { const [r, c] = cur; if (isB(r, c)) return; S[r][c] = G[r][c]; rev.add(key(r, c)); bad.delete(key(r, c)); afterEdit(); };
 $('#bRevW').onclick = () => { const A = curSlot(); if (!A) return; A.cells.forEach(([r, c]) => { S[r][c] = G[r][c]; rev.add(key(r, c)); bad.delete(key(r, c)); }); afterEdit(); };
 $('#bClr').onclick = () => { if (!confirm('Clear all your entries?')) return; initSolverBlank(); };
@@ -645,10 +646,10 @@ $('#file').onchange = async e => {
 $('#btnNew').onclick = () => $('#dlgNew').showModal();
 $('#nCancel').onclick = () => $('#dlgNew').close();
 $('#nGo').onclick = () => {
-  let n = Math.max(5, Math.min(25, +$('#nSize').value || 15)); if (n % 2 === 0) n++;
+  const clamp = v => Math.max(3, Math.min(40, Math.round(+v) || 15)), cols = clamp($('#nCols').value), rows = clamp($('#nRows').value);
   const id = ($('#nTitle').value || 'untitled').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'untitled';
   setMode('build');
-  load({ title: $('#nTitle').value || 'Untitled', author: $('#nAuthor').value, date: new Date().toISOString().slice(0, 10), size: n, grid: Array(n).fill('.'.repeat(n)), clues: {}, theme: [] }, id);
+  load({ title: $('#nTitle').value || 'Untitled', author: $('#nAuthor').value, date: new Date().toISOString().slice(0, 10), size: rows, rows, cols, grid: Array(rows).fill('.'.repeat(cols)), clues: {}, theme: [] }, id);
   $('#dlgNew').close();
 };
 const setTheme = t => { document.documentElement.dataset.theme = t; $('#btnTheme').textContent = t === 'dark' ? 'Light' : 'Dark'; };
