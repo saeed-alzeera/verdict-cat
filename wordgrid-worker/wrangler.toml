@@ -22,5 +22,5 @@ fallthrough = true
 # Browsers from these origins may call the API / open sockets. Add your own domain if you use one.
 ALLOWED_ORIGINS = "https://saeed-alzeera.github.io,http://127.0.0.1:8765,http://localhost:8765"
 
-# Required secret (not stored here):  wrangler secret put WORDGRID_KEY
-# This key is separate from the sync key; it only creates rooms.
+# Required secret (not stored here):  wrangler secret put SYNC_KEY
+# Use the same value as the sync worker. Friends never see it: they join by invite link.

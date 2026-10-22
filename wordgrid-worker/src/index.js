@@ -1,8 +1,9 @@
 /*
  * verdict-cat-wordgrid — online rooms for the Wordgrid game.
  *
- *   Auth model (deliberately separate from the sync worker's SYNC_KEY):
- *     WORDGRID_KEY   Worker secret. Needed only to CREATE a room (and /ping).
+ *   Auth model:
+ *     SYNC_KEY       Worker secret — the SAME value as the sync worker's. Only the host
+ *                    ever holds it; it is needed only to CREATE a room (and /ping).
  *     invite token   in the invite link; lets a friend take a free seat.
  *     seat token     per seat; identifies that player for the WebSocket and rejoining.
  *
@@ -51,13 +52,13 @@ function json(request, env, body, status = 200) {
 }
 
 async function keyOk(request, env) {
-  if (!env.WORDGRID_KEY) return false;
+  if (!env.SYNC_KEY) return false;
   const header = request.headers.get('Authorization') || '';
   const given = header.startsWith('Bearer ') ? header.slice(7) : '';
   const enc = new TextEncoder();
   const [a, b] = await Promise.all([
     crypto.subtle.digest('SHA-256', enc.encode(given)),
-    crypto.subtle.digest('SHA-256', enc.encode(env.WORDGRID_KEY))
+    crypto.subtle.digest('SHA-256', enc.encode(env.SYNC_KEY))
   ]);
   return crypto.subtle.timingSafeEqual(a, b);
 }
