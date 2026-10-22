@@ -22,13 +22,13 @@ Object and code); it only learns yes/no. A leaked invite link only gets someone 
 
 Merge to `main` (or run **Deploy Wordgrid Worker** from the Actions tab). It deploys to
 `https://verdict-cat-wordgrid.<your-subdomain>.workers.dev`; if your subdomain differs from the one
-hard-coded in `games/wordgrid/online.html`, update `DEFAULT_WORKER` there. Add any custom site
+hard-coded in `games/wordgrid/index.html`, update `DEFAULT_WORKER` there. Add any custom site
 domain to `ALLOWED_ORIGINS` in `wrangler.toml`. The `verdict-cat-sync` Worker must already exist
 (the binding points at it by name).
 
 ## Using it
 
-1. Open `games/wordgrid/online.html`, your sync key is picked up automatically if this device has it (otherwise paste it once),
+1. Open the Wordgrid card on the homepage (`games/wordgrid/`); your sync key is picked up automatically if this device has it (otherwise paste it once),
    choose 2–4 seats, pick your name and icon, **Create room**.
 2. Send the invite link. A friend opens it, sees a name/icon page **prefilled from their last
    game** (nothing is assumed — they press *Join*), and lands in the waiting room.
