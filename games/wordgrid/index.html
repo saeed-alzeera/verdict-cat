@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Wordgrid</title>
+<style>
+:root[data-theme="dark"] {
+  --bg: #111418; --surface: #1a1d23; --surface2: #22262e;
+  --border: #2e3340; --border2: #3d4455;
+  --ink: #e8eaed; --muted: #8b9099; --faint: #4a5060;
+  --accent: #5b9bd5; --danger: #e05555; --ok: #4caf7d;
+  --cell: #1e2530; --tile: #e9d9b0; --tile-ink: #2a2316; --tile-pending: #f6e7a8;
+  --tw: #b5483f; --dw: #c98d86; --tl: #3f7fb5; --dl: #8db9dd;
+  --p0: #5b9bd5; --p1: #e0a24b; --p2: #4caf7d; --p3: #c978c9;
+  --shadow: 0 4px 24px rgba(0,0,0,.5);
+}
+:root[data-theme="light"] {
+  --bg: #f0f2f5; --surface: #ffffff; --surface2: #e8eaed;
+  --border: #d0d5de; --border2: #b0b8c8;
+  --ink: #1a1d23; --muted: #5a6070; --faint: #a0a8b8;
+  --accent: #2563eb; --danger: #dc2626; --ok: #16a34a;
+  --cell: #e3e8ef; --tile: #f0dfae; --tile-ink: #2a2316; --tile-pending: #fff1b0;
+  --tw: #d1584d; --dw: #e8a9a2; --tl: #4a8cc7; --dl: #a9cdea;
+  --p0: #2563eb; --p1: #d98a1c; --p2: #16a34a; --p3: #a64ca6;
+  --shadow: 0 4px 24px rgba(0,0,0,.12);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { min-height: 100%; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 12px 10px 32px; -webkit-tap-highlight-color: transparent;
+}
+header { width: 100%; max-width: 640px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+header a, header button.link { color: var(--muted); font-size: 13px; text-decoration: none; background: none; border: 0; cursor: pointer; }
+header a:hover, header button.link:hover { color: var(--ink); }
+header h1 { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+button { font: inherit; color: var(--ink); }
+.btn {
+  background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px;
+  padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+
+/* setup */
+#setup { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px; margin-top: 24px; }
+#setup h2 { font-size: 18px; margin-bottom: 4px; }
+#setup p.sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+.seg { display: flex; gap: 8px; margin-bottom: 14px; }
+.seg button { flex: 1; padding: 10px 0; border-radius: 8px; border: 1px solid var(--border2); background: var(--surface2); cursor: pointer; font-weight: 700; }
+.seg button.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.names { display: grid; gap: 8px; margin-bottom: 14px; }
+.names label { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.names .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.names input[type=text] { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--ink); font: inherit; }
+.opt { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+#loadmsg { font-size: 12px; color: var(--muted); margin-top: 10px; min-height: 16px; }
+#loadmsg.err { color: var(--danger); }
+
+/* game */
+#game { width: 100%; max-width: 640px; display: none; flex-direction: column; gap: 10px; }
+#scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.pcard { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--pc); border-radius: 8px; padding: 6px 10px; }
+.pcard.turn { border-color: var(--pc); background: color-mix(in srgb, var(--pc) 14%, var(--surface)); }
+.pcard.out { opacity: .45; }
+.pcard .nm { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcard .sc { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pcard .tag { font-size: 10px; color: var(--muted); }
+#meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+
+#board-wrap { width: 100%; }
+#board {
+  --n: 15; display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 2px;
+  width: 100%; aspect-ratio: 1 / 1; background: var(--border); padding: 2px; border-radius: 8px;
+  container-type: inline-size; user-select: none; -webkit-user-select: none;
+}
+.sq {
+  position: relative; background: var(--cell); border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2.2cqw; font-weight: 700; color: rgba(255,255,255,.85); cursor: pointer; overflow: hidden;
+}
+.sq.TW { background: var(--tw); } .sq.DW { background: var(--dw); }
+.sq.TL { background: var(--tl); } .sq.DL { background: var(--dl); }
+:root[data-theme="light"] .sq.DW, :root[data-theme="light"] .sq.DL { color: rgba(0,0,0,.55); }
+.sq.hot { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tile {
+  position: absolute; inset: 1px; background: var(--tile); color: var(--tile-ink); border-radius: 3px;
+  display: flex; align-items: center; justify-content: center; font-size: 4.2cqw; font-weight: 800;
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.tile sub { position: absolute; right: 7%; bottom: 3%; font-size: 1.8cqw; font-weight: 700; opacity: .75; }
+.tile.blank { color: #b0452e; }
+.tile.pending { background: var(--tile-pending); outline: 2px solid var(--accent); outline-offset: -2px; }
+.tile.last { box-shadow: 0 0 0 2px var(--pc, var(--accent)) inset; }
+
+#rack { display: flex; justify-content: center; gap: 6px; min-height: 52px; flex-wrap: wrap; }
+.rt {
+  width: 46px; height: 52px; position: relative; background: var(--tile); color: var(--tile-ink);
+  border: 0; border-radius: 6px; font-size: 24px; font-weight: 800; cursor: pointer;
+  box-shadow: 0 2px 0 rgba(0,0,0,.4);
+}
+.rt sub { position: absolute; right: 5px; bottom: 3px; font-size: 11px; font-weight: 700; opacity: .75; }
+.rt.sel { outline: 3px solid var(--accent); transform: translateY(-4px); }
+.rt.swap { outline: 3px solid var(--danger); transform: translateY(-4px); }
+.rt.blankt { color: #b0452e; }
+.rt.used { visibility: hidden; }
+
+#status { min-height: 20px; font-size: 13px; text-align: center; color: var(--muted); }
+#status.bad { color: var(--danger); } #status.good { color: var(--ok); }
+#actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+#log { font-size: 12px; color: var(--muted); max-height: 110px; overflow: auto; border-top: 1px solid var(--border); padding-top: 8px; display: grid; gap: 3px; }
+#log b { color: var(--ink); }
+
+/* overlays */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+.overlay.on { display: flex; }
+.modal { background: var(--surface); border: 1px solid var(--border2); border-radius: 12px; padding: 22px; max-width: 360px; width: 100%; text-align: center; box-shadow: var(--shadow); }
+.modal h3 { font-size: 18px; margin-bottom: 6px; }
+.modal p { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+.letters { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.letters button { padding: 9px 0; border-radius: 6px; border: 1px solid var(--border2); background: var(--tile); color: var(--tile-ink); font-weight: 800; cursor: pointer; }
+table.st { width: 100%; border-collapse: collapse; margin: 6px 0 14px; font-size: 14px; }
+table.st td { padding: 6px 4px; border-bottom: 1px solid var(--border); text-align: left; }
+table.st td:last-child { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
+#cover { background: var(--bg); }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="../../games.html">← Games</a>
+  <h1>Wordgrid</h1>
+  <button class="link" id="newbtn" style="visibility:hidden">New game</button>
+</header>
+
+<section id="setup">
+  <h2>Local game</h2>
+  <p class="sub">2–4 players, one device, pass it around.</p>
+  <div class="seg" id="countSeg">
+    <button data-n="2">2 players</button>
+    <button data-n="3">3 players</button>
+    <button data-n="4" class="on">4 players</button>
+  </div>
+  <div class="names" id="names"></div>
+  <label class="opt"><input type="checkbox" id="hideRack" checked/> Hide racks between turns (pass-the-device screen)</label>
+  <button class="btn primary" id="startBtn" style="width:100%" disabled>Start game</button>
+  <div id="loadmsg">Loading dictionary…</div>
+</section>
+
+<section id="game">
+  <div id="scores"></div>
+  <div id="meta"><span id="bagInfo"></span><span id="turnInfo"></span></div>
+  <div id="board-wrap"><div id="board"></div></div>
+  <div id="status"></div>
+  <div id="rack"></div>
+  <div id="actions">
+    <button class="btn primary" id="playBtn">Play</button>
+    <button class="btn" id="recallBtn">Recall</button>
+    <button class="btn" id="shuffleBtn">Shuffle</button>
+    <button class="btn" id="swapBtn">Swap</button>
+    <button class="btn" id="passBtn">Pass</button>
+    <button class="btn danger" id="resignBtn">Resign</button>
+  </div>
+  <div id="log"></div>
+</section>
+
+<div class="overlay" id="cover"><div class="modal"><h3 id="coverName"></h3><p>Pass the device. Tap when ready to see your rack.</p><button class="btn primary" id="coverBtn">I'm ready</button></div></div>
+<div class="overlay" id="blankPick"><div class="modal"><h3>Blank tile</h3><p>Choose the letter it stands for.</p><div class="letters" id="letters"></div></div></div>
+<div class="overlay" id="endModal"><div class="modal"><h3 id="endTitle">Game over</h3><p id="endSub"></p><table class="st" id="endTable"></table><button class="btn primary" id="againBtn">New game</button></div></div>
+
+<script src="engine.js"></script>
+<script>
+(function () {
+  'use strict';
+  var E = window.WordgridEngine;
+  var COLORS = ['var(--p0)', 'var(--p1)', 'var(--p2)', 'var(--p3)'];
+  var $ = function (id) { return document.getElementById(id); };
+
+  var dict = null;
+  var isWord = function (w) { return dict ? dict.has(w) : false; };
+
+  // ---- setup ----
+  var count = 4;
+  var nameInputs = [];
+  function renderNames() {
+    var box = $('names'); box.innerHTML = '';
+    nameInputs = [];
+    for (var i = 0; i < count; i++) {
+      var lab = document.createElement('label');
+      var dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = COLORS[i];
+      var inp = document.createElement('input'); inp.type = 'text'; inp.maxLength = 14; inp.value = 'Player ' + (i + 1);
+      lab.appendChild(dot); lab.appendChild(inp); box.appendChild(lab); nameInputs.push(inp);
+    }
+  }
+  $('countSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    count = +b.dataset.n;
+    Array.prototype.forEach.call($('countSeg').children, function (x) { x.classList.toggle('on', x === b); });
+    renderNames();
+  });
+  renderNames();
+
+  fetch('enable.txt').then(function (r) {
+    if (!r.ok) throw new Error(r.status);
+    return r.text();
+  }).then(function (t) {
+    dict = new Set(t.split('\n').map(function (s) { return s.trim(); }).filter(Boolean));
+    $('loadmsg').textContent = dict.size.toLocaleString() + ' words loaded (ENABLE list).';
+    $('startBtn').disabled = false;
+  }).catch(function () {
+    $('loadmsg').textContent = 'Could not load enable.txt. Serve this folder over http (e.g. python3 -m http.server) rather than opening the file directly.';
+    $('loadmsg').className = 'err';
+  });
+
+  // ---- game state ----
+  var g = null, pending = [], selected = -1, swapMode = false, swapSel = [], hide = true, lastCells = [], lastBy = -1, revealed = true;
+
+  function startGame() {
+    var names = nameInputs.map(function (n, i) { return n.value.trim() || ('Player ' + (i + 1)); });
+    hide = $('hideRack').checked;
+    g = E.newGame(names);
+    pending = []; selected = -1; swapMode = false; swapSel = []; lastCells = []; lastBy = -1;
+    $('setup').style.display = 'none'; $('game').style.display = 'flex'; $('newbtn').style.visibility = 'visible';
+    $('log').innerHTML = '';
+    addLog('<b>' + esc(g.players[g.turn].name) + '</b> goes first.');
+    beginTurn();
+  }
+  function esc(s) { return s.replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function addLog(html) {
+    var d = document.createElement('div'); d.innerHTML = html; $('log').insertBefore(d, $('log').firstChild);
+  }
+  function setStatus(msg, cls) { var s = $('status'); s.textContent = msg || ''; s.className = cls || ''; }
+
+  function beginTurn() {
+    pending = []; selected = -1; swapMode = false; swapSel = [];
+    if (hide && g.players.length > 1) {
+      revealed = false;
+      $('coverName').textContent = g.players[g.turn].name + '’s turn';
+      $('cover').classList.add('on');
+    } else { revealed = true; $('cover').classList.remove('on'); }
+    render();
+  }
+  $('coverBtn').addEventListener('click', function () { revealed = true; $('cover').classList.remove('on'); render(); });
+
+  // ---- render ----
+  var boardBuilt = false;
+  function buildBoard() {
+    var b = $('board'); b.innerHTML = '';
+    for (var r = 0; r < E.SIZE; r++) for (var c = 0; c < E.SIZE; c++) {
+      var d = document.createElement('div');
+      d.className = 'sq ' + E.PREMIUM[r][c]; d.dataset.r = r; d.dataset.c = c;
+      b.appendChild(d);
+    }
+    boardBuilt = true;
+  }
+  function cellEl(r, c) { return $('board').children[r * E.SIZE + c]; }
+
+  function tileNode(ch, blank, cls) {
+    var t = document.createElement('div'); t.className = 'tile' + (blank ? ' blank' : '') + (cls ? ' ' + cls : '');
+    t.textContent = ch;
+    if (!blank) { var s = document.createElement('sub'); s.textContent = E.VALUE[ch]; t.appendChild(s); }
+    return t;
+  }
+
+  function render() {
+    if (!boardBuilt) buildBoard();
+    var cur = g.players[g.turn];
+
+    // scoreboard
+    var sc = $('scores'); sc.innerHTML = '';
+    g.players.forEach(function (p, i) {
+      var d = document.createElement('div');
+      d.className = 'pcard' + (i === g.turn && !g.over ? ' turn' : '') + (p.resigned ? ' out' : '');
+      d.style.setProperty('--pc', COLORS[i]);
+      var nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = p.name;
+      var s = document.createElement('div'); s.className = 'sc'; s.textContent = p.score;
+      d.appendChild(nm); d.appendChild(s);
+      if (p.resigned) { var t = document.createElement('div'); t.className = 'tag'; t.textContent = 'resigned'; d.appendChild(t); }
+      sc.appendChild(d);
+    });
+    $('bagInfo').textContent = 'Bag: ' + g.bag.length + ' tiles';
+    $('turnInfo').textContent = g.over ? 'Game over' : cur.name + ' to play';
+
+    // board
+    for (var r = 0; r < E.SIZE; r++) for (var c = 0; c < E.SIZE; c++) {
+      var el = cellEl(r, c); el.textContent = ''; el.classList.remove('hot');
+      var t = g.board[r][c];
+      var pend = pending.find(function (p) { return p.r === r && p.c === c; });
+      if (t) {
+        var isLast = lastCells.some(function (x) { return x[0] === r && x[1] === c; });
+        var n = tileNode(t.ch, t.blank, isLast ? 'last' : '');
+        if (isLast) n.style.setProperty('--pc', COLORS[lastBy]);
+        el.appendChild(n);
+      } else if (pend) {
+        el.appendChild(tileNode(pend.ch, pend.blank, 'pending'));
+      } else {
+        var p = E.PREMIUM[r][c];
+        el.textContent = (r === E.CENTER && c === E.CENTER) ? '★' : p;
+      }
+    }
+
+    // rack
+    var rk = $('rack'); rk.innerHTML = '';
+    var usedIdx = pending.map(function (p) { return p.rackIdx; });
+    cur.rack.forEach(function (ch, i) {
+      var b = document.createElement('button');
+      b.className = 'rt' + (ch === '?' ? ' blankt' : '') + (usedIdx.indexOf(i) >= 0 ? ' used' : '') +
+        (!swapMode && selected === i ? ' sel' : '') + (swapMode && swapSel.indexOf(i) >= 0 ? ' swap' : '');
+      b.textContent = ch === '?' ? ' ' : ch;
+      if (ch !== '?') { var s = document.createElement('sub'); s.textContent = E.VALUE[ch]; b.appendChild(s); }
+      b.dataset.i = i;
+      rk.appendChild(b);
+    });
+    rk.style.visibility = revealed && !g.over ? 'visible' : 'hidden';
+
+    // buttons
+    var off = g.over || !revealed;
+    $('playBtn').disabled = off || !pending.length || swapMode;
+    $('recallBtn').disabled = off || !pending.length;
+    $('shuffleBtn').disabled = off;
+    $('swapBtn').disabled = off || pending.length > 0;
+    $('swapBtn').textContent = swapMode ? (swapSel.length ? 'Confirm swap (' + swapSel.length + ')' : 'Cancel swap') : 'Swap';
+    $('passBtn').disabled = off || swapMode;
+    $('resignBtn').disabled = off;
+
+    // live preview
+    if (!g.over && revealed && pending.length && !swapMode) {
+      var ev = E.evaluate(g, toPlacements(), isWord);
+      if (ev.ok) setStatus(ev.words.map(function (w) { return w.word + ' ' + w.score; }).join(' · ') + (ev.bingo ? ' · +50 bingo' : '') + '  =  ' + ev.score + ' pts', 'good');
+      else setStatus(ev.error, partial() ? '' : 'bad');
+    } else if (swapMode) setStatus('Tap the tiles to exchange, then confirm.', '');
+    else if (!pending.length) setStatus(revealed && !g.over ? 'Pick a tile, then tap a square.' : '', '');
+  }
+  // Don't shout "invalid" while the player is obviously still building a word.
+  function partial() { return pending.length < 2 && g.history.some(function (h) { return h.type === 'play'; }) === false; }
+
+  function toPlacements() {
+    return pending.map(function (p) { return { r: p.r, c: p.c, ch: p.ch, blank: p.blank }; });
+  }
+
+  // ---- interaction ----
+  $('rack').addEventListener('click', function (e) {
+    var b = e.target.closest('.rt'); if (!b || b.classList.contains('used')) return;
+    var i = +b.dataset.i;
+    if (swapMode) {
+      var k = swapSel.indexOf(i); if (k >= 0) swapSel.splice(k, 1); else swapSel.push(i);
+    } else selected = selected === i ? -1 : i;
+    render();
+  });
+
+  $('board').addEventListener('click', function (e) {
+    var sq = e.target.closest('.sq'); if (!sq || g.over || !revealed || swapMode) return;
+    var r = +sq.dataset.r, c = +sq.dataset.c;
+    var pi = pending.findIndex(function (p) { return p.r === r && p.c === c; });
+    if (pi >= 0) { pending.splice(pi, 1); render(); return; }       // tap a pending tile to take it back
+    if (g.board[r][c]) return;
+    var rack = g.players[g.turn].rack;
+    if (selected < 0) return setStatus('Pick a tile from your rack first.', '');
+    var ch = rack[selected];
+    if (ch === '?') {
+      pickBlank(function (letter) { place(r, c, letter, true); });
+    } else place(r, c, ch, false);
+  });
+  function place(r, c, ch, blank) {
+    pending.push({ r: r, c: c, ch: ch, blank: blank, rackIdx: selected });
+    selected = -1;
+    // auto-advance selection to the next unused tile so a word can be tapped out quickly
+    render();
+  }
+  function pickBlank(cb) {
+    var box = $('letters'); box.innerHTML = '';
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(function (L) {
+      var b = document.createElement('button'); b.textContent = L;
+      b.addEventListener('click', function () { $('blankPick').classList.remove('on'); cb(L); });
+      box.appendChild(b);
+    });
+    $('blankPick').classList.add('on');
+  }
+  $('blankPick').addEventListener('click', function (e) { if (e.target === this) { this.classList.remove('on'); selected = -1; render(); } });
+
+  $('recallBtn').addEventListener('click', function () { pending = []; selected = -1; render(); });
+  $('shuffleBtn').addEventListener('click', function () {
+    var rack = g.players[g.turn].rack;
+    if (pending.length) return setStatus('Recall your tiles before shuffling.', 'bad');
+    for (var i = rack.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = rack[i]; rack[i] = rack[j]; rack[j] = t; }
+    selected = -1; render();
+  });
+
+  $('playBtn').addEventListener('click', function () {
+    var by = g.turn, pl = toPlacements();
+    var res = E.play(g, pl, isWord);
+    if (!res.ok) { setStatus(res.error, 'bad'); return; }
+    lastCells = pl.map(function (p) { return [p.r, p.c]; }); lastBy = by;
+    addLog('<b>' + esc(g.players[by].name) + '</b> played ' + res.words.map(function (w) { return esc(w.word) + ' (' + w.score + ')'; }).join(', ') + (res.bingo ? ' +50 bingo' : '') + ' for <b>' + res.score + '</b>.');
+    afterMove();
+  });
+
+  $('swapBtn').addEventListener('click', function () {
+    if (!swapMode) {
+      if (g.bag.length < E.RACK) return setStatus('Fewer than ' + E.RACK + ' tiles left in the bag — swapping is closed.', 'bad');
+      swapMode = true; swapSel = []; selected = -1; render(); return;
+    }
+    if (!swapSel.length) { swapMode = false; render(); return; }
+    var by = g.turn, res = E.swap(g, swapSel);
+    if (!res.ok) { setStatus(res.error, 'bad'); return; }
+    addLog('<b>' + esc(g.players[by].name) + '</b> swapped ' + swapSel.length + ' tile' + (swapSel.length > 1 ? 's' : '') + '.');
+    afterMove();
+  });
+
+  $('passBtn').addEventListener('click', function () {
+    var by = g.turn; E.pass(g);
+    addLog('<b>' + esc(g.players[by].name) + '</b> passed.');
+    afterMove();
+  });
+
+  $('resignBtn').addEventListener('click', function () {
+    var by = g.turn;
+    if (!confirm(g.players[by].name + ' resigns? Their tiles go back in the bag.')) return;
+    E.resign(g, by);
+    addLog('<b>' + esc(g.players[by].name) + '</b> resigned.');
+    afterMove();
+  });
+
+  function afterMove() {
+    if (g.over) { render(); showEnd(); } else beginTurn();
+  }
+
+  function showEnd() {
+    var reasons = { out: 'A player used their last tile — remaining racks are scored against the others.',
+                    stalled: 'Everyone passed twice in a row — each rack is deducted from its owner.',
+                    resigned: 'Only one player is left in the game.' };
+    var st = E.standings(g), top = st.filter(function (x) { return x.rank === 1; });
+    $('endTitle').textContent = top.length > 1 ? 'Tie: ' + top.map(function (x) { return x.name; }).join(' & ') : top[0].name + ' wins!';
+    $('endSub').textContent = reasons[g.endReason] || '';
+    var tb = $('endTable'); tb.innerHTML = '';
+    st.forEach(function (x) {
+      var tr = document.createElement('tr');
+      var a = document.createElement('td'); a.textContent = (x.rank ? x.rank + '. ' : '— ') + x.name + (x.resigned ? ' (resigned)' : '');
+      var b = document.createElement('td'); b.textContent = x.score;
+      tr.appendChild(a); tr.appendChild(b); tb.appendChild(tr);
+    });
+    $('endModal').classList.add('on');
+  }
+
+  function toSetup() {
+    $('endModal').classList.remove('on'); $('cover').classList.remove('on');
+    $('game').style.display = 'none'; $('setup').style.display = 'block'; $('newbtn').style.visibility = 'hidden';
+    boardBuilt = false; g = null;
+  }
+  $('newbtn').addEventListener('click', function () { if (confirm('Abandon this game?')) toSetup(); });
+  $('againBtn').addEventListener('click', toSetup);
+  $('startBtn').addEventListener('click', startGame);
+})();
+</script>
+</body>
+</html>
