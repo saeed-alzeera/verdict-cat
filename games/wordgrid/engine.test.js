@@ -167,4 +167,34 @@ test('full random 4-player game with a greedy bot terminates and conserves tiles
   assert.strictEqual(onBoard + held + g.bag.length, 100);
 });
 
+test('serialize/restore round-trips and keeps the game deterministic', () => {
+  const g = fresh(4, 7); give(g, g.turn, 'CATSXYZ');
+  E.play(g, H('CAT', 7, 6), isWord);
+  const copy = E.restore(JSON.parse(JSON.stringify(E.serialize(g))));
+  assert.deepStrictEqual(copy.board, g.board);
+  assert.deepStrictEqual(copy.bag, g.bag);
+  assert.strictEqual(typeof copy.rng, 'function');
+  // same rng position => same shuffle after a swap on both copies
+  E.swap(g, [0, 1]); E.swap(copy, [0, 1]);
+  assert.deepStrictEqual(copy.bag, g.bag);
+  assert.deepStrictEqual(copy.players.map(p => p.rack), g.players.map(p => p.rack));
+});
+
+test('publicView never leaks the seed, bag, or other racks (until game over)', () => {
+  const g = fresh(4, 9);
+  const v = E.publicView(g, 2);
+  const json = JSON.stringify(v);
+  assert.ok(!('seed' in v) && !('bag' in v));
+  assert.deepStrictEqual(v.rack, g.players[2].rack);
+  v.players.forEach(p => assert.ok(!('rack' in p) && p.rackCount === 7));
+  assert.ok(!json.includes('"seed"'));
+  g.over = true;
+  E.publicView(g, 2).players.forEach(p => assert.ok(Array.isArray(p.rack)));
+});
+
+test('play history records cells for highlighting', () => {
+  const g = fresh(); give(g, g.turn, 'CATSXYZ'); E.play(g, H('CAT', 7, 6), isWord);
+  assert.deepStrictEqual(g.history[g.history.length - 1].cells, [[7, 6], [7, 7], [7, 8]]);
+});
+
 console.log('\n' + passed + ' tests passed');

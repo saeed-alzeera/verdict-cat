@@ -38,15 +38,18 @@
     return grid;
   })();
 
+  // Seedable PRNG whose position can be saved (getState) and resumed (pass it back as the seed).
   function mulberry32(seed) {
     var a = seed >>> 0;
-    return function () {
+    var fn = function () {
       a = (a + 0x6D2B79F5) >>> 0;
       var t = a;
       t = Math.imul(t ^ (t >>> 15), t | 1);
       t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
+    fn.getState = function () { return a; };
+    return fn;
   }
 
   function shuffle(arr, rng) {
@@ -253,7 +256,8 @@
     p.score += res.score;
     draw(g, p);
     g.scoreless = 0;
-    g.history.push({ type: 'play', player: g.turn, score: res.score, words: res.words, tiles: placements.length });
+    g.history.push({ type: 'play', player: g.turn, score: res.score, words: res.words, tiles: placements.length,
+      cells: placements.map(function (q) { return [q.r, q.c]; }), bingo: res.bingo });
     if (!p.rack.length && !g.bag.length) finish(g, 'out');
     else advanceTurn(g);
     return res;
@@ -318,10 +322,45 @@
     return list;
   }
 
+  // JSON-safe snapshot (drops the rng function, keeps its position) and the inverse.
+  function serialize(g) {
+    var o = JSON.parse(JSON.stringify(g, function (k, v) { return k === 'rng' ? undefined : v; }));
+    o.rngState = g.rng.getState();
+    return o;
+  }
+  function restore(o) {
+    var g = JSON.parse(JSON.stringify(o));
+    g.rng = mulberry32(g.rngState);
+    delete g.rngState;
+    return g;
+  }
+
+  // What one seat may see: the board and scores, its own rack, and only the *count* of everything else.
+  // Never includes the seed, the bag contents, or another player's rack (until the game is over).
+  function publicView(g, seat, historyLimit) {
+    return {
+      board: g.board,
+      bagCount: g.bag.length,
+      turn: g.turn,
+      over: g.over,
+      endReason: g.endReason,
+      scoreless: g.scoreless,
+      players: g.players.map(function (p, i) {
+        var o = { name: p.name, score: p.score, resigned: p.resigned, rackCount: p.rack.length };
+        if (g.over) o.rack = p.rack.slice();
+        return o;
+      }),
+      rack: g.players[seat] ? g.players[seat].rack.slice() : [],
+      history: g.history.slice(-(historyLimit || 40)),
+      standings: g.over ? standings(g) : null
+    };
+  }
+
   return {
     SIZE: SIZE, CENTER: CENTER, RACK: RACK, MIN_PLAYERS: MIN_PLAYERS, MAX_PLAYERS: MAX_PLAYERS,
     VALUE: VALUE, DIST: DIST, PREMIUM: PREMIUM,
     newGame: newGame, evaluate: evaluate, play: play, pass: pass, swap: swap, resign: resign,
-    standings: standings, rackValue: rackValue, activePlayers: activePlayers
+    standings: standings, rackValue: rackValue, activePlayers: activePlayers,
+    serialize: serialize, restore: restore, publicView: publicView
   };
 });
