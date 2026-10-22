@@ -4,23 +4,24 @@ Cloudflare Worker for **online Wordgrid rooms** (2–4 players). It runs the sam
 `games/wordgrid/engine.js` as the browser, but the server is the referee: it
 deals the tiles, validates every move, and sends each player only their own rack.
 
-## Keys — kept separate from the sync key
+## Keys — one key for you, none for friends
 
 | Credential | Held by | Lets you |
 | --- | --- | --- |
-| `WORDGRID_KEY` (Worker secret) | only you | **create** rooms |
+| `SYNC_KEY` (Worker secret, same value as the sync worker) | only you | **create** rooms |
 | invite token (in the invite link) | friends you send it to | take a free seat in that one room, before it starts |
 | seat token (per player, per room) | that player's browser | play as that seat; rejoin after a refresh |
 
-`WORDGRID_KEY` is unrelated to `SYNC_KEY` and this Worker has no access to the sync
-worker's progress, notes or books. A leaked game key can create rooms and nothing else;
-a leaked invite link only gets someone a seat in one room.
+Friends never see or store the key: they join with the invite link alone, so there is nothing
+for them to save. This Worker has no access to the sync worker's data (separate Durable Object
+and code); it only checks the key to allow room creation. A leaked invite link only gets
+someone a seat in one room.
 
 ## One-time setup
 
 ```sh
 openssl rand -hex 24                          # copy this value
-cd wordgrid-worker && npx wrangler secret put WORDGRID_KEY
+cd wordgrid-worker && npx wrangler secret put SYNC_KEY      # same value as the sync worker
 ```
 
 Then merge to `main` (or run **Deploy Wordgrid Worker** from the Actions tab). The
@@ -28,12 +29,12 @@ Worker deploys to `https://verdict-cat-wordgrid.<your-subdomain>.workers.dev`; i
 subdomain differs from the one hard-coded in `games/wordgrid/online.html`, update
 `DEFAULT_WORKER` there. Add any custom site domain to `ALLOWED_ORIGINS` in `wrangler.toml`.
 
-Rotate the key any time by running `wrangler secret put WORDGRID_KEY` again (existing
-rooms keep working; only new room creation needs the new key).
+If you rotate the sync key, run `wrangler secret put SYNC_KEY` here too (existing rooms keep
+working; only new room creation needs the new key).
 
 ## Using it
 
-1. Open `games/wordgrid/online.html`, paste the game key once (remembered on that device),
+1. Open `games/wordgrid/online.html`, your sync key is picked up automatically if this device has it (otherwise paste it once),
    choose 2–4 seats, pick your name and icon, **Create room**.
 2. Send the invite link. A friend opens it, sees a name/icon page **prefilled from their last
    game** (nothing is assumed — they press *Join*), and lands in the waiting room.
@@ -43,10 +44,10 @@ rooms keep working; only new room creation needs the new key).
 
 | Method | Path | Auth | |
 | --- | --- | --- | --- |
-| POST | `/rooms` | game key | `{seats, name, icon}` → `{roomId, seat, token, invite}` |
+| POST | `/rooms` | sync key | `{seats, name, icon}` → `{roomId, seat, token, invite}` |
 | POST | `/r/:id/join` | invite or seat token | `{invite \| token, name, icon}` → `{seat, token, name, icon}` |
 | GET | `/r/:id/ws?t=<seat token>` | seat token | WebSocket |
-| GET | `/ping` | game key | check a key |
+| GET | `/ping` | sync key | check a key |
 
 WebSocket messages (client → server): `start`, `play {placements}`, `pass`, `swap {indices}`,
 `resign`, `rematch` (host, after game over), `ping`. The server answers every change with a
@@ -63,7 +64,7 @@ fresh `{type:"state"}` view per seat, or `{type:"error", message}` to the sender
 ## Local development
 
 ```sh
-printf 'WORDGRID_KEY=devkey\n' > .dev.vars     # git-ignored
+printf 'SYNC_KEY=devkey\n' > .dev.vars     # git-ignored
 npx wrangler dev --port 8787
 python3 -m http.server 8765                     # from the repo root
 # in the browser console on the game page:  localStorage.wordgrid_worker = 'http://127.0.0.1:8787'
