@@ -8,29 +8,23 @@ deals the tiles, validates every move, and sends each player only their own rack
 
 | Credential | Held by | Lets you |
 | --- | --- | --- |
-| `SYNC_KEY` (Worker secret, same value as the sync worker) | only you | **create** rooms |
+| your sync key | only you | **create** rooms |
 | invite token (in the invite link) | friends you send it to | take a free seat in that one room, before it starts |
 | seat token (per player, per room) | that player's browser | play as that seat; rejoin after a refresh |
 
-Friends never see or store the key: they join with the invite link alone, so there is nothing
-for them to save. This Worker has no access to the sync worker's data (separate Durable Object
-and code); it only checks the key to allow room creation. A leaked invite link only gets
-someone a seat in one room.
+There is **nothing to configure on Cloudflare**. When you create a room, this Worker asks the
+sync worker (service binding `SYNC`, calling its `/ping`) whether the key is valid, so the key is
+never copied here and rotating it needs no change. Friends never see or store it: they join with
+the invite link alone. This Worker has no access to the sync worker's data (separate Durable
+Object and code); it only learns yes/no. A leaked invite link only gets someone a seat in one room.
 
-## One-time setup
+## Deploy
 
-```sh
-openssl rand -hex 24                          # copy this value
-cd wordgrid-worker && npx wrangler secret put SYNC_KEY      # same value as the sync worker
-```
-
-Then merge to `main` (or run **Deploy Wordgrid Worker** from the Actions tab). The
-Worker deploys to `https://verdict-cat-wordgrid.<your-subdomain>.workers.dev`; if your
-subdomain differs from the one hard-coded in `games/wordgrid/online.html`, update
-`DEFAULT_WORKER` there. Add any custom site domain to `ALLOWED_ORIGINS` in `wrangler.toml`.
-
-If you rotate the sync key, run `wrangler secret put SYNC_KEY` here too (existing rooms keep
-working; only new room creation needs the new key).
+Merge to `main` (or run **Deploy Wordgrid Worker** from the Actions tab). It deploys to
+`https://verdict-cat-wordgrid.<your-subdomain>.workers.dev`; if your subdomain differs from the one
+hard-coded in `games/wordgrid/online.html`, update `DEFAULT_WORKER` there. Add any custom site
+domain to `ALLOWED_ORIGINS` in `wrangler.toml`. The `verdict-cat-sync` Worker must already exist
+(the binding points at it by name).
 
 ## Using it
 
@@ -64,7 +58,7 @@ fresh `{type:"state"}` view per seat, or `{type:"error", message}` to the sender
 ## Local development
 
 ```sh
-printf 'SYNC_KEY=devkey\n' > .dev.vars     # git-ignored
+printf 'SYNC_KEY=devkey\n' > .dev.vars     # git-ignored; compares the key locally instead of asking the sync worker
 npx wrangler dev --port 8787
 python3 -m http.server 8765                     # from the repo root
 # in the browser console on the game page:  localStorage.wordgrid_worker = 'http://127.0.0.1:8787'
