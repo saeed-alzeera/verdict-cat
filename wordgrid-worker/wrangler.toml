@@ -22,5 +22,12 @@ fallthrough = true
 # Browsers from these origins may call the API / open sockets. Add your own domain if you use one.
 ALLOWED_ORIGINS = "https://saeed-alzeera.github.io,http://127.0.0.1:8765,http://localhost:8765"
 
-# Required secret (not stored here):  wrangler secret put SYNC_KEY
-# Use the same value as the sync worker. Friends never see it: they join by invite link.
+# Room creation is allowed when the sync worker accepts the presented key. This binding
+# lets this Worker ask it directly; no secret has to be copied here, and rotating the sync
+# key needs no change. Friends never see the key: they join by invite link.
+[[services]]
+binding = "SYNC"
+service = "verdict-cat-sync"
+
+# Optional: `wrangler secret put SYNC_KEY` makes this Worker compare the key itself instead
+# (used for local development).

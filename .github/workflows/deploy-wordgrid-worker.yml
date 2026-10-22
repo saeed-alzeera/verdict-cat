@@ -28,8 +28,8 @@ jobs:
           node games/wordgrid/engine.test.js
           node wordgrid-worker/src/room.test.js
 
-      # SYNC_KEY (same value as the sync worker) is set once by the owner:
-      #   cd wordgrid-worker && npx wrangler secret put SYNC_KEY
+      # No secret to set: room creation is authorised by asking the sync worker (service
+      # binding SYNC), so the sync key is only ever stored there.
       - name: Deploy worker
         uses: cloudflare/wrangler-action@v3
         with:

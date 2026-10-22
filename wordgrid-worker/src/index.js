@@ -2,8 +2,9 @@
  * verdict-cat-wordgrid — online rooms for the Wordgrid game.
  *
  *   Auth model:
- *     SYNC_KEY       Worker secret — the SAME value as the sync worker's. Only the host
- *                    ever holds it; it is needed only to CREATE a room (and /ping).
+ *     sync key       the same key as the sync worker, checked by asking that worker (service
+ *                    binding SYNC). Only the host ever holds it; it is needed only to CREATE a
+ *                    room (and /ping). Nothing to configure on this Worker.
  *     invite token   in the invite link; lets a friend take a free seat.
  *     seat token     per seat; identifies that player for the WebSocket and rejoining.
  *
@@ -51,16 +52,39 @@ function json(request, env, body, status = 200) {
   });
 }
 
-async function keyOk(request, env) {
-  if (!env.SYNC_KEY) return false;
+// Is the presented key the sync key? Returns 'ok' | 'bad' | 'down'.
+//  - Normally the sync worker decides, through the SYNC service binding (its /ping checks the
+//    bearer key). The key is never copied into this Worker, so there is no secret to set here
+//    and rotating the sync key needs no change here.
+//  - If a SYNC_KEY secret is set on this Worker it is compared directly instead (local dev, tests).
+async function keyCheck(request, env) {
   const header = request.headers.get('Authorization') || '';
   const given = header.startsWith('Bearer ') ? header.slice(7) : '';
-  const enc = new TextEncoder();
-  const [a, b] = await Promise.all([
-    crypto.subtle.digest('SHA-256', enc.encode(given)),
-    crypto.subtle.digest('SHA-256', enc.encode(env.SYNC_KEY))
-  ]);
-  return crypto.subtle.timingSafeEqual(a, b);
+  if (!given) return 'bad';
+  if (env.SYNC_KEY) {
+    const enc = new TextEncoder();
+    const [a, b] = await Promise.all([
+      crypto.subtle.digest('SHA-256', enc.encode(given)),
+      crypto.subtle.digest('SHA-256', enc.encode(env.SYNC_KEY))
+    ]);
+    return crypto.subtle.timingSafeEqual(a, b) ? 'ok' : 'bad';
+  }
+  if (!env.SYNC) return 'down';
+  try {
+    const r = await env.SYNC.fetch('https://sync.internal/ping', { headers: { Authorization: 'Bearer ' + given } });
+    if (r.status === 200) return 'ok';
+    return r.status === 401 || r.status === 403 ? 'bad' : 'down';
+  } catch {
+    return 'down';
+  }
+}
+
+// null when the key is fine, otherwise the error response to send.
+async function rejectKey(request, env) {
+  const k = await keyCheck(request, env);
+  if (k === 'ok') return null;
+  if (k === 'down') return json(request, env, { error: 'Could not check the key right now. Try again in a moment.' }, 503);
+  return json(request, env, { error: 'Bad key.' }, 401);
 }
 
 export default {
@@ -73,11 +97,12 @@ export default {
     if (!origin.ok) return json(request, env, { error: 'Origin not allowed.' }, 403);
 
     if (url.pathname === '/ping' && request.method === 'GET') {
-      return (await keyOk(request, env)) ? json(request, env, { ok: true }) : json(request, env, { error: 'Bad key.' }, 401);
+      return (await rejectKey(request, env)) || json(request, env, { ok: true });
     }
 
     if (url.pathname === '/rooms' && request.method === 'POST') {
-      if (!(await keyOk(request, env))) return json(request, env, { error: 'Bad key.' }, 401);
+      const denied = await rejectKey(request, env);
+      if (denied) return denied;
       let body;
       try { body = await request.json(); } catch { return json(request, env, { error: 'Bad JSON.' }, 400); }
       const bytes = new Uint8Array(12); crypto.getRandomValues(bytes);
