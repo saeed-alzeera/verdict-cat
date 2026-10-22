@@ -1,0 +1,9 @@
+{
+  "name": "verdict-cat-wordgrid",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node src/room.test.js",
+    "dev": "wrangler dev"
+  }
+}

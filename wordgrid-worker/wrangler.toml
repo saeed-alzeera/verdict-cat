@@ -1,0 +1,26 @@
+name = "verdict-cat-wordgrid"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# One SQLite-backed Durable Object per room (free-plan friendly). Rooms delete
+# themselves after 7 idle days.
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+# The word list ships inside the Worker as a text module.
+[[rules]]
+type = "Text"
+globs = ["**/*.txt"]
+fallthrough = true
+
+[vars]
+# Browsers from these origins may call the API / open sockets. Add your own domain if you use one.
+ALLOWED_ORIGINS = "https://saeed-alzeera.github.io,http://127.0.0.1:8765,http://localhost:8765"
+
+# Required secret (not stored here):  wrangler secret put WORDGRID_KEY
+# This key is separate from the sync key; it only creates rooms.

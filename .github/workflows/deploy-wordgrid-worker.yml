@@ -1,0 +1,37 @@
+name: Deploy Wordgrid Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "wordgrid-worker/**"
+      # the Worker bundles the shared engine, icon list and word list
+      - "games/wordgrid/engine.js"
+      - "games/wordgrid/icons.js"
+      - "games/wordgrid/enable.txt"
+      - ".github/workflows/deploy-wordgrid-worker.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-wordgrid-worker
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Unit tests
+        run: |
+          node games/wordgrid/engine.test.js
+          node wordgrid-worker/src/room.test.js
+
+      # WORDGRID_KEY is set once by the owner:  wrangler secret put WORDGRID_KEY
+      # It is deliberately NOT the sync key.
+      - name: Deploy worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: "wordgrid-worker"
