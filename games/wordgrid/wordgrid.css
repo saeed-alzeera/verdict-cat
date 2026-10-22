@@ -91,14 +91,14 @@ button { font: inherit; color: var(--ink); }
 .tile.pending { background: var(--tile-pending); outline: 2px solid var(--accent); outline-offset: -2px; }
 .tile.last { box-shadow: 0 0 0 2px var(--pc, var(--accent)) inset; }
 
-#rack { display: flex; justify-content: center; gap: 6px; min-height: 52px; flex-wrap: wrap; }
+#rack { display: flex; justify-content: center; gap: 6px; min-height: 64px; flex-wrap: wrap; padding: 6px; border-radius: 10px; border: 2px dashed transparent; }
+#rack.droptarget { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .rt {
   width: 46px; height: 52px; position: relative; background: var(--tile); color: var(--tile-ink);
   border: 0; border-radius: 6px; font-size: 24px; font-weight: 800; cursor: pointer;
   box-shadow: 0 2px 0 rgba(0,0,0,.4);
 }
 .rt sub { position: absolute; right: 5px; bottom: 3px; font-size: 11px; font-weight: 700; opacity: .75; }
-.rt.sel { outline: 3px solid var(--accent); transform: translateY(-4px); }
 .rt.swap { outline: 3px solid var(--danger); transform: translateY(-4px); }
 .rt.blankt { color: #b0452e; }
 .rt.used { visibility: hidden; }
@@ -121,3 +121,16 @@ table.st { width: 100%; border-collapse: collapse; margin: 6px 0 14px; font-size
 table.st td { padding: 6px 4px; border-bottom: 1px solid var(--border); text-align: left; }
 table.st td:last-child { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
 #cover { background: var(--bg); }
+
+/* dragging */
+.rt, .tile.pending { touch-action: none; cursor: grab; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+body.dragging-tile, body.dragging-tile * { cursor: grabbing !important; }
+.rt.dragging, .tile.pending.dragging { opacity: .3; }
+.ghost {
+  position: fixed; left: 0; top: 0; z-index: 200; pointer-events: none;
+  background: var(--tile); color: var(--tile-ink); border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; font-weight: 800;
+  box-shadow: 0 10px 22px rgba(0,0,0,.55); outline: 2px solid var(--accent);
+}
+.ghost.blank { color: #b0452e; }
+.ghost sub { position: absolute; right: 7%; bottom: 3%; font-size: .38em; font-weight: 700; opacity: .75; }
