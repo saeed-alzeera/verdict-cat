@@ -265,7 +265,7 @@
   }
 
   // ---- state -> UI ----
-  var lastSig = '', pending = [], selected = -1, swapMode = false, swapSel = [], dict = null;
+  var lastSig = '', pending = [], swapMode = false, swapSel = [], dict = null;
   fetch('enable.txt').then(function (r) { return r.ok ? r.text() : Promise.reject(); }).then(function (t) {
     dict = new Set(t.split('\n').map(function (s) { return s.trim(); }).filter(Boolean)); if (S && S.game) render();
   }).catch(function () { /* the server checks words anyway */ });
@@ -275,7 +275,7 @@
     S = s;
     if (s.phase === 'lobby') { renderLobby(); show('lobby'); return; }
     var sig = s.game.turn + ':' + s.game.history.length + ':' + s.phase;
-    if (sig !== lastSig) { lastSig = sig; pending = []; selected = -1; swapMode = false; swapSel = []; $('status').className = ''; }
+    if (sig !== lastSig) { lastSig = sig; pending = []; swapMode = false; swapSel = []; $('status').className = ''; }
     show('game'); render();
     $('endModal').classList.toggle('on', s.phase === 'over');
     if (s.phase === 'over') renderEnd();
@@ -387,7 +387,7 @@
     g.rack.forEach(function (ch, i) {
       var b = document.createElement('button');
       b.className = 'rt' + (ch === '?' ? ' blankt' : '') + (usedIdx.indexOf(i) >= 0 ? ' used' : '') +
-        (!swapMode && selected === i ? ' sel' : '') + (swapMode && swapSel.indexOf(i) >= 0 ? ' swap' : '');
+        (swapMode && swapSel.indexOf(i) >= 0 ? ' swap' : '');
       b.textContent = ch === '?' ? ' ' : ch;
       if (ch !== '?') { var s = document.createElement('sub'); s.textContent = E.VALUE[ch]; b.appendChild(s); }
       b.dataset.i = i; rk.appendChild(b);
@@ -409,7 +409,7 @@
       else { st.className = pending.length < 2 && !g.board[E.CENTER][E.CENTER] ? '' : 'bad'; st.textContent = ev.error; }
     } else if (swapMode) { st.className = ''; st.textContent = 'Tap the tiles to exchange, then confirm.'; }
     else if (!st.classList.contains('bad') || mineTurn) {
-      st.className = ''; st.textContent = g.over ? '' : (mineTurn ? 'Your turn — pick a tile, then tap a square.' : 'Waiting for ' + seatMeta(g.turn).name + '…');
+      st.className = ''; st.textContent = g.over ? '' : (mineTurn ? 'Your turn — drag tiles onto the board. Drag one back to your rack to take it off.' : 'Waiting for ' + seatMeta(g.turn).name + '…');
     }
 
     var lg = $('log'); lg.innerHTML = '';
@@ -437,24 +437,119 @@
   }
   $('rematchBtn').addEventListener('click', function () { send({ type: 'rematch' }); });
 
-  // ---- input ----
+  // ---- input: drag tiles from the rack onto the board (and back) ----
+  var drag = null, justDragged = false, DRAG_THRESHOLD = 5;
+
+  function canDrag() { return !!S && S.phase === 'playing' && S.game.turn === S.you && !swapMode; }
+  function pendingAt(r, c) { return pending.filter(function (p) { return p.r === r && p.c === c; })[0]; }
+  function squareFree(r, c) { return !S.game.board[r][c] && !pendingAt(r, c); }
+
+  function dragFace(src) {
+    if (src.kind === 'rack') { var ch = S.game.rack[src.idx]; return { ch: ch === '?' ? '' : ch, blank: ch === '?', value: ch === '?' ? null : E.VALUE[ch] }; }
+    var p = pendingAt(src.r, src.c); return { ch: p.ch, blank: p.blank, value: p.blank ? null : E.VALUE[p.ch] };
+  }
+
+  function startDrag(e, src) {
+    if ((e.button !== undefined && e.button !== 0) || !canDrag()) return;
+    drag = { src: src, x0: e.clientX, y0: e.clientY, cx: e.clientX, cy: e.clientY, pid: e.pointerId, touch: e.pointerType !== 'mouse', active: false, ghost: null, hot: null, size: 40 };
+    e.preventDefault();
+    window.addEventListener('pointermove', onDragMove);
+    window.addEventListener('pointerup', onDragEnd);
+    window.addEventListener('pointercancel', onDragCancel);
+  }
+
+  function activateDrag() {
+    var d = drag, face = dragFace(d.src);
+    d.active = true;
+    d.size = Math.max(36, Math.round(cellEl(0, 0).getBoundingClientRect().width * 1.3));
+    var g = document.createElement('div'); g.className = 'ghost' + (face.blank ? ' blank' : '');
+    g.style.width = g.style.height = d.size + 'px'; g.style.fontSize = Math.round(d.size * 0.55) + 'px';
+    g.textContent = face.ch;
+    if (face.value != null) { var sb = document.createElement('sub'); sb.textContent = face.value; g.appendChild(sb); }
+    document.body.appendChild(g); d.ghost = g;
+    var srcEl = d.src.kind === 'rack' ? $('rack').querySelector('.rt[data-i="' + d.src.idx + '"]') : cellEl(d.src.r, d.src.c).firstChild;
+    if (srcEl) srcEl.classList.add('dragging');
+    document.body.classList.add('dragging-tile');
+  }
+
+  function targetAt(x, y) {
+    var el = document.elementFromPoint(x, y); if (!el) return null;
+    var sq = el.closest('.sq');
+    if (sq) return { kind: 'sq', r: +sq.dataset.r, c: +sq.dataset.c, el: sq };
+    if (el.closest('#rack')) return { kind: 'rack' };
+    return null;
+  }
+
+  function onDragMove(e) {
+    var d = drag; if (!d || e.pointerId !== d.pid) return;
+    var dx = e.clientX - d.x0, dy = e.clientY - d.y0;
+    if (!d.active) { if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return; activateDrag(); }
+    // On touch the tile rides above the fingertip so it stays visible; the drop point is the tile's centre.
+    d.cx = e.clientX; d.cy = e.clientY - (d.touch ? d.size * 0.9 : 0);
+    d.ghost.style.transform = 'translate(' + (d.cx - d.size / 2) + 'px,' + (d.cy - d.size / 2) + 'px)';
+    var t = targetAt(d.cx, d.cy);
+    var hot = t && t.kind === 'sq' && (squareFree(t.r, t.c) || (d.src.kind === 'board' && t.r === d.src.r && t.c === d.src.c)) ? t.el : null;
+    if (hot !== d.hot) { if (d.hot) d.hot.classList.remove('hot'); if (hot) hot.classList.add('hot'); d.hot = hot; }
+    $('rack').classList.toggle('droptarget', !!t && t.kind === 'rack' && d.src.kind === 'board');
+  }
+
+  function endDragUI() {
+    var d = drag; if (!d) return;
+    window.removeEventListener('pointermove', onDragMove);
+    window.removeEventListener('pointerup', onDragEnd);
+    window.removeEventListener('pointercancel', onDragCancel);
+    if (d.ghost) d.ghost.remove();
+    if (d.hot) d.hot.classList.remove('hot');
+    $('rack').classList.remove('droptarget');
+    document.body.classList.remove('dragging-tile');
+    Array.prototype.forEach.call(document.querySelectorAll('.dragging'), function (x) { x.classList.remove('dragging'); });
+    drag = null;
+  }
+
+  function onDragCancel(e) { if (drag && e.pointerId === drag.pid) { endDragUI(); render(); } }
+
+  function onDragEnd(e) {
+    var d = drag; if (!d || e.pointerId !== d.pid) return;
+    endDragUI();
+    if (!d.active) return;                                   // a plain tap: the click handlers deal with it
+    justDragged = true; setTimeout(function () { justDragged = false; }, 0);
+    var t = canDrag() ? targetAt(d.cx, d.cy) : null;
+    if (t && d.src.kind === 'rack' && t.kind === 'sq' && squareFree(t.r, t.c)) {
+      var idx = d.src.idx, ch = S.game.rack[idx];
+      if (ch === '?') { pickBlank(function (L) { pending.push({ r: t.r, c: t.c, ch: L, blank: true, rackIdx: idx }); render(); }); return; }
+      pending.push({ r: t.r, c: t.c, ch: ch, blank: false, rackIdx: idx });
+    } else if (t && d.src.kind === 'board') {
+      var p = pendingAt(d.src.r, d.src.c);
+      if (p && t.kind === 'sq' && squareFree(t.r, t.c)) { p.r = t.r; p.c = t.c; }       // move it
+      else if (p && t.kind === 'rack') pending.splice(pending.indexOf(p), 1);             // take it back
+    }
+    render();
+  }
+
+  $('rack').addEventListener('pointerdown', function (e) {
+    var b = e.target.closest('.rt'); if (!b || b.classList.contains('used') || swapMode) return;
+    startDrag(e, { kind: 'rack', idx: +b.dataset.i });
+  });
+  $('board').addEventListener('pointerdown', function (e) {
+    var sq = e.target.closest('.sq'); if (!sq) return;
+    var r = +sq.dataset.r, c = +sq.dataset.c;
+    if (pendingAt(r, c)) startDrag(e, { kind: 'board', r: r, c: c });
+  });
+
+  // Swap mode is about choosing tiles, not placing them, so rack tiles keep tap-to-select there.
   $('rack').addEventListener('click', function (e) {
-    var b = e.target.closest('.rt'); if (!b || b.classList.contains('used')) return;
-    var i = +b.dataset.i;
-    if (swapMode) { var k = swapSel.indexOf(i); if (k >= 0) swapSel.splice(k, 1); else swapSel.push(i); }
-    else selected = selected === i ? -1 : i;
+    if (justDragged || !swapMode) return;
+    var b = e.target.closest('.rt'); if (!b) return;
+    var i = +b.dataset.i, k = swapSel.indexOf(i);
+    if (k >= 0) swapSel.splice(k, 1); else swapSel.push(i);
     render();
   });
+  // A quick tap on a tile you've placed also takes it back.
   $('board').addEventListener('click', function (e) {
-    var sq = e.target.closest('.sq'); if (!sq || !S || S.phase !== 'playing' || swapMode || S.game.turn !== S.you) return;
-    var r = +sq.dataset.r, c = +sq.dataset.c;
-    var pi = pending.findIndex(function (p) { return p.r === r && p.c === c; });
-    if (pi >= 0) { pending.splice(pi, 1); render(); return; }
-    if (S.game.board[r][c]) return;
-    if (selected < 0) { $('status').className = ''; $('status').textContent = 'Pick a tile from your rack first.'; return; }
-    var ch = S.game.rack[selected], idx = selected;
-    if (ch === '?') pickBlank(function (L) { pending.push({ r: r, c: c, ch: L, blank: true, rackIdx: idx }); selected = -1; render(); });
-    else { pending.push({ r: r, c: c, ch: ch, blank: false, rackIdx: idx }); selected = -1; render(); }
+    if (justDragged || !canDrag()) return;
+    var sq = e.target.closest('.sq'); if (!sq) return;
+    var p = pendingAt(+sq.dataset.r, +sq.dataset.c);
+    if (p) { pending.splice(pending.indexOf(p), 1); render(); }
   });
   function pickBlank(cb) {
     var box = $('letters'); box.innerHTML = '';
@@ -464,14 +559,14 @@
     });
     $('blankPick').classList.add('on');
   }
-  $('blankPick').addEventListener('click', function (e) { if (e.target === this) { this.classList.remove('on'); selected = -1; render(); } });
-  $('recallBtn').addEventListener('click', function () { pending = []; selected = -1; render(); });
+  $('blankPick').addEventListener('click', function (e) { if (e.target === this) { this.classList.remove('on'); render(); } });
+  $('recallBtn').addEventListener('click', function () { pending = []; render(); });
   $('playBtn').addEventListener('click', function () { send({ type: 'play', placements: toPlacements() }); $('playBtn').disabled = true; });
   $('passBtn').addEventListener('click', function () { send({ type: 'pass' }); });
   $('swapBtn').addEventListener('click', function () {
     if (!swapMode) {
       if (S.game.bagCount < E.RACK) { flash('Fewer than ' + E.RACK + ' tiles left in the bag — swapping is closed.'); return; }
-      swapMode = true; swapSel = []; selected = -1; render(); return;
+      swapMode = true; swapSel = []; render(); return;
     }
     if (!swapSel.length) { swapMode = false; render(); return; }
     send({ type: 'swap', indices: swapSel });
