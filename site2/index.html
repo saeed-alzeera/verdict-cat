@@ -477,7 +477,7 @@ const SKIP_PENALTY = 50, TOP_SPOTS = 5, MAX_NODES = 800, MAX_MS = 1500, KEEP = 8
 function rankPlacements(word) {
   const len = word.length, out = [];
   for (const s of slots) {
-    if (s.cells.length !== len) continue;
+    if (s.dir !== 'A' || s.cells.length !== len) continue;
     const pat = patOf(s);
     if ([...pat].some((ch, i) => ch !== '?' && ch !== word[i])) continue;       // clashes with letters already placed
     if (!pat.includes('?')) continue;                                            // taken by a word already
@@ -655,8 +655,8 @@ function placeWords(raw) {
       const left = [], bad = [];
       for (const w of alt) {
         if (w.length < 3) bad.push(`${w}: needs at least 3 letters`);
-        else if (slots.some(s => patOf(s) === w)) { if (alt.length === 1 && u.alts.length > 1) satisfied = true; why.push(`${w}: already in the grid`); }
-        else if (!slots.some(s => s.cells.length === w.length)) bad.push(`${w}: no ${w.length}-letter entry in this grid`);
+        else if (slots.some(s => s.dir === 'A' && patOf(s) === w)) { if (alt.length === 1 && u.alts.length > 1) satisfied = true; why.push(`${w}: already in the grid`); }
+        else if (!slots.some(s => s.dir === 'A' && s.cells.length === w.length)) bad.push(`${w}: no ${w.length}-letter across entry in this grid`);
         else if (!rankPlacements(w).length) bad.push(`${w}: no ${w.length}-letter entry fits it (a clash with a letter there, or a crossing would have no word)`);
         else left.push(w);
       }
@@ -724,8 +724,8 @@ function addToList(raw) {
 function renderList() {
   const fits = w => w.length >= 3 && w.length <= N;
   $('#custList').innerHTML = custom.map(w => {
-    const n = slots.filter(s => s.cells.length === w.length).length;
-    return `<span class="chip${fits(w) ? '' : ' off'}" title="${fits(w) ? n + ' entries of this length in the grid' : 'Does not fit this grid size'}">${w}<i>${fits(w) ? n : ''}</i><button data-w="${w}" aria-label="Remove ${w}">×</button></span>`;
+    const n = slots.filter(s => s.dir === 'A' && s.cells.length === w.length).length;
+    return `<span class="chip${fits(w) ? '' : ' off'}" title="${fits(w) ? n + ' across entries of this length in the grid' : 'Does not fit this grid size'}">${w}<i>${fits(w) ? n : ''}</i><button data-w="${w}" aria-label="Remove ${w}">×</button></span>`;
   }).join('');
   $('#bBlack').disabled = bfBusy;
   $('#bfInfo').textContent = custom.length ? custom.filter(fits).length + ' words' : '';
