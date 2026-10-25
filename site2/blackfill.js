@@ -7,7 +7,7 @@
  * length (across only) the custom words need (diminishing returns, big penalty for having fewer slots than words), minus small
  * penalties for atypical grids (too few entries, long entries nobody asked for, too many 3-letter entries). The best
  * pattern of each restart is then checked exactly: how many of the words can sit in the grid at the same time with
- * their crossings agreeing, and how many (word, slot) placements belong to such an arrangement.
+ * their crossings agreeing (and no down entry taking more than three words, or two in neighbouring rows, which would usually leave it unfillable), and how many (word, slot) placements belong to such an arrangement.
  *
  * Loaded by the page; also usable from Node for tests.
  */
@@ -60,6 +60,17 @@
         cells = [];
       }
     }
+    // down entry id of every cell (-1 if none): words never go down, but crowding a down entry with word letters usually leaves it unfillable
+    const down = new Int32Array(N * N).fill(-1); let id = 0;
+    for (let c = 0; c < N; c++) {
+      let cells = [];
+      for (let k = 0; k <= N; k++) {
+        if (k < N && !b[k * N + c]) { cells.push(k * N + c); continue; }
+        if (cells.length >= 3) { cells.forEach(i => { down[i] = id; }); id++; }
+        cells = [];
+      }
+    }
+    out.down = down; out.downCount = id;
     return out;
   }
 
@@ -71,15 +82,26 @@
     const order = words.map((w, i) => i).filter(i => !fixed || i !== fixed[0])
       .sort((a, b) => (byLen.get(words[a].length) || []).length - (byLen.get(words[b].length) || []).length);
     const letters = new Uint8Array(N * N), used = new Uint8Array(slots.length);
+    const down = slots.down, cnt = new Uint8Array(slots.downCount || 0), rows = new Int32Array((slots.downCount || 0) * 3).fill(-9);
     let best = 0, nodes = 0, cut = false;
     const put = (w, s) => {
       const cells = slots[s].cells, changed = [];
+      if (down) for (const i of cells) {                    // a down entry may take at most three words, none in neighbouring rows
+        const d = down[i], r = (i / N) | 0;
+        if (cnt[d] >= 3) return null;
+        for (let j = 0; j < cnt[d]; j++) if (Math.abs(rows[3 * d + j] - r) < 2) return null;
+      }
       for (let k = 0; k < cells.length; k++) {
         const ch = w.charCodeAt(k), cur = letters[cells[k]];
         if (cur && cur !== ch) { changed.forEach(i => { letters[i] = 0; }); return null; }
         if (!cur) { letters[cells[k]] = ch; changed.push(cells[k]); }
       }
+      if (down) for (const i of cells) { const d = down[i]; rows[3 * d + cnt[d]++] = (i / N) | 0; }
       used[s] = 1; return changed;
+    };
+    const unput = (s, changed) => {
+      changed.forEach(c => { letters[c] = 0; }); used[s] = 0;
+      if (down) for (const i of slots[s].cells) cnt[down[i]]--;
     };
     const dfs = (i, placed) => {
       if (placed > best) best = placed;
@@ -90,7 +112,7 @@
         if (used[s]) continue;
         const changed = put(w, s); if (!changed) continue;
         dfs(i + 1, placed + 1);
-        changed.forEach(c => { letters[c] = 0; }); used[s] = 0;
+        unput(s, changed);
         if (cut || best === words.length) return;
       }
       dfs(i + 1, placed);
