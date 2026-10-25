@@ -25,7 +25,7 @@ When autofill proposes a fill, each proposed word shows as a chip in the Autofil
 Words typed into **Add a word** (Place, or **Add to list**) join a custom list kept in this browser. **Place** with an empty box places the words already on the list. Each chip shows how many entries of its length the current grid has. **Generate black squares**
 replaces the black pattern (and clears letters and clues; **Undo** restores them) with a symmetric NYT-style one: 180° symmetry,
 all entries 3+ letters, connected, no 2x2 black blocks, at most 78 entries on a 15x15 (140 on a 21x21). It anneals over
-patterns, scoring the slots of each length the list needs (strong penalty for fewer slots than words), then checks the best
+patterns, scoring the across slots of each length the list needs (words only ever go across; downs are never candidates, though the grid rules still apply to them) (strong penalty for fewer slots than words), then checks the best
 patterns exactly: how many words fit in the grid at once with their crossings agreeing, and how many (word, entry) placements
 belong to such an arrangement. The words are not placed; use Add a word for that.
 

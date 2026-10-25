@@ -4,7 +4,7 @@
  * squares), all white squares connected, no 2x2 blocks of black, and no more than 78 entries on a 15x15 (140 on a 21x21).
  *
  * Search: simulated annealing over symmetric black-square patterns. A pattern scores for the number of slots of each
- * length the custom words need (diminishing returns, big penalty for having fewer slots than words), minus small
+ * length (across only) the custom words need (diminishing returns, big penalty for having fewer slots than words), minus small
  * penalties for atypical grids (too few entries, long entries nobody asked for, too many 3-letter entries). The best
  * pattern of each restart is then checked exactly: how many of the words can sit in the grid at the same time with
  * their crossings agreeing, and how many (word, slot) placements belong to such an arrangement.
@@ -19,7 +19,7 @@
     return Math.max(2 * N, Math.round(n));
   }
 
-  // b: Uint8Array(N*N), 1 = black. Returns null when the pattern breaks a rule, else {m: slots per length, entries, blacks}.
+  // b: Uint8Array(N*N), 1 = black. Returns null when the pattern breaks a rule, else {m: across slots per length, entries (across + down), blacks}.
   function analyze(b, N, cap) {
     const m = new Int16Array(N + 1); let entries = 0, blacks = 0, whites = 0, first = -1;
     for (let i = 0; i < N * N; i++) { if (b[i]) blacks++; else { whites++; if (first < 0) first = i; } }
@@ -27,7 +27,7 @@
       let run = 0;
       for (let k = 0; k <= N; k++) {
         if (k < N && !b[d ? k * N + r : r * N + k]) { run++; continue; }
-        if (run) { if (run < 3) return null; m[run]++; entries++; }
+        if (run) { if (run < 3) return null; if (!d) m[run]++; entries++; }
         run = 0;
       }
     }
@@ -48,10 +48,10 @@
     return { m, entries, blacks };
   }
 
-  // Every entry as {dir: 'A'|'D', len, cells: [index, ...]}.
+  // Every across entry as {dir: 'A', len, cells: [index, ...]}; downs are never candidates for words.
   function slotsOf(b, N) {
     const out = [];
-    for (let r = 0; r < N; r++) for (let d = 0; d < 2; d++) {
+    for (let r = 0; r < N; r++) for (let d = 0; d < 1; d++) {
       let cells = [];
       for (let k = 0; k <= N; k++) {
         const i = d ? k * N + r : r * N + k;
