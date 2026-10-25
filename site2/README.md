@@ -27,7 +27,7 @@ replaces the black pattern (and clears letters and clues; **Undo** restores them
 all entries 3+ letters, connected, no 2x2 black blocks, at most 78 entries on a 15x15 (140 on a 21x21). It anneals over
 patterns, scoring the across slots of each length the list needs (words only ever go across; downs are never candidates, though the grid rules still apply to them) (strong penalty for fewer slots than words), then checks the best
 patterns exactly: how many words fit in the grid at once with their crossings agreeing, and how many (word, entry) placements
-belong to such an arrangement. The words are not placed; use Add a word for that.
+belong to such an arrangement. Words are also kept from crowding a down entry (at most three per down, none in neighbouring rows), because that is what makes Add a word refuse a placement. The words are not placed; use Add a word for that.
 
 ## OR / AND in Add words
 
