@@ -761,9 +761,16 @@
     try {
       var metaCover = opf.querySelector('meta[name="cover"]');
       var coverId = metaCover ? metaCover.getAttribute('content') : null;
-      var coverItem = coverId
-        ? opf.querySelector('item[id="' + coverId + '"]')
-        : opf.querySelector('item[id="cover-image"],item[id="cover"],item[properties="cover-image"]');
+      var isImg = function(el) { return el && /^image\//i.test(el.getAttribute('media-type') || ''); };
+      var coverItem = coverId ? opf.querySelector('item[id="' + coverId + '"]') : null;
+      // An id of "cover" is often the XHTML cover page, so only accept images.
+      if (!isImg(coverItem)) coverItem = opf.querySelector('item[properties~="cover-image"]');
+      if (!isImg(coverItem)) coverItem = opf.querySelector('item[id="cover-image"]');
+      if (!isImg(coverItem)) {
+        coverItem = Array.prototype.find.call(opf.querySelectorAll('item'), function(el) {
+          return isImg(el) && /cover/i.test(el.getAttribute('href') || '');
+        }) || null;
+      }
       if (coverItem) {
         var href = coverItem.getAttribute('href');
         var opfDir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
