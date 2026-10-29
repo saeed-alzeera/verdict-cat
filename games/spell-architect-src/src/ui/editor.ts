@@ -2,20 +2,21 @@
 // AUGMENT chips (behaviors / modifiers) and TRIGGER blocks that each launch further Forms.
 // A plain-language story of the whole spell is written beside it. Pauses the game while open.
 import {
-  RUNES, RUNE_BY_ID, ELEMENTS, FORMS, RARITY, KIND_COLOR, KIND_LABEL, runeColor, EVOLVE_COST, EVOLVED_OF, BASE_CORE_OF, ULTIMATES, type RuneKind, type Element,
+  RUNES, RUNE_BY_ID, ELEMENTS, FORMS, RARITY, KIND_COLOR, KIND_LABEL, runeColor, EVOLVE_COST, EVOLVED_OF, BASE_CORE_OF, ULTIMATES, MERGEABLE, mergeResult, type RuneKind, type Element,
 } from '../data/runes';
 import { REACTIONS } from '../data/reactions';
 import { store } from '../core/save';
 import { reactionCardHtml } from './reactions';
 import { MUT_TRACKS, MUT_OPTION_BY_ID } from '../data/mutations';
 import {
-  checkAttach, findNode, newNode, spellCost, subtreeRunes, estimate, type SpellNode,
+  checkAttach, findNode, newNode, spellCost, subtreeRunes, estimate, walk, type SpellNode,
 } from '../core/spell';
 import { audio } from '../core/audio';
 import type { Run } from '../game/run';
 import type { ActiveSpell } from '../game/types';
 import { el, type UI } from './ui';
 import { relicManager } from './relics';
+import { showSpellOverview } from './overview';
 
 export function openEditor(ui: UI, run: Run) { new Editor(ui, run).open(); }
 
@@ -31,6 +32,7 @@ class Editor {
   hint = '';
   hintBad = false;
   tab: 'spell' | 'react' | 'forge' | 'relics' | 'stats' = 'spell';
+  mergeSel: string[] = [];
 
   constructor(private ui: UI, private run: Run) {
     const first = run.spells.findIndex((s) => s.def.root);
@@ -104,6 +106,18 @@ class Editor {
     this.say('Removed. The runes went back to your pool.');
   }
 
+  /** Toggle a trigger in the merge selection (max two, same type). */
+  pickMerge(id: string) {
+    const type = RUNE_BY_ID[id].trigger;
+    const cur = this.mergeSel.filter((x) => RUNE_BY_ID[x].trigger === type);
+    if (cur.length !== this.mergeSel.length) this.mergeSel = [];
+    const have = this.run.inv[id] ?? 0;
+    const used = this.mergeSel.filter((x) => x === id).length;
+    if (used > 0 && used >= have) { this.mergeSel.splice(this.mergeSel.lastIndexOf(id), 1); return; }
+    if (this.mergeSel.length >= 2) this.mergeSel.shift();
+    if (used < have) this.mergeSel.push(id);
+  }
+
   /* ------------------------------ events ------------------------------ */
 
   bind() {
@@ -127,6 +141,16 @@ class Editor {
       }
       const tb = t.closest('[data-tab]') as HTMLElement | null;
       if (tb) { this.tab = tb.dataset.tab as typeof this.tab; audio.play('ui'); this.render(); return; }
+      if (t.closest('[data-overview]')) { showSpellOverview(this.ui, this.run); return; }
+      const mp = t.closest('[data-mpick]') as HTMLElement | null;
+      if (mp) { this.pickMerge(mp.dataset.mpick!); this.render(); return; }
+      if (t.closest('[data-merge]')) {
+        const [a, b] = this.mergeSel;
+        const err = a && b ? this.run.mergeTriggers(a, b) : 'Pick two triggers of the same type.';
+        if (err) this.say(err, true);
+        else { audio.play('level'); this.say('Triggers merged into one stronger trigger.'); this.mergeSel = []; }
+        this.render(); return;
+      }
       const fg = t.closest('[data-forge]') as HTMLElement | null;
       if (fg) {
         const el0 = fg.dataset.forge!;
@@ -368,7 +392,14 @@ class Editor {
       <div class="rlist">${reactList.map((r) => reactionCardHtml(r, present, seenR[r.id] ?? 0)).join('')}</div>`;
 
     // Forge tab: 4 cores -> evolved core
-    const owned = (id: string) => (run.inv[id] ?? 0) + run.spells.filter((s2) => s2.def.root?.children.some((ch) => ch.rune === id)).length;
+    const owned = (id: string) => { let n = run.inv[id] ?? 0; for (const s2 of run.spells) if (s2.def.root) walk(s2.def.root, (nd) => { if (nd.rune === id) n++; }); return n; };
+    const mergeable = RUNES.filter((r) => r.kind === 'trigger' && r.trigger && MERGEABLE.includes(r.trigger) && (run.inv[r.id] ?? 0) > 0);
+    const mres = this.mergeSel.length === 2 ? mergeResult(this.mergeSel[0], this.mergeSel[1]) : null;
+    const mergeHtml = `<div class="spname" style="margin-top:14px">MERGE TRIGGERS</div>
+      <div class="mergebox">Combine <b>two triggers of the same type</b> from your rune pool into ONE trigger whose chance is the sum (max 80%). Two 10% On Hits become one 20% On Hit. It also frees capacity and the Form's single trigger slot.
+        ${mres === null ? '<br><span class="muted">Pick two below.</span>' : typeof mres === 'string' ? `<br><span style="color:#ff9a9a">${mres}</span>` : `<br>Result: <b style="color:#ffd25a">${mres.icon} ${mres.name}</b> (cost ${mres.cost})`}</div>
+      ${mergeable.length ? `<div class="mchips">${mergeable.map((r) => { const n = this.mergeSel.filter((x) => x === r.id).length; return `<button class="mchip ${n ? 'sel' : ''}" data-mpick="${r.id}">${r.icon} ${r.name} ${Math.round((r.chance ?? 1) * 100)}% ×${run.inv[r.id]}${n ? ` (picked ${n})` : ''}</button>`; }).join('')}</div>
+      <button class="addchip" data-merge="1" ${mres && typeof mres !== 'string' ? '' : 'disabled'}>MERGE INTO ONE</button>` : '<p class="muted">You have no On Hit / On Kill / On Critical Hit triggers in your pool. Triggers placed on a spell must be removed first.</p>'}`;
     const forgeInfo = `
       <div class="spname">FORGE</div>
       ${run.forgeReady().length ? `<div class="forgebanner">You can forge: ${run.forgeReady().map((e3) => ELEMENTS[e3].name).join(', ')}!</div>` : ''}
@@ -382,8 +413,9 @@ class Editor {
           <p><b>${evo.icon} ${evo.name}</b> ${have ? `(owned: ${have})` : ''}: ${evo.desc.replace(/^EVOLVED \w+\. /, '')}</p>
           <p class="ul"><b>${U.icon} ${U.name}:</b> ${U.desc}</p>
           <button class="addchip" data-forge="${e2}" ${n >= EVOLVE_COST ? '' : 'disabled'}>FORGE ${evo.name.toUpperCase()}</button></div>`;
-      }).join('')}`;
-    const tabsHtml = `<div class="itabs">${(['spell', 'react', 'forge', 'relics', 'stats'] as const).map((t) => `<button data-tab="${t}" class="${this.tab === t ? 'on' : ''} ${t === 'forge' && run.forgeReady().length ? 'glow' : ''}">${t === 'spell' ? 'SPELL' : t === 'react' ? 'REACTIONS' : t === 'relics' ? `RELICS ${run.equipped.length}/6` : t === 'stats' ? 'STATS' : run.forgeReady().length ? 'FORGE !' : 'FORGE'}</button>`).join('')}</div>`;
+      }).join('')}
+      ${mergeHtml}`;
+    const tabsHtml = `<div class="itabs">${(['spell', 'react', 'forge', 'relics', 'stats'] as const).map((t) => `<button data-tab="${t}" class="${this.tab === t ? 'on' : ''} ${t === 'forge' && run.forgeReady().length ? 'glow' : ''}">${t === 'spell' ? 'SPELL' : t === 'react' ? 'REACTIONS' : t === 'relics' ? `RELICS ${run.equipped.length}/6` : t === 'stats' ? 'STATS' : run.forgeReady().length ? 'FORGE !' : 'FORGE / MERGE'}</button>`).join('')}</div>`;
     const rm = this.tab === 'relics' ? relicManager(run, () => this.render()) : null;
     const pl = run.player;
     const statsInfo = `<div class="spname">STATS</div><div class="statgrid">
@@ -402,7 +434,7 @@ class Editor {
       <span class="ri">${r.icon}</span><span class="rn">${r.name}</span><span class="rc">${r.cost}</span><span class="rx">×${run.inv[r.id]}</span></div>`).join('');
 
     ed.innerHTML = `
-      <header><h2>SPELL EDITOR</h2><div class="stabs">${tabs}</div><button class="x" data-a="close" title="Close (Esc / E)">X</button></header>
+      <header><h2>SPELL EDITOR</h2><div class="stabs">${tabs}</div><button class="mini ovbtn" data-overview="1" title="See every spell at a glance">🔮 OVERVIEW</button><button class="x" data-a="close" title="Close (Esc / E)">X</button></header>
       <main>
         <section class="graphwrap">
           <div class="legend"><span style="--c:${KIND_COLOR.form}">FORM = the spell</span><span style="--c:${KIND_COLOR.core}">CORE = its element</span><span style="--c:${KIND_COLOR.behavior}">AUGMENTS = tweaks</span><span style="--c:${KIND_COLOR.trigger}">TRIGGER = launches more Forms</span></div>

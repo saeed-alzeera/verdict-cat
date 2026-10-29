@@ -17,6 +17,8 @@ let spellSeq = 1;
 export const ruleMods = { triggerCost: 0, triggerChanceAdd: 0, triggerChanceMul: 1 };
 export const costOf = (id: string): number => { const r = RUNE_BY_ID[id]; return r.cost + (r.kind === 'trigger' ? ruleMods.triggerCost : 0); };
 
+/** No stack of boosts can push a trigger past this. */
+export const MAX_TRIGGER_CHANCE = 0.9;
 export const MAX_TRIGGER_NEST = 3;
 export const MAX_TRIGGER_CHILDREN = 3;
 
@@ -160,7 +162,7 @@ function compileForm(node: SpellNode, inherit: Element, depth: number, warnings:
     else if (cr.kind === 'modifier') (f.m as Record<string, number>)[cr.key!]++;
     else if (cr.kind === 'trigger') {
       const base = cr.chance ?? 1;
-      const chance = base >= 1 ? 1 : Math.min(0.95, (base + ruleMods.triggerChanceAdd) * ruleMods.triggerChanceMul);
+      const chance = base >= 1 ? 1 : Math.min(MAX_TRIGGER_CHANCE, (base + ruleMods.triggerChanceAdd) * ruleMods.triggerChanceMul);
       const t: { type: TriggerType; chance: number; children: CForm[] } = { type: cr.trigger!, chance, children: [] };
       if (c.children.length === 0) warnings.push(`${cr.name} has no effect yet. Slot a Form into it.`);
       for (const k of c.children) t.children.push(compileForm(k, element, depth + 1, warnings));

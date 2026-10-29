@@ -20,8 +20,8 @@ export function spawnBoss(run: Run, kind: number) {
   const d = BOSSES[kind];
   const p = run.player;
   const a = Math.random() * 6.28;
-  const x = Math.max(80, Math.min(ARENA - 80, p.x + Math.cos(a) * 460));
-  const y = Math.max(80, Math.min(ARENA - 80, p.y + Math.sin(a) * 460));
+  const x = Math.max(80, Math.min(ARENA - 80, p.x + Math.cos(a) * 380));
+  const y = Math.max(80, Math.min(ARENA - 80, p.y + Math.sin(a) * 380));
   const e = spawnEnemy(run, 'grunt', x, y, false, 'neutral');
   // re-skin the placeholder grunt into a boss
   run.freeImg(e.spr); run.freeImg(e.shadow);
@@ -30,7 +30,7 @@ export function spawnBoss(run: Run, kind: number) {
   e.sc = d.sc; e.r = d.r; e.speed = d.speed * 1.35; e.elite = false;
   e.aff = 'neutral'; e.res = { ...BOSS_RES[kind] };
   e.maxHp = e.hp = d.hp * Math.pow(hpMul(run.dtime), 0.75) * (run.quick ? 0.8 : 1);
-  e.dmg = d.dmg * (1 + run.dtime / 60 * 0.03);
+  e.dmg = d.dmg * 1.25 * (1 + run.dtime / 60 * 0.05);
   e.xp = d.xp; e.armor = 2 + kind * 2; e.spawnT = 0.5;
   e.boss = {
     kind, name: d.name, phase: 0, cd: 2.2, atk: '', atkT: 0, dash: 0, dx: 0, dy: 0, spiral: 0, spiralAng: 0, pull: 0, last: '', enraged: false,

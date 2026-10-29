@@ -405,3 +405,25 @@ button.glow, .itabs button.glow { border-color: var(--gold) !important; color: v
 .history .rl { display: flex; flex-wrap: wrap; gap: 4px; } .history .rl span { background: #221a3e; padding: 2px 5px; }
 .shopp { max-height: 94vh; overflow-y: auto; }
 .shopp .rbtns { position: sticky; bottom: 0; background: #1a1330; padding: 8px 0 2px; }
+
+/* spell overview */
+.ovw { display: flex; flex-direction: column; gap: 10px; }
+.ovsum { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.ovsum div, .ovstats div { background: #1a1440; border: 2px solid var(--edge2); padding: 8px 4px; text-align: center; }
+.ovsum b, .ovstats b { display: block; font-size: 12px; color: #fff; }
+.ovsum span, .ovstats span { font-size: 6px; color: var(--mut); line-height: 1.5; display: block; margin-top: 4px; }
+.ovgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.ovcard { --c: #6a5ab0; border: 3px solid var(--c); background: #120d2e; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.ovcard.empty { opacity: 0.6; border-style: dashed; }
+.ovh { display: flex; align-items: center; gap: 8px; font-size: 9px; line-height: 1.5; }
+.ovh em { margin-left: auto; font-size: 7px; color: var(--mut); font-style: normal; }
+.ovi { font-size: 14px; }
+.ovstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.ovcard .story { margin: 0; }
+.ovcard .capbar { margin-bottom: 0; }
+.ovbtn { margin-left: auto; }
+.mchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.mchip { --c: #ff6b9c; font-size: 7px; padding: 6px 8px; border: 2px solid var(--c); color: var(--c); background: #120d2e; cursor: pointer; font-family: inherit; }
+.mchip.sel { background: var(--c); color: #120d2e; }
+.mchip:disabled { opacity: 0.4; cursor: default; }
+.mergebox { background: #0a0720; border: 3px solid var(--edge2); border-left: 6px solid #ff6b9c; padding: 10px; margin-bottom: 12px; font-size: 8px; line-height: 2; }

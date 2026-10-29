@@ -26,10 +26,10 @@ interface StatDef {
 const hpFrac = (r: Run) => r.player.hp / r.player.maxHp;
 
 const STATS: StatDef[] = [
-  { id: 'heal', title: 'Mend Wounds', icon: '💚', rarity: 'common', desc: () => 'Restore 40% of your maximum health.', weight: (r) => 8 * (hpFrac(r) < 0.6 ? 2.5 : 0.5), apply: (r) => r.heal(r.player.maxHp * 0.4) },
-  { id: 'healfull', title: 'Full Restoration', icon: '💖', rarity: 'uncommon', desc: () => 'Fully restore your health.', weight: (r) => 4 * (hpFrac(r) < 0.4 ? 3 : 0.2), apply: (r) => r.heal(r.player.maxHp) },
-  { id: 'maxhp', title: 'Vitality', icon: '❤️', rarity: 'common', desc: () => '+10 maximum health and heal 10.', weight: () => 5, apply: (r) => { r.player.maxHp += 10; r.heal(10); } },
-  { id: 'regen', title: 'Regeneration', icon: '🌿', rarity: 'common', desc: () => '+0.25 health regenerated per second.', weight: () => 4, apply: (r) => { r.player.regen += 0.25; } },
+  { id: 'heal', title: 'Mend Wounds', icon: '💚', rarity: 'common', desc: () => 'Restore 20% of your maximum health.', weight: (r) => 5 * (hpFrac(r) < 0.6 ? 2 : 0.4), apply: (r) => r.heal(r.player.maxHp * 0.2) },
+  { id: 'healfull', title: 'Full Restoration', icon: '💖', rarity: 'uncommon', desc: () => 'Restore 50% of your maximum health.', weight: (r) => 2 * (hpFrac(r) < 0.4 ? 3 : 0.2), apply: (r) => r.heal(r.player.maxHp * 0.5) },
+  { id: 'maxhp', title: 'Vitality', icon: '❤️', rarity: 'common', desc: () => '+10 maximum health and heal 5.', weight: () => 5, apply: (r) => { r.player.maxHp += 10; r.heal(5); } },
+  { id: 'regen', title: 'Regeneration', icon: '🌿', rarity: 'common', desc: () => '+0.1 health regenerated per second.', weight: () => 2.5, apply: (r) => { r.player.regen += 0.1; } },
   { id: 'speed', title: 'Fleet Feet', icon: '👟', rarity: 'common', desc: () => '+6% movement speed.', weight: (r) => (r.player.speed < 480 ? 5 : 0), apply: (r) => { r.player.speed *= 1.06; } },
   { id: 'magnet', title: 'Arcane Magnet', icon: '🧲', rarity: 'common', desc: () => '+30% pickup radius.', weight: () => 4, apply: (r) => { r.player.pickup *= 1.3; } },
   { id: 'coins', title: 'Coin Purse', icon: '💰', rarity: 'common', desc: (r) => `Gain ${3 + Math.round(r.round / 2)} coins to spend in the shop.`, weight: () => 5, apply: (r) => r.addCoins(3 + Math.round(r.round / 2)) },
@@ -37,8 +37,8 @@ const STATS: StatDef[] = [
   { id: 'crit', title: 'Keen Eye', icon: '🎯', rarity: 'uncommon', desc: () => '+5% critical hit chance.', weight: () => 3.5, apply: (r) => { r.player.crit += 0.05; } },
   { id: 'critdmg', title: 'Brutal Strikes', icon: '🗡️', rarity: 'uncommon', desc: () => 'Critical hits deal +30% more damage.', weight: () => 3, apply: (r) => { r.player.critMul += 0.3; } },
   { id: 'haste', title: 'Quickened Mind', icon: '⏩', rarity: 'uncommon', desc: () => '-7% cooldown on every spell.', weight: () => 3.5, apply: (r) => { r.player.cdMul *= 0.93; } },
-  { id: 'might', title: "Archmage's Might", icon: '🔮', rarity: 'epic', desc: () => '+8% damage, +6% crit chance and heal 15%.', weight: (r) => (r.player.level >= 8 ? 2 : 0), apply: (r) => { r.player.dmgMul += 0.08; r.player.crit += 0.06; r.heal(r.player.maxHp * 0.15); } },
-  { id: 'ascend', title: 'Ascension', icon: '🌟', rarity: 'legendary', desc: () => '+12% damage, +20 max health, -8% cooldowns and a full heal.', weight: (r) => (r.player.level >= 12 ? 0.8 : 0), apply: (r) => { r.player.dmgMul += 0.12; r.player.maxHp += 20; r.player.cdMul *= 0.92; r.heal(r.player.maxHp); } },
+  { id: 'might', title: "Archmage's Might", icon: '🔮', rarity: 'epic', desc: () => '+8% damage, +6% crit chance and heal 8%.', weight: (r) => (r.player.level >= 8 ? 2 : 0), apply: (r) => { r.player.dmgMul += 0.08; r.player.crit += 0.06; r.heal(r.player.maxHp * 0.08); } },
+  { id: 'ascend', title: 'Ascension', icon: '🌟', rarity: 'legendary', desc: () => '+12% damage, +20 max health, -8% cooldowns and heal 30%.', weight: (r) => (r.player.level >= 12 ? 0.8 : 0), apply: (r) => { r.player.dmgMul += 0.12; r.player.maxHp += 20; r.player.cdMul *= 0.92; r.heal(r.player.maxHp * 0.3); } },
 ];
 
 export function formsInPlay(run: Run): Set<FormId> {

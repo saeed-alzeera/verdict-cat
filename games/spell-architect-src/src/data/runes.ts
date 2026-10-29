@@ -24,6 +24,7 @@ export interface RuneDef {
   chance?: number; // trigger: chance (0..1) that it fires each time its condition happens
   key?: string; // behavior / modifier key used by the compiler
   evolved?: boolean; // forged core (4 copies of a core combined)
+  merged?: boolean; // trigger made by merging two triggers (never sold, rewarded or unlocked)
   forms?: FormId[]; // compatible forms (omitted = all)
   maxStack?: number; // how many may sit on one form
   unlock: number; // arcane shards to unlock permanently (0 = from start)
@@ -192,6 +193,30 @@ for (const baseId of ['t_hit', 't_kill', 't_crit']) {
 }
 
 export const RUNE_BY_ID: Record<string, RuneDef> = Object.fromEntries(RUNES.map((r) => [r.id, r]));
+
+/** Two same-type triggers merge into one whose chance is the sum, up to this cap. */
+export const MAX_MERGE_CHANCE = 0.8;
+export const MERGEABLE: TriggerType[] = ['hit', 'kill', 'crit'];
+const MERGE_BASE: Record<string, string> = { hit: 't_hit', kill: 't_kill', crit: 't_crit' };
+const rarityForChance = (c: number): Rarity => (c <= 0.2 ? 'common' : c <= 0.45 ? 'uncommon' : c <= 0.6 ? 'rare' : 'epic');
+
+/** The rune you get by merging triggers `a` and `b` (created on first use), or the reason it can't be done. */
+export function mergeResult(a: string, b: string): RuneDef | string {
+  const ra = RUNE_BY_ID[a], rb = RUNE_BY_ID[b];
+  if (!ra || !rb || ra.kind !== 'trigger' || rb.kind !== 'trigger') return 'Only triggers can be merged.';
+  if (ra.trigger !== rb.trigger) return 'Both triggers must be the same type (two On Hit, two On Kill, or two On Critical Hit).';
+  if (!MERGEABLE.includes(ra.trigger!)) return 'On Expiry always fires, so there is nothing to merge.';
+  const pct = Math.round(((ra.chance ?? 1) + (rb.chance ?? 1)) * 100);
+  if (pct > MAX_MERGE_CHANCE * 100) return `The merged chance would be ${pct}%. A single trigger can't pass ${Math.round(MAX_MERGE_CHANCE * 100)}%.`;
+  const base = RUNE_BY_ID[MERGE_BASE[ra.trigger!]];
+  const id = `${base.id}@${pct}`;
+  if (!RUNE_BY_ID[id]) {
+    const d: RuneDef = { ...base, id, name: `${base.name} ${pct}%`, rarity: rarityForChance(pct / 100), chance: pct / 100, cost: pct >= 75 ? 2 : 1, unlock: 99999, merged: true,
+      desc: `${base.desc.replace(/ Fires \d+% of the time\./, '')} Fires ${pct}% of the time (made by merging two triggers).` };
+    RUNES.push(d); RUNE_BY_ID[id] = d;
+  }
+  return RUNE_BY_ID[id];
+}
 export const KIND_LABEL: Record<RuneKind, string> = {
   core: 'Core', form: 'Form', behavior: 'Behavior', trigger: 'Trigger', modifier: 'Modifier',
 };
