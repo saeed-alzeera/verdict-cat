@@ -1,0 +1,166 @@
+# ✦ SPELL ARCHITECT
+
+A top-down, Survivors-style action roguelite where **you design the spells**.
+Instead of picking weapons, you collect modular magical **runes** and wire them together in a visual node editor:
+Core (element) → Form (how it manifests) → Behaviors / Modifiers / Triggers → branching sub-spells.
+Then you watch your creation interact with hordes, elemental puddles, poison clouds and bosses.
+
+Built with **TypeScript + Vite + Phaser 3**, UI set in the bundled *Press Start 2P* font (OFL). 100% client-side, no backend, no external assets (all art and audio is generated procedurally at runtime), deployable to GitHub Pages.
+
+## Quick start
+
+```bash
+npm install
+npm run dev        # local dev server (http://localhost:5173)
+npm run build      # type-check + production build into dist/
+npm run preview    # serve the production build locally
+```
+
+Requires Node 18+.
+
+## Controls
+
+| Input | Action |
+| --- | --- |
+| `WASD` / arrow keys | Move (spells cast automatically) |
+| `Space` | Fire an Ultimate (needs an equipped evolved Core) |
+| Between rounds | Spell Editor opens from the round briefing (`E` in the Sandbox) |
+| `Esc` / `P` | Pause / resume / close overlays |
+| `1` `2` `3` | Pick a level-up stat boost · `1` `2` pick a mutation |
+| `R` or `Enter` | Retry from the game-over / victory screen |
+
+Editor: click a rune in the **Rune Pool**, then click a glowing card to place it (or drag runes onto cards, or use the dashed **+** buttons for a menu that also explains why a rune *can't* go somewhere). Drag chips and cards between cards to rearrange, drag them to the pool (or right-click / X) to remove them. Hover anything for a tooltip.
+
+## The spell system
+
+**A spell slot holds a Form. You socket a Core into it for its element, then augment it and chain more Forms off its triggers.**
+
+| Category | Runes |
+| --- | --- |
+| **Form** (the spell's body, fills a slot) | Projectile, Beam, Orbiting Orb, Aura, Mine, Nova, Meteor |
+| **Core** (element, socketed into a Form) | Fire, Ice, Lightning, Poison, Water, Gravity (no Core = plain Arcane magic) |
+| **Behavior** | Split, Pierce, Bounce, Chain, Orbit, Homing, Pull, Expand |
+| **Trigger** | On Hit, On Kill, On Expiry, On Critical Hit |
+| **Modifier** | Duplicate, Accelerate, Grow, Increase Duration, Increase Area, Reduce Cooldown |
+
+Rules (enforced by `checkAttach()` in `src/core/spell.ts`, which also produces the human-readable reasons shown in the editor):
+
+* A **Form** goes in a spell slot, or under a Trigger. Each Form has one **Core socket**; with no Core it is plain **Arcane**: launched Forms do NOT inherit the parent's element, so mixing elements in one spell means collecting a second Core for the child Form.
+* **Behaviors** and **Modifiers** attach to a Form (each behavior only works with compatible forms; modifiers stack up to their limit).
+* A **Trigger** attached to a Form launches the Forms placed under it (up to three). Those Forms can have their own Core, augments and triggers, so chains read like sentences: *"Launches a Fireball that splits into 3 smaller copies. When it hits an enemy, it releases a Frost Nova."* Split copies keep your triggers.
+* Every rune costs **Spell Capacity**; each slot has its own capacity (12 to start, raised in the shop).
+* Safety against runaway loops: trigger nesting is limited (3 deep), runtime event depth is capped (4), and there are global entity and per-frame spawn budgets, per-source trigger cooldowns and an event-queue cap.
+
+The editor shows each slot as nested cards (Form → Core socket, augment chips, trigger blocks → launched Forms), with a plain-language **What it does** story written beside it.
+
+### Elemental interactions (systemic, not scripted upgrades)
+
+Defined in `src/game/combat.ts`, listed in the in-game **Journal**:
+
+* ⚡ **Lightning + Water puddle** → electrified puddle that shocks everything inside (and spreads to nearby puddles).
+* 🔌 **Lightning + Wet enemy** → +50% damage and conduction arcs to other wet enemies.
+* 💥 **Fire + Poison cloud** → gas explosion that chain-ignites neighbouring clouds. Burning enemies ignite clouds they stand in.
+* 🧊 **Ice + Wet enemy** → instant flash-freeze. 3 chills also freeze. Frozen enemies take +25% damage.
+* ♨️ **Fire + Wet enemy** → steam burst; **Fire + puddle** → evaporation. **Ice + puddle** → slowing ice sheet.
+* 🧪 **Lightning chain + Poisoned enemy** → Toxic Arc spreads poison. Poisoned enemies spread infection on death.
+* 🔥 **Burning enemies** spread fire to neighbours and burst when they die.
+* 🌀 **Gravity** pulls enemies into whatever is hazardous; wells collapse for bonus damage when they end.
+
+### Spell mutations
+
+Each spell tracks its own performance (burning kills, chain jumps, enemies captured, freezes, infections spread, soaked enemies, reactions, kills). Reaching a milestone offers a choice of two mutations (e.g. *Inferno Blast* / *Pyre Heart*, *Forked Lightning* / *Overcharge*, *Event Horizon* / *Singularity*). Mutations last for the run only.
+
+### Rounds
+
+A run is **20 rounds**. Each normal round is a 45 s survival timer (12 s in accelerated mode); **every 5th round is a boss** (Stone Warden, Plague Matron, Storm Colossus, Void Architect) and ends when the boss falls. Between rounds the field is swept, rewards are chosen, and you get a **briefing** (enemy mix with attunements, boss resistances, tips) before you edit your spells and start the next round. Level-ups (stat boosts only) earned during a round are cashed in at its end, followed by the **shop**. Enemies have individual speeds (fast sprinters, slow brutes) and get faster in later rounds.
+
+### Attunement, resistance and Arcane
+
+* **Elements hit harder than Arcane** (a Form with no Core) and carry an effect (fire burns, ice chills/freezes, poison stacks, water soaks, lightning chains, gravity pulls). Every Form has its own Core socket, so one spell can mix elements (a Fire projectile whose On Hit releases a Lightning Nova). A Form with no Core is Arcane. The editor's **Reaction potential** panel lists what your elements can do together.
+* **Attuned enemies resist their own element** (a glowing badge above them) and are weak to counters (fire: weak to ice/water, ice: fire, lightning: gravity, poison: fire, water: lightning, gravity: poison). Neutral enemies take full damage from everything. Early rounds are mostly neutral; from round 6 most enemies are attuned.
+* **Bosses can be fully immune** to elements. **Arcane is never resisted**, so it is always the fallback.
+
+### How reactions work
+
+Reactions come from simple systemic rules, not scripted upgrades. Each reaction needs two elements that can be in **different slots** (they share puddles, clouds and statuses) and **deals both damage types, split evenly**, so a resisted type still leaves the other. Examples: *Lightning + Water puddle* electrifies it; *Fire + Poison cloud* detonates it (fire + poison damage); *Ice + Wet* flash-freezes (ice + water damage). The editor's **Reactions** tab lists every reaction, its ingredients, which ones your current loadout can trigger, and what it deals.
+
+### Shop and economy
+
+Enemies drop **coins** as pickups (roughly 1 per ten kills; elites pay 3; clearing a round and bosses pay a bonus) and XP is awarded directly on kill. A **Magnet** drop vacuums every pickup. After each round the **shop** is deliberately constrained: a small rerollable stock (5 runes plus 2 relics, Cores roll like any other common rune), **only 3 purchases per visit**, upgrades that are capped per run and once per visit (Capacity +2, Spell Slot, Spell Power, Haste, Vitality, Keen Edge crit), prices that climb for every copy of a rune you already own, per-rune ownership caps and a reroll cost that rises with each reroll. Runes sell for half. Level-ups give stat boosts only.
+
+### Rarity and Triggers
+
+Everything except Cores has a rarity. **On Hit / On Kill / On Critical Hit** are not guaranteed: they come in tiers that fire 20% (Common), 45% (Uncommon), 60% (Rare) and 80% (Epic) of the time.
+
+### Relics
+
+Passive items with conditions, found from bosses, elites and the shop. Wear up to **6**; extra relics wait in a **stash** and can be swapped in the editor/shop **Relics** tab between rounds. Common to Legendary, plus **cursed** relics with a real downside (Glass Cannon Idol, Gambler's Dice, Hungry Purse). Active relics show on the HUD with live counters.
+
+### Run history
+
+Every run (won, lost or abandoned) is recorded with its spells, relics, per-round log and cause of death. See them under **Run History** in the main menu. When the game is served from the verdict-cat hub (the `verdict-cat-sync-key` is in localStorage), runs sync to the hub's sync worker namespace `spell-runs`.
+
+### Evolutions and Ultimates
+
+Collect **6 copies of the same Core** (pool or equipped) and **forge** an evolved Core in the editor's **Forge** tab (the Forge tab and the round briefing glow when you can): Inferno, Glacier, Tempest, Pestilence, Tsunami, Singularity. An evolved Core gives +40% damage, a new passive, and unlocks that element's **Ultimate** on `Space` (Meteor Storm, Absolute Zero, Thunderstorm, Plague Wave, Tidal Surge, Event Horizon). Ultimates recharge over 45 s and faster with kills.
+
+### Sandbox
+
+The **Sandbox** (main menu) unlocks every rune and evolved core, gives 5 slots and huge capacity, and opens the editor any time. A side panel spawns any enemy type with any attunement (elite optional), bosses, toggles god mode and enemy dummies, clears the field, resets ultimate cooldowns and scales enemy strength.
+
+### Persistence
+
+Stored in `localStorage` (key `spell-architect-save-v1`): settings, **Arcane Shards**, unlocked runes, starting-spell choice, run stats and the **Discovery Journal** (reactions + spell combinations + runes seen). Spend shards in the **Grimoire** to unlock runes — progression adds variety, not raw power.
+
+## Project layout
+
+```
+src/
+  main.ts                 Phaser bootstrap
+  data/
+    runes.ts              ★ data-driven rune/element/form definitions
+    mutations.ts          mutation tracks and their effects
+    reactions.ts          reaction display data (journal)
+  core/
+    spell.ts              spell graph, validation, compilation, naming, estimates
+    save.ts               localStorage persistence
+    audio.ts              procedural WebAudio SFX + music
+  game/
+    run.ts                simulation state & main tick loop
+    casting.ts            casting, per-form entity simulation, trigger event executor
+    combat.ts             damage pipeline, statuses, elemental reactions, kills
+    enemies.ts            archetypes, AI, spawn director
+    bosses.ts             boss attack patterns
+    rewards.ts            reward generation
+    fx.ts                 pooled particles / bolts / numbers / shake
+  gfx/textures.ts         procedural pixel-art generation
+  scenes/                 Boot, Menu backdrop, Game (rendering glue)
+  ui/                     DOM UI: menus, HUD, overlays, editor (editor.ts), styles.css
+```
+
+### Adding a rune
+
+1. Add an entry to `RUNES` in `src/data/runes.ts` (kind, cost, rarity, compatible forms, `unlock` cost).
+2. For a new *behavior/modifier/trigger* key, read it from `CForm.b` / `CForm.m` in `src/game/casting.ts` (the compiler in `core/spell.ts` already forwards every behavior/modifier key automatically). New cores/forms need matching entries in `ELEMENTS` / `FORMS` and a branch in `spawnEnt`.
+
+## Testing hooks
+
+The game exposes `window.__SA` (spell/graph helpers, reward generator, save store, UI) and `window.__SA_GAME` (the Phaser game). The simulation can be stepped without rendering, e.g. in the console:
+
+```js
+const run = __SA_GAME.scene.getScene('Game').run;
+__SA_GAME.scene.getScene('Game').scene.pause();
+for (let i = 0; i < 600; i++) run.tick(1 / 60);
+```
+
+## Deployment (GitHub Pages)
+
+`vite.config.ts` uses `base: './'`, so the build works under any repository path.
+
+1. Push to GitHub (default branch `main` or `master`).
+2. In **Settings → Pages**, set **Source** to **GitHub Actions**.
+3. `.github/workflows/deploy.yml` installs, builds and publishes `dist/` on every push (or run it manually from the *Actions* tab).
+
+## License
+
+Code and procedurally generated assets are original; do whatever you like with them.
