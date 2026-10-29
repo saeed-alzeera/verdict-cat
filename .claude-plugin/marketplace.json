@@ -1,0 +1,5 @@
+{
+  "name": "verdict-cat-mods",
+  "owner": { "name": "saeed-alzeera" },
+  "plugins": [{ "name": "task-tracker", "source": "./mods/task-tracker" }]
+}

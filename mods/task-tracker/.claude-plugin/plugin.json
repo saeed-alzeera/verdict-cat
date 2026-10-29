@@ -1,0 +1,1 @@
+{ "name": "task-tracker", "version": "0.1.0", "description": "A live pane showing Claude's to-do list and progress", "types": "./types/index.d.ts" }
