@@ -71,7 +71,7 @@ export function spawnEnemy(run: Run, type: Exclude<EType, 'boss'>, x: number, y:
 }
 
 function spawnPoint(run: Run): [number, number] {
-  const p = run.player;
+  const p = run.randomPlayer().player;
   // out of the player's immediate reach, on floor that is not about to crumble
   for (let i = 0; i < 10; i++) {
     const [x, y] = run.arena.randomSpot(p.x, p.y, 330);
@@ -148,7 +148,7 @@ export function updateDirector(run: Run, dt: number) {
   const r = run.round;
   if (r >= 4 && r % 2 === 0) once('swarm', 0.15, () => {
     const n = Math.min(44, Math.round((8 + r * 2) * (1 + 0.2 * ramp(run.dtime))));
-    const p = run.player;
+    const p = run.randomPlayer().player;
     const a0 = Math.random() * 6.28;
     for (let i = 0; i < n; i++) {
       const a = a0 + (i / n) * 6.2832, R = 380;
@@ -170,13 +170,12 @@ export function updateDirector(run: Run, dt: number) {
 
 /* ---------------------------------- AI ---------------------------------- */
 
-export function updateEnemies(run: Run, dt: number) {
-  const p = run.player;
-  const enemies = run.enemies;
+export function updateEnemies(world: Run, dt: number) {
+  const enemies = world.enemies;
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i];
     if (e.dead) continue;
-    updateStatus(run, e, dt);
+    updateStatus(world, e, dt);
     if (e.dead) continue;
     if (e.slowT <= 0) e.slowMul = 1;
     if (e.spawnT > 0) e.spawnT -= dt;
@@ -190,6 +189,9 @@ export function updateEnemies(run: Run, dt: number) {
       if (e.slowT > 0) mul *= e.slowMul;
       if (e.buff > 0) mul *= 1.3;
     }
+    // each enemy hunts the nearest living player; `run` is that player's context for everything below
+    const run = world.nearestPlayer(e.x, e.y) ?? world;
+    const p = run.player;
     const dx = p.x - e.x, dy = p.y - e.y;
     const dist = Math.hypot(dx, dy) || 1;
     const nx = dx / dist, ny = dy / dist;

@@ -58,6 +58,7 @@ function blank(run: Run, sp: ActiveSpell, f: CForm, src: Src, kind: SEnt['kind']
 }
 
 export function spawnEnt(run: Run, sp: ActiveSpell, f: CForm, x: number, y: number, ang: number, o: SpawnOpts = {}): SEnt | null {
+  run = run.owner(sp);
   if (run.ents.length >= MAX_ENTS) return null;
   const mut = sp.mut;
   const src = o.src ?? makeSrc(sp, f, f.depth);
@@ -176,6 +177,7 @@ export function spawnEnt(run: Run, sp: ActiveSpell, f: CForm, x: number, y: numb
 
 /** Non-triggering environment decals: puddles/clouds left behind by water and poison impacts. */
 export function spawnEnv(run: Run, src: Src, el: Element, x: number, y: number, r: number, life: number, dmg: number) {
+  run = run.owner(src.sp);
   if (el !== 'water' && el !== 'poison') return;
   if (run.ents.length >= MAX_ENTS) return;
   let n = 0;
@@ -364,6 +366,7 @@ function castRoot(run: Run, sp: ActiveSpell, f: CForm): boolean {
 }
 
 export function castForm(run: Run, sp: ActiveSpell, f: CForm, x: number, y: number, hint: number, root: boolean, dmgMul = 1) {
+  run = run.owner(sp);
   const n = f.form === 'aura' ? 1 : copiesOf(f, sp.mut);
   const src = makeSrc(sp, f, f.depth);
   const o = (extra: SpawnOpts): SpawnOpts => ({ root, dmgMul, src: { ...src, icd: { hit: 0, crit: 0 } }, ...extra });
@@ -448,11 +451,12 @@ export function processEvents(run: Run) {
 
 /* ----------------------------- Entity simulation ----------------------------- */
 
-export function updateEnts(run: Run, dt: number) {
-  const ents = run.ents;
+export function updateEnts(world: Run, dt: number) {
+  const ents = world.ents;
   for (let i = 0; i < ents.length; i++) {
     const en = ents[i];
     if (en.dead) continue;
+    const run = world.owner(en.sp); // each entity runs with its caster's stats and relics
     en.life -= dt;
     switch (en.kind) {
       case 'projectile': updateProjectile(run, en, dt); break;

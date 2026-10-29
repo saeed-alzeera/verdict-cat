@@ -26,6 +26,7 @@ export function resMul(e: Enemy, el: Element): number {
 
 /** Reaction damage is split between both element types, so a resisted type still leaves the other. */
 export function reactDamage(run: Run, e: Enemy, amount: number, els: Element[], src: Src | null) {
+  if (src) run = run.owner(src.sp); // the caster's stats, relics and rewards apply
   for (const el of els) {
     if (e.dead) return;
     dealDamage(run, e, (amount / els.length) * reactionMul(run), el, src, { react: true, noTrig: true });
@@ -33,12 +34,13 @@ export function reactDamage(run: Run, e: Enemy, amount: number, els: Element[], 
 }
 
 export function reaction(run: Run, id: string, x: number, y: number, src: Src | null) {
+  if (src) run = run.owner(src.sp); // the caster's stats, relics and rewards apply
   const def = REACTION_BY_ID[id];
   if (!def) return;
   const passive = id === 'wildfire' || id === 'plague';
   if (src && (!passive || Math.random() < 0.2)) src.sp.st.reactions++;
   run.reactionCount++;
-  const first = store.discoverReaction(id);
+  const first = run.remote ? false : store.discoverReaction(id);
   onReaction(run, id);
   const last = run.reactTxt[id] ?? -9;
   if (first) {
@@ -176,6 +178,7 @@ export function updateStatus(run: Run, e: Enemy, dt: number) {
 
 export function dealDamage(run: Run, e: Enemy, amount: number, el: Element, src: Src | null, o: DmgOpts = {}): number {
   if (e.dead) return 0;
+  if (src) run = run.owner(src.sp); // the caster's stats, relics and rewards apply
   let a = amount;
   let conduct = false;
   const rm = resMul(e, el);
@@ -385,6 +388,7 @@ function freezePuddle(run: Run, p: SEnt, src: Src) {
 }
 
 function evaporate(run: Run, p: SEnt, src: Src) {
+  if (src) run = run.owner(src.sp); // the caster's stats, relics and rewards apply
   if (p.life < 1.2) { killEnt(run, p); return; }
   p.life *= 0.5; p.maxLife = Math.max(p.maxLife, p.life);
   reaction(run, 'evaporate', p.x, p.y, src);
@@ -394,6 +398,7 @@ function evaporate(run: Run, p: SEnt, src: Src) {
 
 export function igniteCloud(run: Run, c: SEnt, src: Src | null, depth: number) {
   if (c.dead) return;
+  if (src) run = run.owner(src.sp); // the caster's stats, relics and rewards apply
   killEnt(run, c);
   const sp = src?.sp;
   const rm = sp ? sp.mut.react : 1;
@@ -421,6 +426,7 @@ export function igniteCloud(run: Run, c: SEnt, src: Src | null, depth: number) {
 export function killEnemy(run: Run, e: Enemy, src: Src | null, el: Element) {
   if (e.dead) return;
   e.dead = true;
+  if (src) run = run.owner(src.sp); // the caster's stats, relics and rewards apply
   run.kills++;
   for (const sp of run.spells) if (sp.ultCd > 0) sp.ultCd = Math.max(0, sp.ultCd - 0.2);
   const wasBurn = e.burn > 0, wasPoison = e.poison > 0, wasFrozen = e.freeze > 0;
@@ -440,7 +446,7 @@ export function killEnemy(run: Run, e: Enemy, src: Src | null, el: Element) {
     const chance: Record<string, number> = { grunt: 0.1, swarmer: 0.05, archer: 0.16, charger: 0.16, shaman: 0.2, armored: 0.3 };
     if (e.elite) run.dropCoin(e.x, e.y, 3);
     else if (Math.random() < (chance[e.type] ?? 0.1)) run.dropCoin(e.x, e.y, 1);
-    if (e.elite) { if (Math.random() < 0.2) run.dropPickup('heal', e.x + 10, e.y); if (run.round >= 4 && Math.random() < 0.12) { const rl = rollRelics(run, 1, 'shop')[0]; if (rl) run.addRelic(rl.id); } }
+    if (e.elite) { if (Math.random() < 0.2) run.dropPickup('heal', e.x + 10, e.y); if (run.round >= 4 && Math.random() < 0.12) { const rl = rollRelics(run, 1, 'shop')[0]; if (rl) { if (run.remote) run.pushPending({ type: 'relic', options: [rl.id] }); else run.addRelic(rl.id); } } }
     else if (Math.random() < 0.0005) run.dropPickup('heal', e.x, e.y);
     if (Math.random() < 0.012) run.dropPickup('magnet', e.x, e.y);
   }

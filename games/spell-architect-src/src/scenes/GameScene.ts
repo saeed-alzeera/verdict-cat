@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Run, ARENA, type RunOpts } from '../game/run';
 import { ui } from '../ui/ui';
+import { GuestSession, HostSession } from '../net/coop';
 
 export class GameScene extends Phaser.Scene {
   run!: Run;
@@ -9,6 +10,7 @@ export class GameScene extends Phaser.Scene {
   keys!: Record<string, Phaser.Input.Keyboard.Key>;
   opts!: RunOpts;
   zoom = 1;
+  coop: HostSession | GuestSession | null = null;
 
   constructor() { super('Game'); }
 
@@ -29,9 +31,16 @@ export class GameScene extends Phaser.Scene {
     this.run.onAnnounce = (t, c, s) => ui.announce(t, c, s);
     this.run.onEnd = (s) => ui.showGameOver(s);
     ui.beginRun(this.run, this.opts);
+    const mp = this.opts.mp;
+    this.coop = null;
+    if (mp?.role === 'host' && mp.host) this.coop = new HostSession(this.run, this, mp.host, mp.code, mp.name);
+    else if (mp?.role === 'guest' && mp.guest) {
+      this.coop = new GuestSession(this.run, this, mp.guest, mp);
+      this.pSpr.setVisible(false); this.pShadow.setVisible(false); // the host's mirror draws every wizard, this one included
+    }
     this.applyZoom();
     this.scale.on('resize', this.applyZoom, this);
-    this.events.once('shutdown', () => { this.scale.off('resize', this.applyZoom, this); ui.endRun(); });
+    this.events.once('shutdown', () => { this.scale.off('resize', this.applyZoom, this); this.coop?.leave(); this.coop?.destroy(); this.coop = null; ui.endRun(); });
     cam.centerOn(this.run.player.x, this.run.player.y);
   }
 
@@ -50,12 +59,24 @@ export class GameScene extends Phaser.Scene {
     run.input.y = (k.S.isDown || k.DOWN.isDown ? 1 : 0) - (k.W.isDown || k.UP.isDown ? 1 : 0);
     if (ui.blocking) { run.input.x = 0; run.input.y = 0; }
     ui.pump(run);
-    run.tick(dtMs / 1000);
-    run.syncSprites(this.pSpr, this.pShadow);
     const cam = this.cameras.main;
     const sm = run.fx.shakeMag;
     const sx = sm > 0 ? (Math.random() - 0.5) * sm * 2 : 0, sy = sm > 0 ? (Math.random() - 0.5) * sm * 2 : 0;
-    cam.centerOn(Math.round(run.player.x + sx), Math.round(run.player.y + sy));
+    const co = this.coop;
+    if (co instanceof GuestSession) {
+      // a guest does not simulate: it sends its input and draws what the host mirrors
+      co.frame(dtMs / 1000, run.input, this.scale.width / this.zoom, this.scale.height / this.zoom);
+      const t = co.inFight ? co.cameraTarget() : run.player;
+      cam.centerOn(Math.round(t.x + sx), Math.round(t.y + sy));
+      ui.hud.update(run);
+      return;
+    }
+    run.tick(dtMs / 1000);
+    run.syncSprites(this.pSpr, this.pShadow);
+    // a downed host watches a teammate
+    const tp = run.down ? (run.nearestPlayer(run.player.x, run.player.y) ?? run).player : run.player;
+    cam.centerOn(Math.round(tp.x + sx), Math.round(tp.y + sy));
+    co?.frame(dtMs / 1000);
     ui.hud.update(run);
   }
 }

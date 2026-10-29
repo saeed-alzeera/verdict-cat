@@ -1,5 +1,8 @@
 // DOM-based user interface: menus, HUD, level-up, mutation, pause, game over, journal, grimoire.
 import { showSpellOverview } from './overview';
+import { lobbyPanel, showMultiplayer } from './lobby';
+import type { MpOpts } from '../net/coop';
+import { normCode } from '../net/signaling';
 import type Phaser from 'phaser';
 import {
   RUNES, RUNE_BY_ID, RARITY, ELEMENTS, FORMS, KIND_LABEL, KIND_COLOR, runeColor,
@@ -44,6 +47,7 @@ class Hud {
   hp!: HTMLElement; hpTxt!: HTMLElement; xp!: HTMLElement; lvl!: HTMLElement; timer!: HTMLElement; kills!: HTMLElement;
   bossBox!: HTMLElement; bossFill!: HTMLElement; bossName!: HTMLElement; slotsEl!: HTMLElement; ann!: HTMLElement; toasts!: HTMLElement; badge!: HTMLElement; coinEl!: HTMLElement; lastCoin = -1; ultsEl!: HTMLElement; ultKey = '';
   ultEls: HTMLElement[] = [];
+  partyEl!: HTMLElement; partyKey = '';
   slotKey = '';
   frame = 0; relEl!: HTMLElement; hpBar!: HTMLElement; relKey = '';
   cdEls: HTMLElement[] = [];
@@ -56,6 +60,7 @@ class Hud {
         <div class="coinbar">◈ <b class="cn">0</b></div>
         <div class="hud-relics"></div>
         <div class="rewardbadge hidden"></div>
+        <div class="hud-party"></div>
       </div>
       <div class="hud-ults"></div>
       <div class="hud-tc"><div class="timer">0:00</div><div class="kills">0 slain</div>
@@ -70,6 +75,7 @@ class Hud {
       <div class="toasts"></div>
     </div>`);
     uiRef.root.appendChild(this.root);
+    this.partyEl = $('.hud-party', this.root);
     this.relEl = $('.hud-relics', this.root); this.hpBar = $('.bar.hp', this.root);
     this.hp = $('.hp .fill', this.root); this.hpTxt = $('.hp span', this.root);
     this.xp = $('.xp .fill', this.root); this.lvl = $('.lvl', this.root);
@@ -128,7 +134,9 @@ class Hud {
       this.last.t = t; this.last.k2 = run.round;
       this.timer.innerHTML = run.sandbox ? 'SANDBOX' : `<small>ROUND ${run.round}/${FINAL_ROUND}</small><br>${isBossRound(run.round) ? 'BOSS' : fmtTime(Math.max(0, remain))}`;
     }
-    if (run.kills !== this.last.kl) { this.last.kl = run.kills; this.kills.textContent = `${run.kills} slain`; }
+    const kills = run.coop?.role === 'host' ? run.players.reduce((n, q) => n + q.kills, 0) : run.kills;
+    if (kills !== this.last.kl) { this.last.kl = kills; this.kills.textContent = `${kills} slain`; }
+    this.updateParty(run);
     const cn = Math.floor(run.coins);
     if (cn !== this.lastCoin) { this.lastCoin = cn; this.coinEl.textContent = String(cn); }
     const pend = run.pending.filter((q) => q.type !== 'mutation').length;
@@ -180,6 +188,20 @@ class Hud {
       if (e) e.style.height = `${f * 100}%`;
     }
   }
+  /** Teammates' health (co-op). */
+  updateParty(run: Run) {
+    let list: { name: string; hp: number; mh: number; down: boolean; me: boolean }[] = [];
+    if (run.coop?.role === 'host') list = run.players.map((q) => ({ name: q.pname, hp: q.player.hp, mh: q.player.maxHp, down: q.down, me: q === run }));
+    else if (run.coop?.role === 'guest') {
+      const m = (run.coop as unknown as { meta?: { pl?: { pid: number; name: string; hp: number; mh: number; down: boolean }[]; me?: { pid: number } } }).meta;
+      list = (m?.pl ?? []).map((q) => ({ name: q.name, hp: q.hp, mh: q.mh, down: q.down, me: q.pid === m?.me?.pid }));
+    }
+    const key = list.map((q) => `${q.name}${Math.round(q.hp)}${q.down}`).join('|');
+    if (key === this.partyKey) return;
+    this.partyKey = key;
+    this.partyEl.innerHTML = list.length < 2 ? '' : list.filter((q) => !q.me).map((q) => `<div class="pm ${q.down ? 'down' : ''}"><span>${q.name}</span><i><b style="width:${Math.max(0, Math.min(100, (q.hp / q.mh) * 100))}%"></b></i></div>`).join('');
+  }
+
   announce(text: string, color: string, sub?: string) {
     if (text.startsWith('NEW ') || text.startsWith('MUTATED')) {
       while (this.toasts.children.length > 3) this.toasts.firstElementChild!.remove();
@@ -211,11 +233,13 @@ class UI {
     this.game = game;
     this.hud = new Hud(this);
     window.addEventListener('keydown', (e) => this.onKey(e));
-    window.addEventListener('blur', () => { if (this.run && !this.run.over && !this.blocking) this.togglePause(); });
+    window.addEventListener('blur', () => { if (this.run && !this.run.over && !this.blocking && !this.run.coop) this.togglePause(); });
     const unlock = () => { audio.init(); };
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
     this.showMenu();
+    const j = new URLSearchParams(location.search).get('join');
+    if (j) showMultiplayer(this, normCode(j));
   }
 
   /* ------------------------------ layers ------------------------------ */
@@ -247,7 +271,7 @@ class UI {
       if ((k === 'r' || k === 'R' || k === 'Enter') && top?.kind === 'gameover') this.retry();
       return;
     }
-    if (k === ' ' || k === 'Spacebar') { e.preventDefault(); if (!top && !e.repeat && !this.run.useUltimate()) this.hud.flashUlt(this.run); return; }
+    if (k === ' ' || k === 'Spacebar') { e.preventDefault(); if (!top && !e.repeat && !(this.run.coop?.role === 'guest' ? this.run.coop.ult() : this.run.useUltimate())) this.hud.flashUlt(this.run); return; }
     if (k === 'Escape' || k === 'p' || k === 'P') {
       if (top?.kind === 'pause') this.pop('pause');
       else if (!top && this.run.phase !== 'prep') this.togglePause();
@@ -317,17 +341,26 @@ class UI {
         ${d.weak.length ? `<p>Weak to: ${elChips(d.weak)}</p>` : ''}
         <p class="muted">Arcane (no Core) is never resisted. Bring a mix.</p></div></div>`;
     }
+    const co = run.coop;
     const slots = run.spells.map((s, i) => `<div class="pslot"><b>${i + 1}</b>${s.c.valid && s.c.root ? `${ELEMENTS[s.c.root.element].icon} ${s.c.name}` : '<em>empty</em>'}${s.c.root?.evolved ? ' ★' : ''}</div>`).join('');
     const n = el(`<div class="overlay prepov"><div class="panel prepp">
       <div class="rtitle"><small>${r === 1 ? 'GET READY' : `ROUND ${r - 1} COMPLETE`}</small><h2>ROUND ${r}${boss !== null ? ' · BOSS' : ''} <span class="of">/ ${FINAL_ROUND}</span></h2>
       <p class="sub">${boss !== null ? 'Defeat the boss to finish the round.' : `Survive ${roundLen(run.quick)} seconds.`} ${boss === null ? `Next boss: round ${Math.ceil(r / 5) * 5}.` : ''}</p></div>
+      ${co ? '<div data-lobby></div>' : ''}
       ${bossHtml}
       ${run.forgeReady().length ? `<div class="forgebanner">FORGE READY: you have ${EVOLVE_COST}+ ${run.forgeReady().map((e) => ELEMENTS[e].name).join(', ')} cores. Open the Spell Editor's Forge tab to evolve them into an Ultimate!</div>` : ''}
       <h4>ENEMY MIX THIS ROUND</h4><div class="shares">${shares}</div>
       ${plan.tip ? `<p class="tip2">TIP: ${plan.tip}</p>` : ''}
       <h4>YOUR LOADOUT</h4><div class="pslots">${slots}</div>
-      <div class="rbtns"><button class="big" data-a="shop">Shop <small>◈ ${Math.floor(run.coins)}</small></button><button class="big ${run.forgeReady().length ? 'glow' : ''}" data-a="editor">Spell Editor${run.forgeReady().length ? ' (FORGE READY!)' : ''}</button><button class="big primary" data-a="go">Start Round ${r}</button></div>
+      <div class="rbtns"><button class="big" data-a="shop">Shop <small>◈ ${Math.floor(run.coins)}</small></button><button class="big ${run.forgeReady().length ? 'glow' : ''}" data-a="editor">Spell Editor${run.forgeReady().length ? ' (FORGE READY!)' : ''}</button>${co?.role === 'guest' ? '<button class="big primary" data-a="ready">Ready</button>' : `<button class="big primary" data-a="go">Start Round ${r}</button>`}</div>
     </div></div>`);
+    if (co) n.querySelector('[data-lobby]')!.replaceWith(lobbyPanel(this, co as never));
+    const startRound = () => {
+      const err = run.coop?.beforeStart?.();
+      if (err) { this.announce('NOT READY', '#ff9a9a', err); audio.play('warn'); return; }
+      run.startRound(); this.pop('prep');
+    };
+    const unready = () => { const g = run.coop as unknown as { ready?: boolean; setReady?(on: boolean): void } | null; if (g?.ready) { g.setReady!(false); const rb = n.querySelector('[data-a=ready]'); if (rb) rb.textContent = 'Ready'; } };
     n.querySelectorAll<HTMLCanvasElement>('canvas[data-boss]').forEach((cv) => {
       try {
         const img = this.game.textures.get(`boss${cv.dataset.boss}`).getSourceImage() as CanvasImageSource;
@@ -338,13 +371,18 @@ class UI {
       const b = (e.target as HTMLElement).closest('button[data-a]') as HTMLElement | null;
       if (!b) return;
       audio.play('ui');
-      if (b.dataset.a === 'editor') openEditor(this, run);
-      else if (b.dataset.a === 'shop') showShop(this, run);
-      else if (b.dataset.a === 'go') { run.startRound(); this.pop('prep'); }
+      if (b.dataset.a === 'editor') { unready(); openEditor(this, run); }
+      else if (b.dataset.a === 'shop') { unready(); showShop(this, run); }
+      else if (b.dataset.a === 'go') startRound();
+      else if (b.dataset.a === 'ready') {
+        const g = run.coop as unknown as { ready: boolean; setReady(on: boolean): void };
+        g.setReady(!g.ready);
+        b.textContent = g.ready ? 'Ready (click to change your build)' : 'Ready';
+      }
     });
     this.push('prep', n, (e) => {
-      if ((e.key === 'e' || e.key === 'E') && this.stack[this.stack.length - 1]?.kind === 'prep') { openEditor(this, run); return true; }
-      if ((e.key === 'Enter') && this.stack[this.stack.length - 1]?.kind === 'prep') { run.startRound(); this.pop('prep'); return true; }
+      if ((e.key === 'e' || e.key === 'E') && this.stack[this.stack.length - 1]?.kind === 'prep') { unready(); openEditor(this, run); return true; }
+      if ((e.key === 'Enter') && this.stack[this.stack.length - 1]?.kind === 'prep' && co?.role !== 'guest') { startRound(); return true; }
       return false;
     });
   }
@@ -360,8 +398,8 @@ class UI {
         ${run.sandbox ? '<button class="big" data-a="editor">Spell Editor</button>' : '<p class="muted">Spell editing opens between rounds.</p>'}
         <button class="big" data-a="overview">🔮 Spell Overview</button>
         <button class="big" data-a="journal">📜 Journal</button>
-        <button class="big" data-a="retry">Restart Run</button>
-        <button class="big danger" data-a="quit">Quit to Menu</button>
+        ${run.coop ? '' : '<button class="big" data-a="retry">Restart Run</button>'}
+        <button class="big danger" data-a="quit">${run.coop ? (run.coop.role === 'host' ? 'End Game for Everyone' : 'Leave Game') : 'Quit to Menu'}</button>
       </div>
       <div class="sett"></div>
     </div></div>`);
@@ -535,6 +573,7 @@ class UI {
           <button class="big" data-a="grim">◆ Grimoire <small>${st.shards}</small></button>
           <button class="big" data-a="journal">📜 Journal</button>
         </div>
+        <div class="row"><button class="big primary" data-a="mp">🌐 Online Co-op</button></div>
         <div class="row"><button class="big" data-a="sandbox">Sandbox</button><button class="big" data-a="history">📊 Run History</button></div>
         <div class="row">
           <button class="big" data-a="settings">⚙ Settings</button>
@@ -553,6 +592,7 @@ class UI {
       switch (b.dataset.a) {
         case 'play': this.startRun(); break;
         case 'sandbox': this.startRun(true); break;
+        case 'mp': showMultiplayer(this); break;
         case 'grim': this.showGrimoire(); break;
         case 'journal': this.showJournal(); break;
         case 'history': this.showHistory(); break;
@@ -564,6 +604,17 @@ class UI {
     this.menuEl = n;
     this.root.appendChild(n);
   }
+
+  /** Start (or join) a co-op run. */
+  startMp(mp: MpOpts) {
+    const st = store.d;
+    const opts: RunOpts = { quick: false, core: '', form: st.starter.form, mp };
+    this.menuEl?.remove(); this.menuEl = null;
+    this.game.scene.stop('Menu');
+    this.game.scene.start('Game', opts);
+  }
+  /** Close the between-rounds overlays (the host started the round). */
+  closePrep() { this.clearLayers(); }
 
   startRun(sandbox = false) {
     const st = store.d;
@@ -642,6 +693,7 @@ class UI {
       <p><b>Augments.</b> <span style="color:${KIND_COLOR.behavior}">Behaviors</span> change how a Form acts, <span style="color:${KIND_COLOR.modifier}">Modifiers</span> tune its numbers. A <span style="color:${KIND_COLOR.trigger}">Trigger</span> launches more Forms when it fires. The editor writes your whole chain as plain sentences.</p>
       <p><b>Reactions.</b> Elements from different slots interact with each other's puddles, clouds and statuses. Each reaction deals <b>both</b> damage types. The editor's Reactions tab shows which ones your loadout can trigger.</p>
       <p><b>Evolution.</b> Collect ${EVOLVE_COST} copies of the same Core and forge an evolved Core in the editor's Forge tab: +40% damage, a new passive, and an <b>Ultimate</b> on Space. The editor and briefing flash when you can forge.</p>
+      <p><b>Co-op.</b> Choose <b>Online Co-op</b> in the main menu to host a room or join a friend's with their 5-letter code. You share the arena and the horde; everyone keeps their own build, shop and rewards, and the round starts when the host presses Start after everyone is Ready.</p>
       <p><b>Shop.</b> Kills and cleared rounds earn coins. After every round, spend them on new Cores, Forms and runes (rerollable stock), spell capacity, extra slots and buffs, or sell runes you don't need. <b>Level-ups</b> instantly give a random stat boost, even mid-round; boss caches give a choice of strong runes.</p>
       <p><b>Capacity</b> limits runes per spell. <b>Mutations</b> evolve spells that perform well. Spend Arcane Shards in the Grimoire to unlock more runes (behaviors, triggers, modifiers). The <b>Sandbox</b> lets you test any build against any enemy.</p>
     </div>`);

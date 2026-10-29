@@ -18,7 +18,7 @@ export const BOSS_NAMES = BOSSES.map((b) => b.name);
 
 export function spawnBoss(run: Run, kind: number) {
   const d = BOSSES[kind];
-  const p = run.player;
+  const p = run.randomPlayer().player;
   const a = Math.random() * 6.28;
   const x = Math.max(80, Math.min(ARENA - 80, p.x + Math.cos(a) * 380));
   const y = Math.max(80, Math.min(ARENA - 80, p.y + Math.sin(a) * 380));
@@ -145,7 +145,7 @@ function startAttack(run: Run, e: Enemy, atk: string, ph: number) {
             run.fx.ring(tx, ty, 0xff8a3a, 10, 70, 0.35);
             run.fx.burst(tx, ty, 0xff8a3a, 12, 220, 0.5, 1.3);
             run.fx.shake(4); audio.play('boom');
-            if ((p.x - tx) ** 2 + (p.y - ty) ** 2 < (70 + p.r) ** 2) run.hurtPlayer(e.dmg * 1.3, tx, ty, `${e.boss?.name ?? 'Boss'} (slam)`);
+            for (const pr of run.world.players) if (!pr.down && (pr.player.x - tx) ** 2 + (pr.player.y - ty) ** 2 < (70 + pr.player.r) ** 2) pr.hurtPlayer(e.dmg * 1.3, tx, ty, `${e.boss?.name ?? 'Boss'} (slam)`);
           } });
         });
       }
@@ -185,10 +185,13 @@ function startAttack(run: Run, e: Enemy, atk: string, ph: number) {
           run.fx.bolt(e.x, e.y, e.x + Math.cos(a) * 1200, e.y + Math.sin(a) * 1200, d.color, 40, 0.3);
           run.fx.bolt(e.x, e.y, e.x + Math.cos(a) * 1200, e.y + Math.sin(a) * 1200, 0xffffff, 14, 0.25);
           run.fx.shake(5); audio.play('boom');
-          const rx = p.x - e.x, ry = p.y - e.y;
-          const along = rx * Math.cos(a) + ry * Math.sin(a);
-          const perp = Math.abs(-rx * Math.sin(a) + ry * Math.cos(a));
-          if (along > 0 && perp < 23 + p.r) run.hurtPlayer(e.dmg * 1.4, e.x, e.y, `${e.boss?.name ?? 'Boss'} (beam)`);
+          for (const pr of run.world.players) {
+            if (pr.down) continue;
+            const rx = pr.player.x - e.x, ry = pr.player.y - e.y;
+            const along = rx * Math.cos(a) + ry * Math.sin(a);
+            const perp = Math.abs(-rx * Math.sin(a) + ry * Math.cos(a));
+            if (along > 0 && perp < 23 + pr.player.r) pr.hurtPlayer(e.dmg * 1.4, e.x, e.y, `${e.boss?.name ?? 'Boss'} (beam)`);
+          }
         } });
       }
       break;
