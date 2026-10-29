@@ -14,6 +14,7 @@ import { newShop, refreshPrices, type Shop } from './shop';
 import { RELIC_BY_ID, RELIC_SLOTS, recomputeMods, onRoundStart, onLethal, onKill, rollRelics } from './relics';
 import { saveRunRecord, type RunRecord, type RoundRec } from '../core/analytics';
 import { ruleMods } from '../core/spell';
+import { generateRewards } from './rewards';
 import { updateCasting, updateEnts, processEvents } from './casting';
 
 import { Arena, ARENA, tileCx, tileCy } from './arena';
@@ -112,6 +113,7 @@ export class Run {
   arena = new Arena();
   input = { x: 0, y: 0 };
   gemCount = 0;
+  boosts: string[] = []; // stat boosts gained from level-ups this run
   openerDone = false;
   viewW = 1280;
   viewH = 720;
@@ -384,11 +386,23 @@ export class Run {
       p.level++;
       p.xpNeed = this.xpFor(p.level);
       p.dmgMul += 0.015;
-      this.pending.push({ type: 'levelup' });
+      this.applyLevelBoost();
       audio.play('level');
       this.fx.ring(p.x, p.y, 0xffe08a, 10, 160, 0.6);
       this.fx.burst(p.x, p.y, 0xffe08a, 20, 220, 0.8, 1.4);
     }
+  }
+
+  /** Level-ups give a random stat boost right away, mid-round, with no menu. */
+  applyLevelBoost() {
+    const p = this.player;
+    const opts = generateRewards(this, 'levelup', 3);
+    if (!opts.length) return;
+    const pick = opts[(Math.random() * opts.length) | 0];
+    pick.apply(this);
+    this.fx.text(p.x, p.y - 52, `LEVEL ${p.level}`, '#ffe08a', 14, 1.4);
+    this.fx.text(p.x, p.y - 70, `${pick.icon} ${pick.title}`, '#ffffff', 11, 1.6);
+    this.boosts.push(`${pick.icon} ${pick.title}`);
   }
 
   /* -------------------------- enemy projectiles etc -------------------------- */
@@ -672,7 +686,6 @@ export class Run {
   /** The round is won: sweep the field, collect everything, then open the prep screen. */
   endRound() {
     if (this.phase !== 'fight') return;
-    if (this.round === 1 && !this.pending.some((q) => q.type === 'levelup')) this.pending.push({ type: 'levelup' }); // always at least one reward after round 1
     this.phase = 'clearing';
     this.clearT = 1.5;
     this.pushRoundRecord();

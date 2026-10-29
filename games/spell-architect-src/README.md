@@ -26,7 +26,7 @@ Requires Node 18+.
 | `Space` | Fire an Ultimate (needs an equipped evolved Core) |
 | Between rounds | Spell Editor opens from the round briefing (`E` in the Sandbox) |
 | `Esc` / `P` | Pause / resume / close overlays |
-| `1` `2` `3` | Pick a level-up stat boost · `1` `2` pick a mutation |
+| `1` `2` | Pick a mutation |
 | `R` or `Enter` | Retry from the game-over / victory screen |
 
 Editor: click a rune in the **Rune Pool**, then click a glowing card to place it (or drag runes onto cards, or use the dashed **+** buttons for a menu that also explains why a rune *can't* go somewhere). Drag chips and cards between cards to rearrange, drag them to the pool (or right-click / X) to remove them. Hover anything for a tooltip.
@@ -72,7 +72,7 @@ Each spell tracks its own performance (burning kills, chain jumps, enemies captu
 
 ### Rounds
 
-A run is **20 rounds**. Each normal round is a 45 s survival timer (12 s in accelerated mode); **every 5th round is a boss** (Stone Warden, Plague Matron, Storm Colossus, Void Architect) and ends when the boss falls. Between rounds the field is swept, rewards are chosen, and you get a **briefing** (enemy mix with attunements, boss resistances, tips) before you edit your spells and start the next round. Level-ups (stat boosts only) earned during a round are cashed in at its end, followed by the **shop**. Enemies have individual speeds (fast sprinters, slow brutes) and get faster in later rounds.
+A run is **20 rounds**. Each normal round is a 45 s survival timer (12 s in accelerated mode); **every 5th round is a boss** (Stone Warden, Plague Matron, Storm Colossus, Void Architect) and ends when the boss falls. Between rounds the field is swept, rewards are chosen, and you get a **briefing** (enemy mix with attunements, boss resistances, tips) before you edit your spells and start the next round. Level-ups apply a random stat boost **instantly**, mid-round, with a floating label; between rounds you get the shop.
 
 ### Attunement, resistance and Arcane
 
@@ -86,7 +86,7 @@ Reactions come from simple systemic rules, not scripted upgrades. Each reaction 
 
 ### Crumbling floor
 
-The arena is a small 11x11 tile map. Every round a seeded share of the tiles falls away in three waves: 10% in round 1, +10% per round up to 50% from round 5 on. It resets every round (not cumulative). Doomed tiles crack and pulse red for a few seconds first. The remaining floor always stays connected. Enemies on a cracking tile run for solid ground, path around holes, and die if they are still there when it drops; you take 12% max HP and are put back on solid floor. Implemented in `src/game/arena.ts`.
+The arena is a small 11x11 tile map. Every round a seeded share of the tiles falls away in three waves: 10% in round 1, 20% from round 2 on. It resets every round (not cumulative). Doomed tiles crack and pulse red for a few seconds first. The remaining floor always stays connected. Enemies on a cracking tile run for solid ground, path around holes, and die if they are still there when it drops; you take 12% max HP and are put back on solid floor. Implemented in `src/game/arena.ts`.
 
 ### Shop and economy
 

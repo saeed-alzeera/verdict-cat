@@ -642,7 +642,7 @@ class UI {
       <p><b>Augments.</b> <span style="color:${KIND_COLOR.behavior}">Behaviors</span> change how a Form acts, <span style="color:${KIND_COLOR.modifier}">Modifiers</span> tune its numbers. A <span style="color:${KIND_COLOR.trigger}">Trigger</span> launches more Forms when it fires. The editor writes your whole chain as plain sentences.</p>
       <p><b>Reactions.</b> Elements from different slots interact with each other's puddles, clouds and statuses. Each reaction deals <b>both</b> damage types. The editor's Reactions tab shows which ones your loadout can trigger.</p>
       <p><b>Evolution.</b> Collect ${EVOLVE_COST} copies of the same Core and forge an evolved Core in the editor's Forge tab: +40% damage, a new passive, and an <b>Ultimate</b> on Space. The editor and briefing flash when you can forge.</p>
-      <p><b>Shop.</b> Kills and cleared rounds earn coins. After every round, spend them on new Cores, Forms and runes (rerollable stock), spell capacity, extra slots and buffs, or sell runes you don't need. <b>Level-ups</b> give stat boosts; boss caches give a choice of strong runes.</p>
+      <p><b>Shop.</b> Kills and cleared rounds earn coins. After every round, spend them on new Cores, Forms and runes (rerollable stock), spell capacity, extra slots and buffs, or sell runes you don't need. <b>Level-ups</b> instantly give a random stat boost, even mid-round; boss caches give a choice of strong runes.</p>
       <p><b>Capacity</b> limits runes per spell. <b>Mutations</b> evolve spells that perform well. Spend Arcane Shards in the Grimoire to unlock more runes (behaviors, triggers, modifiers). The <b>Sandbox</b> lets you test any build against any enemy.</p>
     </div>`);
     this.openModal(m, 'help');
