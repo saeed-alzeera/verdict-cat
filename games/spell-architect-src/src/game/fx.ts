@@ -10,6 +10,19 @@ interface Txt { t: Phaser.GameObjects.Text; on: boolean; life: number; vy: numbe
 
 const NP = 700, NR = 70, NB = 150, NT = 36;
 
+/** Every cosmetic effect call, as plain numbers. The co-op host records these (instead of sending particles) and each joiner
+ *  replays them on its own Fx, so sparks, rings, bolts and damage numbers cost a few bytes each and are never out of sync with
+ *  the joiner's own frame rate. Colours are 0xRRGGBB numbers. */
+export const enum FxKind { Burst = 1, Spark = 2, Ring = 3, Bolt = 4, Text = 5, Shake = 6, Flash = 7 }
+export type FxEv =
+  | [FxKind.Burst, number, number, number, number, number, number, number, number, number]
+  | [FxKind.Spark, number, number, number, number, number, number, number, number, string]
+  | [FxKind.Ring, number, number, number, number, number, number, number]
+  | [FxKind.Bolt, number, number, number, number, number, number, number]
+  | [FxKind.Text, number, number, string, number, number, number, number]
+  | [FxKind.Shake, number]
+  | [FxKind.Flash, number, number];
+
 export class Fx {
   parts: P[] = [];
   rings: Ring[] = [];
@@ -18,6 +31,8 @@ export class Fx {
   active = 0;
   pc = 0; rc = 0; bc = 0; tc = 0;
   shakeMag = 0;
+  /** Host: receives every effect call before it is thinned or filtered by this machine's own settings. */
+  rec: ((ev: FxEv) => void) | null = null;
   constructor(private scene: Phaser.Scene) {
     for (let i = 0; i < NP; i++) {
       const img = scene.add.image(0, 0, 'dot').setBlendMode(Phaser.BlendModes.ADD).setDepth(12).setVisible(false);
@@ -48,6 +63,7 @@ export class Fx {
   }
 
   burst(x: number, y: number, color: number, n: number, speed: number, life: number, size: number, grav = 0, drag = 3) {
+    this.rec?.([FxKind.Burst, x, y, color, n, speed, life, size, grav, drag]);
     // thin out under heavy load
     if (this.active > 520) n = Math.ceil(n * 0.3);
     else if (this.active > 380) n = Math.ceil(n * 0.6);
@@ -65,6 +81,7 @@ export class Fx {
 
   /** Single directional particle (trails, embers). */
   spark(x: number, y: number, vx: number, vy: number, color: number, life: number, size: number, grav = 0, tex = 'dot') {
+    this.rec?.([FxKind.Spark, x, y, vx, vy, color, life, size, grav, tex]);
     if (this.active > 480) return;
     const p = this.parts[this.pc]; this.pc = (this.pc + 1) % NP;
     if (!p.on) this.active++;
@@ -73,12 +90,14 @@ export class Fx {
   }
 
   ring(x: number, y: number, color: number, r0: number, r1: number, life = 0.35, alpha = 1) {
+    this.rec?.([FxKind.Ring, x, y, color, r0, r1, life, alpha]);
     const g = this.rings[this.rc]; this.rc = (this.rc + 1) % NR;
     g.on = true; g.life = g.max = life; g.s0 = r0 / 60; g.s1 = r1 / 60;
     g.img.setPosition(x, y).setTint(color).setVisible(true).setAlpha(alpha).setScale(g.s0);
   }
 
   bolt(x1: number, y1: number, x2: number, y2: number, color: number, width = 8, life = 0.16) {
+    this.rec?.([FxKind.Bolt, x1, y1, x2, y2, color, width, life]);
     const segs = 3;
     let px = x1, py = y1;
     const dx = x2 - x1, dy = y2 - y1;
@@ -97,15 +116,35 @@ export class Fx {
   }
 
   text(x: number, y: number, s: string, color = '#ffffff', size = 16, life = 0.7, vy = -55) {
+    this.rec?.([FxKind.Text, x, y, s, parseInt(color.slice(1), 16) || 0xffffff, size, life, vy]);
     if (!store.settings.numbers && size < 20) return;
     const t = this.texts[this.tc]; this.tc = (this.tc + 1) % NT;
     t.on = true; t.life = life; t.vy = vy;
     t.t.setText(s).setColor(color).setFontSize(Math.round(size * 0.72)).setPosition(x, y).setVisible(true).setAlpha(1).setScale(1.25);
   }
 
+  flash(ms: number, r: number, g: number, b: number) {
+    this.rec?.([FxKind.Flash, ms, (r << 16) | (g << 8) | b]);
+    this.scene.cameras.main.flash(ms, r, g, b);
+  }
+
   shake(mag: number) {
+    this.rec?.([FxKind.Shake, mag]);
     if (!store.settings.shake) return;
     this.shakeMag = Math.min(14, Math.max(this.shakeMag, mag));
+  }
+
+  /** Joiner: play an effect the host recorded. */
+  play(ev: FxEv) {
+    switch (ev[0]) {
+      case FxKind.Burst: this.burst(ev[1], ev[2], ev[3], ev[4], ev[5], ev[6], ev[7], ev[8], ev[9]); break;
+      case FxKind.Spark: this.spark(ev[1], ev[2], ev[3], ev[4], ev[5], ev[6], ev[7], ev[8], ev[9]); break;
+      case FxKind.Ring: this.ring(ev[1], ev[2], ev[3], ev[4], ev[5], ev[6], ev[7]); break;
+      case FxKind.Bolt: this.bolt(ev[1], ev[2], ev[3], ev[4], ev[5], ev[6], ev[7]); break;
+      case FxKind.Text: this.text(ev[1], ev[2], ev[3], '#' + ev[4].toString(16).padStart(6, '0'), ev[5], ev[6], ev[7]); break;
+      case FxKind.Shake: this.shake(ev[1]); break;
+      case FxKind.Flash: this.flash(ev[1], (ev[2] >> 16) & 255, (ev[2] >> 8) & 255, ev[2] & 255); break;
+    }
   }
 
   update(dt: number) {

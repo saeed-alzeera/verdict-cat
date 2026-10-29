@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Run, ARENA, type RunOpts } from '../game/run';
 import { ui } from '../ui/ui';
 import { GuestSession, HostSession } from '../net/coop';
+import { NetOverlay } from '../net/overlay';
 
 export class GameScene extends Phaser.Scene {
   run!: Run;
@@ -11,6 +12,7 @@ export class GameScene extends Phaser.Scene {
   opts!: RunOpts;
   zoom = 1;
   coop: HostSession | GuestSession | null = null;
+  private netOverlay: NetOverlay | null = null;
 
   constructor() { super('Game'); }
 
@@ -36,11 +38,12 @@ export class GameScene extends Phaser.Scene {
     if (mp?.role === 'host' && mp.host) this.coop = new HostSession(this.run, this, mp.host, mp.code, mp.name);
     else if (mp?.role === 'guest' && mp.guest) {
       this.coop = new GuestSession(this.run, this, mp.guest, mp);
-      this.pSpr.setVisible(false); this.pShadow.setVisible(false); // the host's mirror draws every wizard, this one included
+      this.pSpr.setVisible(false); this.pShadow.setVisible(false); // shown from the joiner's own prediction once a round is on
     }
+    if (this.coop) this.netOverlay = new NetOverlay(() => this.coop);
     this.applyZoom();
     this.scale.on('resize', this.applyZoom, this);
-    this.events.once('shutdown', () => { this.scale.off('resize', this.applyZoom, this); this.coop?.leave(); this.coop?.destroy(); this.coop = null; ui.endRun(); });
+    this.events.once('shutdown', () => { this.scale.off('resize', this.applyZoom, this); this.coop?.leave(); this.coop?.destroy(); this.coop = null; this.netOverlay?.destroy(); this.netOverlay = null; ui.endRun(); });
     cam.centerOn(this.run.player.x, this.run.player.y);
   }
 
@@ -64,8 +67,9 @@ export class GameScene extends Phaser.Scene {
     const sx = sm > 0 ? (Math.random() - 0.5) * sm * 2 : 0, sy = sm > 0 ? (Math.random() - 0.5) * sm * 2 : 0;
     const co = this.coop;
     if (co instanceof GuestSession) {
-      // a guest does not simulate: it sends its input and draws what the host mirrors
-      co.frame(dtMs / 1000, run.input, this.scale.width / this.zoom, this.scale.height / this.zoom);
+      // a joiner does not simulate the world: it predicts its own wizard, sends its input and draws what the host replicates
+      co.frame(dtMs / 1000, run.input);
+      co.drawSelf(this.pSpr, this.pShadow);
       const t = co.inFight ? co.cameraTarget() : run.player;
       cam.centerOn(Math.round(t.x + sx), Math.round(t.y + sy));
       ui.hud.update(run);

@@ -75,6 +75,7 @@ export class MPRoom extends DurableObject {
   join(name) { return this.core.join(name); }
   signal(as, key, to, kind, data) { return this.core.signal(as, key, to, kind, data); }
   poll(as, key, after, waitMs) { return this.core.poll(as, key, after, waitMs); }
+  lock(key) { return this.core.lock(key); }
   close(key) { return this.core.close(key); }
   async alarm() { await this.core.expire(); }
 }

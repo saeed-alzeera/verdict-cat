@@ -8,7 +8,7 @@ import { audio } from '../core/audio';
 import { BOSS_RES } from './rounds';
 
 interface BDef { name: string; tex: string; hp: number; r: number; sc: number; speed: number; dmg: number; color: number; attacks: string[]; xp: number }
-const BOSSES: BDef[] = [
+export const BOSSES: BDef[] = [
   { name: 'Stone Warden', tex: 'boss0', hp: 1800, r: 34, sc: 4.2, speed: 46, dmg: 16, color: 0xff8a3a, attacks: ['ring', 'slam', 'charge', 'summon'], xp: 80 },
   { name: 'Plague Matron', tex: 'boss1', hp: 3600, r: 36, sc: 4.2, speed: 42, dmg: 18, color: 0x7dff4a, attacks: ['aimed', 'pools', 'summon', 'spiral'], xp: 140 },
   { name: 'Storm Colossus', tex: 'boss2', hp: 6000, r: 38, sc: 4.4, speed: 50, dmg: 20, color: 0xfff35e, attacks: ['lines', 'spiral', 'ring', 'charge'], xp: 220 },
@@ -41,7 +41,7 @@ export function spawnBoss(run: Run, kind: number) {
   audio.play('boss');
   run.fx.shake(8);
   run.fx.ring(x, y, d.color, 20, 300, 0.7);
-  run.scene.cameras.main.flash(300, 80, 20, 20);
+  run.fx.flash(300, 80, 20, 20);
 }
 
 export function updateBoss(run: Run, e: Enemy, dt: number, mul: number, dist: number, nx: number, ny: number) {

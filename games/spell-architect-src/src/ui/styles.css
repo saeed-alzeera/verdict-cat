@@ -353,7 +353,7 @@ button.glow, .itabs button.glow { border-color: var(--gold) !important; color: v
 .shsec { display: flex; align-items: center; justify-content: space-between; margin: 8px 0; } .shsec h4, .shopp h4 { font-size: 8px; color: var(--mut); }
 .shopp h4 { margin: 12px 0 8px; border-bottom: 3px solid var(--edge2); padding-bottom: 5px; }
 .rr { font-size: 8px !important; padding: 8px 10px !important; }
-.scards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.scards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .scard { --rc: #aaa; --c: #aaa; position: relative; padding: 12px 10px 30px; background: #1c1448; border: 4px solid var(--rc); box-shadow: 0 0 0 2px var(--ink), 0 4px 0 2px var(--ink), inset 0 0 30px color-mix(in srgb, var(--c) 14%, transparent); cursor: pointer; text-align: center; min-height: 170px; }
 .scard.aff:hover { transform: translateY(-4px); box-shadow: 0 0 0 2px var(--ink), 0 4px 0 2px var(--ink), 0 0 22px var(--rc); }
 .scard.poor { opacity: 0.6; } .scard.sold { opacity: 0.3; pointer-events: none; filter: grayscale(1); }
@@ -447,3 +447,12 @@ button.glow, .itabs button.glow { border-color: var(--gold) !important; color: v
 .hud-party .pm i { display: block; height: 6px; width: 70px; background: #2a1c3a; border: 1px solid #000; }
 .hud-party .pm i b { display: block; height: 100%; background: #5fdc7e; }
 .hud-party .pm.down { opacity: 0.5; }
+
+/* rituals */
+.hud-rit { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; max-width: 260px; }
+.hud-rit .rit { font-size: 7px; line-height: 1.7; color: #e6dcff; text-shadow: 2px 2px 0 #000; background: rgba(20,10,40,.55); border-left: 3px solid #c9a6ff; padding: 3px 6px; }
+.hud-rit .rit small { color: #b8a8e8; } .hud-rit .rit div { color: #cfc8f0; } .hud-rit .rit div.met { color: #7cf08a; } .hud-rit .rit em { color: #ffd25a; font-style: normal; }
+.ritobj { list-style: none; margin: 6px 0; padding: 0; font-size: 6px; line-height: 1.9; color: #e6dcff; text-align: left; } .ritobj li::before { content: '▸ '; color: #c9a6ff; } .ritobj li.met { color: #7cf08a; } .ritobj em { color: #ffd25a; font-style: normal; }
+.ritactive { border: 3px solid #c9a6ff; padding: 8px 10px; margin: 6px 0; background: #1c1448; font-size: 8px; line-height: 1.8; }
+.ritdones { margin: 6px 0; display: flex; flex-wrap: wrap; gap: 8px; font-size: 6px; } .ritdone.fulfilled { color: #7cf08a; } .ritdone.lapsed { color: #ff9a9a; }
+.scard.upoffer .scr { color: #9fd8ff; }

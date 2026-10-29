@@ -10,6 +10,7 @@
  *   POST /mp/rooms/:code/join            { name } -> { peerId, peerKey, hostName }
  *   POST /mp/rooms/:code/signal          { as, key, to, kind, data }
  *   GET  /mp/rooms/:code/signal?as=&key=&after=&wait=   -> { msgs, peers, closed }
+ *   POST /mp/rooms/:code/lock            { key }          (host only: no new players; existing ones may reconnect)
  *   POST /mp/rooms/:code/close           { key }          (host only)
  *
  * `as` / `to` are "host" or a peer id. The host authenticates with the
@@ -81,7 +82,7 @@ export class MPRoomCore {
     const r = this.room;
     if (!r) return null;
     const names = Object.values(r.peers).map((p) => p.name);
-    return { open: !r.closed && Object.keys(r.peers).length + 1 < MAX_PLAYERS, players: names.length + 1, max: MAX_PLAYERS, names };
+    return { open: !r.closed && !r.locked && Object.keys(r.peers).length + 1 < MAX_PLAYERS, players: names.length + 1, max: MAX_PLAYERS, names };
   }
 
   async join(name) {
@@ -89,6 +90,7 @@ export class MPRoomCore {
     const r = this.room;
     if (!r) return { error: 'No such room', status: 404 };
     if (r.closed) return { error: 'Room is closed', status: 410 };
+    if (r.locked) return { error: 'The game has already started', status: 410 };
     if (Object.keys(r.peers).length + 1 >= MAX_PLAYERS) return { error: 'Room is full', status: 409 };
     const peerId = String(r.nextId++);
     const peerKey = randHex(16);
@@ -152,6 +154,17 @@ export class MPRoomCore {
       v = this.view(as, after);
     }
     return v;
+  }
+
+  /** The game has started: no new players, but the ones already in the room can still signal (to reconnect after a drop). */
+  async lock(key) {
+    await this.load();
+    const r = this.room;
+    if (!r) return { error: 'No such room', status: 404 };
+    if (!this.authed('host', key)) return { error: 'Bad key', status: 401 };
+    r.locked = true;
+    await this.save();
+    return { ok: true };
   }
 
   async close(key) {
@@ -228,6 +241,10 @@ export async function handleMp(request, env, parts) {
     const after = Math.max(0, Number(u.searchParams.get('after')) || 0);
     const wait = Math.max(0, Number(u.searchParams.get('wait')) || 0);
     return reply(await stub.poll(u.searchParams.get('as') || '', u.searchParams.get('key') || '', after, wait));
+  }
+  if (sub === 'lock' && method === 'POST') {
+    const b = await body();
+    return reply(await stub.lock(String((b && b.key) ?? '')));
   }
   if (sub === 'close' && method === 'POST') {
     const b = await body();

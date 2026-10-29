@@ -1,4 +1,5 @@
 // Damage pipeline, status effects, elemental reactions and kill handling.
+import { ritualEvent } from './rituals';
 import { ELEMENTS, type Element } from '../data/runes';
 import { REACTION_BY_ID } from '../data/reactions';
 import { store } from '../core/save';
@@ -40,6 +41,7 @@ export function reaction(run: Run, id: string, x: number, y: number, src: Src | 
   const passive = id === 'wildfire' || id === 'plague';
   if (src && (!passive || Math.random() < 0.2)) src.sp.st.reactions++;
   run.reactionCount++;
+  ritualEvent(run, { t: 'reaction', id });
   const first = run.remote ? false : store.discoverReaction(id);
   onReaction(run, id);
   const last = run.reactTxt[id] ?? -9;
@@ -428,6 +430,7 @@ export function killEnemy(run: Run, e: Enemy, src: Src | null, el: Element) {
   e.dead = true;
   if (src) run = run.owner(src.sp); // the caster's stats, relics and rewards apply
   run.kills++;
+  ritualEvent(run, { t: 'kill', elite: e.elite && e.type !== 'boss', els: src ? src.sp.c.elements : [] });
   for (const sp of run.spells) if (sp.ultCd > 0) sp.ultCd = Math.max(0, sp.ultCd - 0.2);
   const wasBurn = e.burn > 0, wasPoison = e.poison > 0, wasFrozen = e.freeze > 0;
   const psrc = e.poisonSrc;
@@ -446,9 +449,8 @@ export function killEnemy(run: Run, e: Enemy, src: Src | null, el: Element) {
     const chance: Record<string, number> = { grunt: 0.1, swarmer: 0.05, archer: 0.16, charger: 0.16, shaman: 0.2, armored: 0.3 };
     if (e.elite) run.dropCoin(e.x, e.y, 3);
     else if (Math.random() < (chance[e.type] ?? 0.1)) run.dropCoin(e.x, e.y, 1);
-    if (e.elite) { if (Math.random() < 0.2) run.dropPickup('heal', e.x + 10, e.y); if (run.round >= 4 && Math.random() < 0.12) { const rl = rollRelics(run, 1, 'shop')[0]; if (rl) { if (run.remote) run.pushPending({ type: 'relic', options: [rl.id] }); else run.addRelic(rl.id); } } }
+    if (e.elite) { if (Math.random() < 0.2) run.dropPickup('heal', e.x + 10, e.y); if (run.round >= 2 && Math.random() < 0.3) run.dropPickup('cache', e.x - 10, e.y, true); if (run.round >= 4 && Math.random() < 0.12) { const rl = rollRelics(run, 1, 'shop')[0]; if (rl) { if (run.remote) run.pushPending({ type: 'relic', options: [rl.id] }); else run.addRelic(rl.id); } } }
     else if (Math.random() < 0.0005) run.dropPickup('heal', e.x, e.y);
-    if (Math.random() < 0.012) run.dropPickup('magnet', e.x, e.y);
   }
   onKill(run, e, run.critKill);
 

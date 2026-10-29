@@ -4,7 +4,20 @@ import Phaser from 'phaser';
 
 type Ctx = CanvasRenderingContext2D;
 
+/** Every generated texture, in creation order. This order is identical on every machine running the same build, so it doubles
+ *  as the numeric sprite id used on the wire (co-op). Phaser's own textures (e.g. one per Text object, keyed by a random UUID)
+ *  differ per machine and must never be used for that. */
+export const TEXTURE_KEYS: string[] = [];
+export const TEXTURE_ID = new Map<string, number>();
+/** A short fingerprint of the texture table; host and joiner compare it on connect so a stale cached build is refused up front. */
+export const textureHash = (): number => {
+  let h = 2166136261;
+  for (const k of TEXTURE_KEYS) for (let i = 0; i < k.length; i++) { h ^= k.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h ^ TEXTURE_KEYS.length) >>> 0;
+};
+
 function canvasTex(scene: Phaser.Scene, key: string, w: number, h: number, draw: (c: Ctx) => void, smooth = false) {
+  if (!TEXTURE_ID.has(key)) { TEXTURE_ID.set(key, TEXTURE_KEYS.length); TEXTURE_KEYS.push(key); }
   if (scene.textures.exists(key)) return;
   const t = scene.textures.createCanvas(key, w, h)!;
   const c = t.getContext();
@@ -228,9 +241,6 @@ export function generateTextures(scene: Phaser.Scene) {
   canvasTex(scene, 'chest', 14, 12, (c) => {
     px(c, '#6b3b12', 0, 3, 14, 9); px(c, '#a8641f', 1, 4, 12, 7); px(c, '#6b3b12', 0, 0, 14, 4); px(c, '#c98a35', 1, 1, 12, 3);
     px(c, '#ffd25a', 6, 4, 2, 3); px(c, '#ffd25a', 0, 6, 14, 1);
-  });
-  canvasTex(scene, 'magnet', 10, 10, (c) => {
-    px(c, '#ff4a4a', 0, 0, 3, 7); px(c, '#4a7aff', 7, 0, 3, 7); px(c, '#ddd', 0, 7, 10, 3); px(c, '#999', 3, 7, 4, 3);
   });
   canvasTex(scene, 'ebullet', 10, 10, (c) => { pixDisc(c, 5, 5, 4, '#ff2a4a'); pixDisc(c, 5, 5, 2, '#ffd0d8'); });
   canvasTex(scene, 'shard', 8, 8, (c) => { c.fillStyle = '#fff'; c.beginPath(); c.moveTo(0, 4); c.lineTo(8, 0); c.lineTo(8, 8); c.closePath(); c.fill(); });

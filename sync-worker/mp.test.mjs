@@ -73,6 +73,21 @@ test('room fills up at the player cap and can be closed by the host only', async
   assert.equal((await call(env, 'POST', `/mp/rooms/${code}/join`, { name: 'x' })).status, 410);
 });
 
+test('a locked room refuses newcomers but lets existing players keep signalling', async () => {
+  const env = fakeEnv();
+  const { code, hostKey } = (await call(env, 'POST', '/mp/rooms')).body;
+  const a = (await call(env, 'POST', `/mp/rooms/${code}/join`, { name: 'A' })).body;
+  assert.equal((await call(env, 'POST', `/mp/rooms/${code}/lock`, { key: 'wrong' })).status, 401);
+  assert.equal((await call(env, 'POST', `/mp/rooms/${code}/lock`, { key: hostKey })).status, 200);
+  assert.equal((await call(env, 'GET', `/mp/rooms/${code}`)).body.open, false);
+  assert.equal((await call(env, 'POST', `/mp/rooms/${code}/join`, { name: 'late' })).status, 410);
+  // the player who was already in can still send an offer (a reconnect) and the host receives it
+  assert.equal((await call(env, 'POST', `/mp/rooms/${code}/signal`, { as: a.peerId, key: a.peerKey, to: 'host', kind: 'offer', data: 'again' })).status, 200);
+  const r = await call(env, 'GET', `/mp/rooms/${code}/signal?as=host&key=${hostKey}&after=0`);
+  assert.equal(r.body.msgs.length, 1);
+  assert.equal(r.body.closed, false, 'a locked room is not a closed room');
+});
+
 test('long-poll wakes as soon as something happens, and times out otherwise', async () => {
   const env = fakeEnv();
   const { code, hostKey } = (await call(env, 'POST', '/mp/rooms')).body;

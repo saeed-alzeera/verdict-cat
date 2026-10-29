@@ -102,14 +102,15 @@ export interface SEnt {
 }
 
 export interface EBullet {
-  x: number; y: number; vx: number; vy: number; r: number; dmg: number; life: number; spr: Img; dead: boolean;
+  id: number; x: number; y: number; vx: number; vy: number; r: number; dmg: number; life: number; spr: Img; dead: boolean;
 }
 
 export interface Pickup {
-  x: number; y: number; type: 'xp' | 'coin' | 'heal' | 'magnet' | 'cache'; v: number; spr: Img; fly: boolean; t: number; dead: boolean;
+  id: number; x: number; y: number; type: 'xp' | 'coin' | 'heal' | 'cache'; v: number; spr: Img; fly: boolean; t: number; dead: boolean;
 }
 
 export interface Telegraph {
+  id: number;
   shape: 'circle' | 'line' | 'ring' | 'windup';
   x: number; y: number; r: number; ang: number; len: number; w: number;
   t: number; total: number; color: number;
@@ -118,7 +119,7 @@ export interface Telegraph {
   dead: boolean;
 }
 
-export interface Zone { x: number; y: number; r: number; t: number; dmg: number; tick: number; spr: Img; dead: boolean }
+export interface Zone { id: number; x: number; y: number; r: number; t: number; dmg: number; tick: number; spr: Img; dead: boolean }
 
 export type EventType = TriggerType;
 export interface GameEvent { type: EventType; src: Src; x: number; y: number; ang: number }
@@ -127,7 +128,7 @@ export interface Player {
   x: number; y: number; vx: number; vy: number;
   hp: number; maxHp: number; speed: number; r: number;
   inv: number; hurtFlash: number; regen: number;
-  dmgMul: number; cdMul: number; crit: number; critMul: number; pickup: number;
+  dmgMul: number; cdMul: number; crit: number; critMul: number;
   level: number; xp: number; xpNeed: number;
   faceX: number; walkT: number; pullX: number; pullY: number; pullT: number;
 }

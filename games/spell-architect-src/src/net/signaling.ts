@@ -35,4 +35,5 @@ export const sendSignal = (code: string, as: string, key: string, to: string, ki
   post(`/mp/rooms/${code}/signal`, { as, key, to, kind, data });
 export const pollSignal = (code: string, as: string, key: string, after: number, waitMs: number, signal?: AbortSignal) =>
   call<PollResult>(`/mp/rooms/${code}/signal?as=${encodeURIComponent(as)}&key=${key}&after=${after}&wait=${waitMs}`, { signal });
+export const lockRoom = (code: string, key: string) => post(`/mp/rooms/${code}/lock`, { key });
 export const closeRoom = (code: string, key: string) => post(`/mp/rooms/${code}/close`, { key }).catch(() => undefined);

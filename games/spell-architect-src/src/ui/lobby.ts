@@ -53,7 +53,7 @@ export function showMultiplayer(ui: UI, prefillCode = '') {
     if (b.dataset.a === 'host') {
       busy = true; say('Creating a room...');
       try {
-        const net = new HostNet({ onPeers() {}, onOpen() {}, onClose() {}, onCtl() {}, onSnap() {}, onError() {} });
+        const net = new HostNet({ onPeers() {}, onOpen() {}, onClose() {}, onCtl() {}, onInp() {}, onError() {} });
         const code = await net.start();
         ui.closeModal(m);
         ui.startMp({ role: 'host', name, code, host: net });
@@ -64,10 +64,16 @@ export function showMultiplayer(ui: UI, prefillCode = '') {
       busy = true; say('Connecting... (this can take a few seconds)');
       const early: Record<string, unknown>[] = [];
       let welcomed: ((m: Record<string, unknown>) => void) | null = null;
-      const welcome = new Promise<Record<string, unknown>>((res) => { welcomed = res; });
+      let refused: ((e: Error) => void) | null = null;
+      const welcome = new Promise<Record<string, unknown>>((res, rej) => { welcomed = res; refused = rej; });
       const net = new GuestNet({
-        onCtl: (msg) => { if (msg.t === 'welcome' && welcomed) { welcomed(msg); welcomed = null; } else early.push(msg); },
-        onSnap() {},
+        onCtl: (msg) => {
+          if (msg.t === 'welcome' && welcomed) { welcomed(msg); welcomed = null; }
+          else if (msg.t === 'reject' && refused) { refused(new Error(String(msg.reason ?? 'The host refused the connection.'))); refused = null; }
+          else early.push(msg);
+        },
+        onSt() {},
+        onFx() {},
         onClose: () => { /* handled by the session once the game scene owns the connection */ },
       });
       try {

@@ -2,7 +2,7 @@
 // AUGMENT chips (behaviors / modifiers) and TRIGGER blocks that each launch further Forms.
 // A plain-language story of the whole spell is written beside it. Pauses the game while open.
 import {
-  RUNES, RUNE_BY_ID, ELEMENTS, FORMS, RARITY, KIND_COLOR, KIND_LABEL, runeColor, EVOLVE_COST, EVOLVED_OF, BASE_CORE_OF, ULTIMATES, MERGEABLE, mergeResult, type RuneKind, type Element,
+  RUNES, RUNE_BY_ID, ELEMENTS, FORMS, RARITY, KIND_COLOR, KIND_LABEL, runeColor, EVOLVE_COST, EVOLVED_OF, BASE_CORE_OF, ULTIMATES, MERGEABLE, mergeResult, tierUpResult, triggerLevel, type RuneKind, type Element,
 } from '../data/runes';
 import { REACTIONS } from '../data/reactions';
 import { store } from '../core/save';
@@ -144,6 +144,13 @@ class Editor {
       if (t.closest('[data-overview]')) { showSpellOverview(this.ui, this.run); return; }
       const mp = t.closest('[data-mpick]') as HTMLElement | null;
       if (mp) { this.pickMerge(mp.dataset.mpick!); this.render(); return; }
+      if (t.closest('[data-tierup]')) {
+        const [a, b] = this.mergeSel;
+        const err = a && b ? this.run.forgeTriggerUp(a, b) : 'Pick two identical triggers.';
+        if (err) this.say(err, true);
+        else { audio.play('level'); this.say('Forged into a higher-level trigger.'); this.mergeSel = []; }
+        this.render(); return;
+      }
       if (t.closest('[data-merge]')) {
         const [a, b] = this.mergeSel;
         const err = a && b ? this.run.mergeTriggers(a, b) : 'Pick two triggers of the same type.';
@@ -395,11 +402,15 @@ class Editor {
     const owned = (id: string) => { let n = run.inv[id] ?? 0; for (const s2 of run.spells) if (s2.def.root) walk(s2.def.root, (nd) => { if (nd.rune === id) n++; }); return n; };
     const mergeable = RUNES.filter((r) => r.kind === 'trigger' && r.trigger && MERGEABLE.includes(r.trigger) && (run.inv[r.id] ?? 0) > 0);
     const mres = this.mergeSel.length === 2 ? mergeResult(this.mergeSel[0], this.mergeSel[1]) : null;
-    const mergeHtml = `<div class="spname" style="margin-top:14px">MERGE TRIGGERS</div>
+    const tres = this.mergeSel.length === 2 ? tierUpResult(this.mergeSel[0], this.mergeSel[1]) : null;
+    const mergeHtml = `<div class="spname" style="margin-top:14px">FORGE TRIGGERS</div>
+      <div class="mergebox"><b>Level up:</b> two identical triggers of one level forge into one of the next level (two level 1 On Hits make an On Hit II, two IIs make a III, up to IV).
+        ${tres === null ? '' : typeof tres === 'string' ? '' : `<br>Level up result: <b style="color:#ffd25a">${tres.icon} ${tres.name}</b> (${Math.round((tres.chance ?? 1) * 100)}%)`}</div>
+      <div class="spname" style="margin-top:10px">MERGE TRIGGERS</div>
       <div class="mergebox">Combine <b>two triggers of the same type</b> from your rune pool into ONE trigger whose chance is the sum (max 80%). Two 10% On Hits become one 20% On Hit. It also frees capacity and the Form's single trigger slot.
         ${mres === null ? '<br><span class="muted">Pick two below.</span>' : typeof mres === 'string' ? `<br><span style="color:#ff9a9a">${mres}</span>` : `<br>Result: <b style="color:#ffd25a">${mres.icon} ${mres.name}</b> (cost ${mres.cost})`}</div>
-      ${mergeable.length ? `<div class="mchips">${mergeable.map((r) => { const n = this.mergeSel.filter((x) => x === r.id).length; return `<button class="mchip ${n ? 'sel' : ''}" data-mpick="${r.id}">${r.icon} ${r.name} ${Math.round((r.chance ?? 1) * 100)}% ×${run.inv[r.id]}${n ? ` (picked ${n})` : ''}</button>`; }).join('')}</div>
-      <button class="addchip" data-merge="1" ${mres && typeof mres !== 'string' ? '' : 'disabled'}>MERGE INTO ONE</button>` : '<p class="muted">You have no On Hit / On Kill / On Critical Hit triggers in your pool. Triggers placed on a spell must be removed first.</p>'}`;
+      ${mergeable.length ? `<div class="mchips">${mergeable.map((r) => { const n = this.mergeSel.filter((x) => x === r.id).length; return `<button class="mchip ${n ? 'sel' : ''}" data-mpick="${r.id}">${r.icon} ${r.name}${triggerLevel(r.id) ? ` (L${triggerLevel(r.id)})` : ''} ${Math.round((r.chance ?? 1) * 100)}% ×${run.inv[r.id]}${n ? ` (picked ${n})` : ''}</button>`; }).join('')}</div>
+      <button class="addchip" data-tierup="1" ${tres && typeof tres !== 'string' ? '' : 'disabled'}>FORGE UP A LEVEL</button> <button class="addchip" data-merge="1" ${mres && typeof mres !== 'string' ? '' : 'disabled'}>MERGE INTO ONE (add chances)</button>` : '<p class="muted">You have no On Hit / On Kill / On Critical Hit triggers in your pool. Triggers placed on a spell must be removed first.</p>'}`;
     const forgeInfo = `
       <div class="spname">FORGE</div>
       ${run.forgeReady().length ? `<div class="forgebanner">You can forge: ${run.forgeReady().map((e3) => ELEMENTS[e3].name).join(', ')}!</div>` : ''}
@@ -422,7 +433,7 @@ class Editor {
       <span>Spell power</span><b>x${pl.dmgMul.toFixed(2)}${earlyPower(run.round) > 1.001 ? ` (+${Math.round((earlyPower(run.round) - 1) * 100)}% early)` : ''}</b><span>Cooldown</span><b>x${pl.cdMul.toFixed(2)}</b>
       <span>Crit chance</span><b>${Math.round(pl.crit * 100)}%</b><span>Crit damage</span><b>x${pl.critMul.toFixed(2)}</b>
       <span>Max health</span><b>${Math.round(pl.maxHp)}</b><span>Regen</span><b>${pl.regen.toFixed(2)}/s</b>
-      <span>Move speed</span><b>${Math.round(pl.speed)}</b><span>Pickup range</span><b>x${(pl.pickup * run.mods.pickupMul).toFixed(2)}</b>
+      <span>Move speed</span><b>${Math.round(pl.speed)}</b><span>Kills</span><b>${run.kills}</b>
       <span>Level</span><b>${pl.level}</b><span>Coins</span><b>${Math.floor(run.coins)}</b></div>
       <p class="muted">Crit chance and Crit damage come from the shop's Keen Edge upgrade, level-up boosts, Lightning cores and relics. Triggers like On Critical Hit fire on crits.</p>`;
     const info = tabsHtml + (this.tab === 'spell' ? spellInfo : this.tab === 'react' ? reactInfo : this.tab === 'relics' ? `<div class="spname">RELICS</div>${rm!.html}` : this.tab === 'stats' ? statsInfo : forgeInfo);

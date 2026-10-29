@@ -6,7 +6,7 @@
 const { chromium } = require('playwright');
 const run = (P, fn, arg) => P.evaluate(fn, arg);
 (async () => {
-  const b = await chromium.launch({ args: ['--no-sandbox', '--use-gl=swiftshader', '--disable-features=WebRtcHideLocalIpsWithMdns'] });
+  const b = await chromium.launch({ args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-features=WebRtcHideLocalIpsWithMdns'] });
   const ctx = await b.newContext({ viewport: { width: 1280, height: 720 } });
   const A = await ctx.newPage(), B = await ctx.newPage();
   const errs = [];
