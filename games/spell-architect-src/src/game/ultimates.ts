@@ -85,7 +85,7 @@ export function castUltimate(run: Run, sp: ActiveSpell) {
           if (e.dead) return;
           reactDamage(run, e, dmg * 0.7, ['poison'], src);
           if (e.dead) return;
-          for (let i = 0; i < 5; i++) applyPoison(run, e, Math.max(3, dmg * 0.12), src, 8);
+          for (let i = 0; i < 5; i++) applyPoison(run, e, Math.max(2, dmg * 0.08), src, 6);
         });
       }
       for (let i = 0; i < 10; i++) {

@@ -1,4 +1,5 @@
 // DOM-based user interface: menus, HUD, level-up, mutation, pause, game over, journal, grimoire.
+import { showSpellOverview } from './overview';
 import type Phaser from 'phaser';
 import {
   RUNES, RUNE_BY_ID, RARITY, ELEMENTS, FORMS, KIND_LABEL, KIND_COLOR, runeColor,
@@ -357,6 +358,7 @@ class UI {
       <div class="btns">
         <button class="big" data-a="resume">Resume</button>
         ${run.sandbox ? '<button class="big" data-a="editor">Spell Editor</button>' : '<p class="muted">Spell editing opens between rounds.</p>'}
+        <button class="big" data-a="overview">🔮 Spell Overview</button>
         <button class="big" data-a="journal">📜 Journal</button>
         <button class="big" data-a="retry">Restart Run</button>
         <button class="big danger" data-a="quit">Quit to Menu</button>
@@ -372,6 +374,7 @@ class UI {
       if (a === 'resume') this.pop('pause');
       else if (a === 'editor') this.openEditorFromPlay();
       else if (a === 'journal') this.showJournal();
+      else if (a === 'overview') showSpellOverview(this, run);
       else if (a === 'retry') this.retry();
       else if (a === 'quit') this.quitToMenu();
     });
@@ -648,8 +651,8 @@ class UI {
   showGrimoire() {
     const kinds: RuneKind[] = ['core', 'form', 'behavior', 'trigger', 'modifier'];
     const build = () => {
-      const body = el(`<div class="grim"><div class="shardbar">◆ <b>${store.d.shards}</b> Arcane Shards · ${store.d.unlocked.filter((id) => !RUNE_BY_ID[id]?.evolved).length}/${RUNES.filter((r) => !r.evolved).length} runes unlocked</div>${kinds.map((k) => `
-        <h3 style="color:${KIND_COLOR[k]}">${KIND_LABEL[k]} Runes</h3><div class="ggrid">${RUNES.filter((r) => r.kind === k && !r.evolved).map((r) => {
+      const body = el(`<div class="grim"><div class="shardbar">◆ <b>${store.d.shards}</b> Arcane Shards · ${store.d.unlocked.filter((id) => !RUNE_BY_ID[id]?.evolved).length}/${RUNES.filter((r) => !r.evolved && !r.merged).length} runes unlocked</div>${kinds.map((k) => `
+        <h3 style="color:${KIND_COLOR[k]}">${KIND_LABEL[k]} Runes</h3><div class="ggrid">${RUNES.filter((r) => r.kind === k && !r.evolved && !r.merged).map((r) => {
           const un = store.isUnlocked(r.id);
           return `<div class="gcard ${un ? 'un' : 'lock'}" style="--c:${runeColor(r)};--rc:${RARITY[r.rarity].color}">
             <div class="gi">${r.icon}</div><div class="gb"><b>${r.name}</b><small>${RARITY[r.rarity].name} · cost ${r.cost}</small><p>${r.desc}</p></div>
@@ -674,12 +677,13 @@ class UI {
     const reacts = REACTIONS.map((r) => reactionCardHtml(r, null, j.reactions[r.id] ?? 0)).join('');
     const combos = Object.entries(j.combos).sort((a, b) => b[1].count - a[1].count);
     const comboHtml = combos.length ? combos.map(([sig, c]) => `<div class="jcard"><div class="gi">🧩</div><div><b>${c.name}</b><small>${sig}</small><small>Built ${c.count}×</small></div></div>`).join('') : '<p class="muted">No combinations recorded yet. Build a spell with 3+ runes.</p>';
-    const seen = RUNES.filter((r) => j.runes[r.id]).length;
+    const baseRunes = RUNES.filter((r) => !r.merged);
+    const seen = baseRunes.filter((r) => j.runes[r.id]).length;
     const m = this.modal('Discovery Journal', `<div class="journal">
       <h3>Elemental reactions <small>${Object.keys(j.reactions).length}/${REACTIONS.length} discovered</small></h3><p class="muted">Reactions deal BOTH damage types (split evenly), so an enemy that resists one element still takes the other. You need the listed elements somewhere in your loadout.</p><div class="jgrid">${reacts}</div>
       <h3>Spell combinations <small>${combos.length}</small></h3><div class="jgrid">${comboHtml}</div>
-      <h3>Runes encountered <small>${seen}/${RUNES.length}</small></h3>
-      <div class="jruns">${RUNES.map((r) => j.runes[r.id] ? runeChipHtml(r) : '<div class="rchip unk"><span class="ri">?</span></div>').join('')}</div>
+      <h3>Runes encountered <small>${seen}/${baseRunes.length}</small></h3>
+      <div class="jruns">${baseRunes.map((r) => j.runes[r.id] ? runeChipHtml(r) : '<div class="rchip unk"><span class="ri">?</span></div>').join('')}</div>
     </div>`, 'wide');
     this.openModal(m, 'journal');
   }

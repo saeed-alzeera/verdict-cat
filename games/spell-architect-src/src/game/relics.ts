@@ -31,11 +31,11 @@ export const RELICS: RelicDef[] = [
     desc: '+4% damage for each different element equipped across your spells (max +24%).', badge: (r) => `+${Math.min(6, r.mods.elements) * 4}%` },
   { id: 'whetstone', name: 'Whetstone', icon: '🪨', rarity: 'common', tag: 'DAMAGE', cond: 'First hit on each enemy', desc: 'The first hit on every enemy deals +30% damage.' },
   { id: 'penny', name: 'Lucky Penny', icon: '🪙', rarity: 'common', tag: 'ECONOMY', cond: 'Kill a Wet, Burning, Poisoned or Frozen enemy', desc: 'Enemies that die while Wet, Burning, Poisoned or Frozen drop +1 coin.' },
-  { id: 'thimble', name: "Healer's Thimble", icon: '🧵', rarity: 'common', tag: 'SURVIVAL', cond: 'Every 15 kills', desc: 'Heal 1 HP every 15 kills.', badge: (r) => `${st(r, 'thimble').n ?? 0}/15` },
+  { id: 'thimble', name: "Healer's Thimble", icon: '🧵', rarity: 'common', tag: 'SURVIVAL', cond: 'Every 25 kills', desc: 'Heal 1 HP every 25 kills.', badge: (r) => `${st(r, 'thimble').n ?? 0}/25` },
   { id: 'ember', name: 'Ember Heart', icon: '❤️‍🔥', rarity: 'common', tag: 'ELEMENTS', cond: 'Target is burning', desc: 'Burning enemies take +15% damage from every source.' },
   // ---- uncommon
   { id: 'purist', name: 'Arcane Purist', icon: '✦', rarity: 'uncommon', tag: 'ARCANE', cond: 'Spells with no Core', desc: 'Spells whose main Form has no Core deal +50% damage and recharge 25% faster.' },
-  { id: 'echo', name: 'Echo Chamber', icon: '🔔', rarity: 'uncommon', tag: 'TRIGGERS', cond: 'Always', desc: '+10 percentage points to every On Hit / On Kill / On Crit chance.',
+  { id: 'echo', name: 'Echo Chamber', icon: '🔔', rarity: 'uncommon', tag: 'TRIGGERS', cond: 'Always', desc: '+8 percentage points to every On Hit / On Kill / On Crit chance.',
     onEquip: (r) => r.recomputeRelics(), onUnequip: (r) => r.recomputeRelics() },
   { id: 'sock', name: 'Static Sock', icon: '🧦', rarity: 'uncommon', tag: 'TEMPO', cond: 'Every 8th cast', desc: 'Every 8th spell cast is cast a second time for free.', badge: (r) => `${st(r, 'sock').n ?? 0}/8` },
   { id: 'resin', name: 'Resin Vial', icon: '🧪', rarity: 'uncommon', tag: 'ELEMENTS', cond: 'Poisoned enemies die', desc: '+2 poison stack cap, and poisoned enemies drop +1 coin when they die.',
@@ -48,7 +48,7 @@ export const RELICS: RelicDef[] = [
   { id: 'baton', name: "Conductor's Baton", icon: '🪄', rarity: 'rare', tag: 'ELEMENTS', cond: 'Each different reaction per round', desc: 'Every different reaction you trigger this round adds +4% damage until the round ends (stacks).', badge: (r) => `+${(Object.keys(st(r, 'baton')).length) * 4}%` },
   { id: 'glove', name: "Duelist's Glove", icon: '🥊', rarity: 'rare', tag: 'TEMPO', cond: 'Critical hit', desc: 'A critical hit refunds 0.4s of that spell\'s cooldown (once per second per spell).' },
   { id: 'mirror', name: 'Mirror Shard', icon: '🪞', rarity: 'rare', tag: 'TEMPO', cond: 'Slot 1 casts', desc: 'Whenever slot 1 casts, slot 2 also casts at 50% damage.' },
-  { id: 'fang', name: 'Vampire Fang', icon: '🦷', rarity: 'rare', tag: 'SURVIVAL', cond: 'Kill with a critical hit', desc: 'Killing an enemy with a critical hit heals 2 HP (max 6 HP per round).' },
+  { id: 'fang', name: 'Vampire Fang', icon: '🦷', rarity: 'rare', tag: 'SURVIVAL', cond: 'Kill with a critical hit', desc: 'Killing an enemy with a critical hit heals 1 HP (max 3 HP per round).' },
   // ---- epic
   { id: 'metronome', name: 'Metronome', icon: '🎼', rarity: 'epic', tag: 'TEMPO', cond: 'Every cast', desc: 'Each cast shortens the NEXT slot\'s cooldown by 0.5 seconds, chaining multi-slot builds.' },
   { id: 'phoenix', name: 'Phoenix Feather', icon: '🪶', rarity: 'epic', tag: 'SURVIVAL', cond: 'Lethal damage (once per run)', desc: 'Once per run, lethal damage instead revives you at 40% health and blasts nearby enemies. The feather is consumed.', badge: (r) => (st(r, 'phoenix').used ? 'USED' : 'READY') },
@@ -78,7 +78,7 @@ export function recomputeMods(run: Run) {
   const els = new Set<string>();
   for (const sp of run.spells) if (sp.c.valid) for (const e of sp.c.elements) if (e !== 'arcane') els.add(e);
   m.elements = els.size;
-  ruleMods.triggerChanceAdd = has(run, 'echo') ? 0.1 : 0;
+  ruleMods.triggerChanceAdd = has(run, 'echo') ? 0.08 : 0;
   ruleMods.triggerChanceMul = has(run, 'dice') ? 1.5 : 1;
   ruleMods.triggerCost = has(run, 'dice') ? 1 : 0;
   m.poisonCap = has(run, 'resin') ? 2 : 0;
@@ -122,10 +122,10 @@ export function onCrit(run: Run, e: Enemy, src: Src, dmg: number) {
 
 export function onKill(run: Run, e: Enemy, crit: boolean) {
   if (!run.equipped.length) return;
-  if (has(run, 'thimble')) { const s = st(run, 'thimble'); s.n = (s.n ?? 0) + 1; if (s.n >= 15) { s.n = 0; run.heal(1); } }
+  if (has(run, 'thimble')) { const s = st(run, 'thimble'); s.n = (s.n ?? 0) + 1; if (s.n >= 25) { s.n = 0; run.heal(1); } }
   if (has(run, 'penny') && (e.wet > 0 || e.burn > 0 || e.poison > 0 || e.freeze > 0)) run.dropCoin(e.x, e.y, 1);
   if (has(run, 'resin') && e.poison > 0) run.dropCoin(e.x, e.y, 1);
-  if (has(run, 'fang') && crit) { const s = st(run, 'fang'); if ((s.n ?? 0) < 6) { s.n = (s.n ?? 0) + 2; run.heal(2); } }
+  if (has(run, 'fang') && crit) { const s = st(run, 'fang'); if ((s.n ?? 0) < 3) { s.n = (s.n ?? 0) + 1; run.heal(1); } }
 }
 
 export function onCast(run: Run, sp: ActiveSpell) {

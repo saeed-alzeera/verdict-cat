@@ -32,6 +32,16 @@ export function owned(run: Run, id: string): number {
   return n;
 }
 
+/** Live price of an offer (rune or relic) under the current relics and holdings. */
+export function offerPrice(run: Run, o: Offer): number {
+  if (o.relic) return Math.max(2, Math.round(relicPrice(RELIC_BY_ID[o.rune]) * run.mods.priceMul));
+  return runePrice(run, RUNE_BY_ID[o.rune]);
+}
+/** Re-price everything still on the shelf. Called whenever relics change (so Bargain Bell works at once) or holdings change. */
+export function refreshPrices(run: Run) {
+  for (const o of run.shop.stock) if (!o.sold && (o.relic ? RELIC_BY_ID[o.rune] : RUNE_BY_ID[o.rune])) o.price = offerPrice(run, o);
+}
+
 export function runePrice(run: Run, r: RuneDef): number {
   const base = (BASE[r.kind] ?? 3) * (r.kind === 'core' ? 1 : RMUL[r.rarity]);
   const grow = 1 + 0.05 * (run.round - 1);
@@ -75,6 +85,7 @@ export function reroll(run: Run): boolean {
   const kept = run.shop.stock.filter((o) => o.sold);
   const fresh = generateStock(run).filter((o) => !kept.some((k) => k.rune === o.rune));
   run.shop.stock = [...kept, ...fresh].slice(0, RUNE_OFFERS + 2 + kept.length);
+  refreshPrices(run);
   return true;
 }
 
@@ -90,6 +101,7 @@ export function buyOffer(run: Run, offer: Offer): string | null {
   run.shop.buysLeft--;
   if (offer.relic) run.addRelic(offer.rune);
   else run.addRune(offer.rune, 1);
+  refreshPrices(run);
   return null;
 }
 
@@ -98,12 +110,13 @@ export function sellRune(run: Run, id: string): number {
   const v = sellPrice(run, RUNE_BY_ID[id]);
   run.inv[id]--;
   run.coins += v;
+  refreshPrices(run);
   return v;
 }
 
 /* ---- always-available upgrades: capped per run, once per visit, escalating prices ---- */
 export interface Always { id: string; title: string; desc: string; icon: string; rarity: Rarity; price: number; needsSpell?: boolean; avail: boolean; note?: string }
-const CAPS: Record<string, number> = { cap: 6, power: 4, haste: 4, maxhp: 3 };
+const CAPS: Record<string, number> = { cap: 6, power: 4, haste: 4, maxhp: 3, heal: 3 };
 
 export function alwaysOffers(run: Run): Always[] {
   const b = run.buys;
@@ -117,9 +130,9 @@ export function alwaysOffers(run: Run): Always[] {
     { id: 'slot', title: `Spell Slot ${run.slots + 1}`, desc: 'Unlock another spell slot.', icon: '📜', rarity: 'rare', price: P(slotCost), avail: run.slots < 5 && visit('slot') },
     { id: 'power', title: 'Spell Power +5%', desc: 'All spells deal 5% more damage.', icon: '🔺', rarity: 'uncommon', price: P(10 * Math.pow(1.4, b.power ?? 0)), avail: left('power') > 0 && visit('power'), note: `${left('power')} left` },
     { id: 'haste', title: 'Haste -4% cooldown', desc: 'Every spell recharges 4% faster.', icon: '⏩', rarity: 'uncommon', price: P(10 * Math.pow(1.4, b.haste ?? 0)), avail: left('haste') > 0 && visit('haste'), note: `${left('haste')} left` },
-    { id: 'maxhp', title: 'Vitality +10 HP', desc: '+10 maximum health and heal 10.', icon: '❤️', rarity: 'common', price: P(6 * Math.pow(1.35, b.maxhp ?? 0)), avail: left('maxhp') > 0 && visit('maxhp'), note: `${left('maxhp')} left` },
+    { id: 'maxhp', title: 'Vitality +10 HP', desc: '+10 maximum health and heal 5.', icon: '❤️', rarity: 'common', price: P(6 * Math.pow(1.35, b.maxhp ?? 0)), avail: left('maxhp') > 0 && visit('maxhp'), note: `${left('maxhp')} left` },
     { id: 'crit', title: 'Keen Edge +4% crit', desc: 'Critical hit chance +4%.', icon: '🎯', rarity: 'uncommon', price: P(9 * Math.pow(1.4, b.crit ?? 0)), avail: (b.crit ?? 0) < 5 && visit('crit'), note: `${5 - (b.crit ?? 0)} left` },
-    { id: 'heal', title: 'Healing Draught', desc: 'Restore 40% of your maximum health.', icon: '💚', rarity: 'common', price: P(5 + run.round * 0.4), avail: run.player.hp < run.player.maxHp * 0.95 && visit('heal') },
+    { id: 'heal', title: 'Healing Draught', desc: 'Restore 20% of your maximum health.', icon: '💚', rarity: 'uncommon', price: P((8 + run.round * 0.8) * Math.pow(1.4, b.heal ?? 0)), avail: left('heal') > 0 && run.player.hp < run.player.maxHp * 0.95 && visit('heal'), note: `${left('heal')} left` },
   ];
 }
 
@@ -137,9 +150,9 @@ export function buyAlways(run: Run, id: string, spellIndex = -1): string | null 
     case 'slot': run.addSlot(); break;
     case 'power': p.dmgMul += 0.05; break;
     case 'haste': p.cdMul *= 0.96; break;
-    case 'maxhp': p.maxHp += 10; run.heal(10); break;
+    case 'maxhp': p.maxHp += 10; run.heal(5); break;
     case 'crit': p.crit += 0.04; break;
-    case 'heal': run.heal(p.maxHp * 0.4); break;
+    case 'heal': run.heal(p.maxHp * 0.2); break;
   }
   return null;
 }

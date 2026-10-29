@@ -84,11 +84,17 @@ A run is **20 rounds**. Each normal round is a 45 s survival timer (12 s in acce
 
 Reactions come from simple systemic rules, not scripted upgrades. Each reaction needs two elements that can be in **different slots** (they share puddles, clouds and statuses) and **deals both damage types, split evenly**, so a resisted type still leaves the other. Examples: *Lightning + Water puddle* electrifies it; *Fire + Poison cloud* detonates it (fire + poison damage); *Ice + Wet* flash-freezes (ice + water damage). The editor's **Reactions** tab lists every reaction, its ingredients, which ones your current loadout can trigger, and what it deals.
 
+### Crumbling floor
+
+The arena is a small 11x11 tile map. Every round a seeded share of the tiles falls away in three waves: 10% in round 1, +10% per round up to 50% from round 5 on. It resets every round (not cumulative). Doomed tiles crack and pulse red for a few seconds first. The remaining floor always stays connected. Enemies on a cracking tile run for solid ground, path around holes, and die if they are still there when it drops; you take 12% max HP and are put back on solid floor. Implemented in `src/game/arena.ts`.
+
 ### Shop and economy
 
 Enemies drop **coins** as pickups (roughly 1 per ten kills; elites pay 3; clearing a round and bosses pay a bonus) and XP is awarded directly on kill. A **Magnet** drop vacuums every pickup. After each round the **shop** is deliberately constrained: a small rerollable stock (5 runes plus 2 relics, Cores roll like any other common rune), **only 3 purchases per visit**, upgrades that are capped per run and once per visit (Capacity +2, Spell Slot, Spell Power, Haste, Vitality, Keen Edge crit), prices that climb for every copy of a rune you already own, per-rune ownership caps and a reroll cost that rises with each reroll. Runes sell for half. Level-ups give stat boosts only.
 
 ### Rarity and Triggers
+
+In the editor's **Forge / Merge** tab, two same-type triggers from your pool (On Hit, On Kill, On Critical Hit) merge into one trigger with the summed chance (max 80%): two 20% On Hits become one 40% On Hit. Trigger chance can never exceed 90% after relics.
 
 Everything except Cores has a rarity. **On Hit / On Kill / On Critical Hit** are not guaranteed: they come in tiers that fire 20% (Common), 45% (Uncommon), 60% (Rare) and 80% (Epic) of the time.
 
@@ -102,7 +108,7 @@ Every run (won, lost or abandoned) is recorded with its spells, relics, per-roun
 
 ### Evolutions and Ultimates
 
-Collect **6 copies of the same Core** (pool or equipped) and **forge** an evolved Core in the editor's **Forge** tab (the Forge tab and the round briefing glow when you can): Inferno, Glacier, Tempest, Pestilence, Tsunami, Singularity. An evolved Core gives +40% damage, a new passive, and unlocks that element's **Ultimate** on `Space` (Meteor Storm, Absolute Zero, Thunderstorm, Plague Wave, Tidal Surge, Event Horizon). Ultimates recharge over 45 s and faster with kills.
+Collect **6 copies of the same Core** (pool or equipped, including Cores in nested trigger Forms) and **forge** an evolved Core in the editor's **Forge** tab (the Forge tab and the round briefing glow when you can): Inferno, Glacier, Tempest, Pestilence, Tsunami, Singularity. An evolved Core gives +40% damage, a new passive, and unlocks that element's **Ultimate** on `Space` (Meteor Storm, Absolute Zero, Thunderstorm, Plague Wave, Tidal Surge, Event Horizon). Ultimates recharge over 45 s and faster with kills.
 
 ### Sandbox
 
@@ -135,7 +141,7 @@ src/
     fx.ts                 pooled particles / bolts / numbers / shake
   gfx/textures.ts         procedural pixel-art generation
   scenes/                 Boot, Menu backdrop, Game (rendering glue)
-  ui/                     DOM UI: menus, HUD, overlays, editor (editor.ts), styles.css
+  ui/                     DOM UI: menus, HUD, overlays, editor (editor.ts), overview.ts (spell overview pane), styles.css
 ```
 
 ### Adding a rune

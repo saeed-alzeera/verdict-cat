@@ -8,7 +8,7 @@ import type { Run } from './run';
 import { ARENA } from './run';
 import { onCast, cooldownMul } from './relics';
 import {
-  dealDamage, applyElement, applyWet, applyPoison, arc, explode, envReact, gravityImpulse, pullResist, reaction, reactDamage,
+  dealDamage, applyElement, applyWet, applyPoison, POISON_BASE_STACKS, arc, explode, envReact, gravityImpulse, pullResist, reaction, reactDamage,
 } from './combat';
 
 export const MAX_DEPTH = 4;
@@ -705,7 +705,7 @@ function updateZone(run: Run, en: SEnt, dt: number) {
   const list = run.query(en.x, en.y, R);
   if (en.silent) {
     for (const e of list) {
-      if (en.el === 'poison') { applyPoison(run, e, Math.max(1.5, en.dmg * 0.5), en.src, 5 + en.sp.mut.polStacks); dealDamage(run, e, en.dmg, 'poison', en.src, { dot: true, noTrig: true }); }
+      if (en.el === 'poison') { applyPoison(run, e, Math.max(1.2, en.dmg * 0.3), en.src, POISON_BASE_STACKS + en.sp.mut.polStacks); dealDamage(run, e, en.dmg * 0.7, 'poison', en.src, { dot: true, noTrig: true }); }
       else applyWet(run, e, en.src);
     }
     return;

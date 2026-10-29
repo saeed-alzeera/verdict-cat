@@ -1,8 +1,8 @@
 // The Run: owns all simulation state for one playthrough and advances it each frame.
 import Phaser from 'phaser';
-import { RUNES, RUNE_BY_ID, EVOLVE_COST, BASE_CORE_OF, EVOLVED_OF, ELEMENTS, type Rarity } from '../data/runes';
+import { RUNES, RUNE_BY_ID, mergeResult, EVOLVE_COST, BASE_CORE_OF, EVOLVED_OF, ELEMENTS, type Rarity } from '../data/runes';
 import { MUT_TRACKS, MUT_OPTION_BY_ID, defaultMut, type MutTrack } from '../data/mutations';
-import { compileSpell, newNode, newSpell, type SpellDef } from '../core/spell';
+import { compileSpell, newNode, newSpell, walk, type SpellDef } from '../core/spell';
 import { store } from '../core/save';
 import { audio } from '../core/audio';
 import { Fx } from './fx';
@@ -10,13 +10,14 @@ import type { ActiveSpell, EBullet, Enemy, GameEvent, Img, Pickup, Player, SEnt,
 import { updateDirector, updateEnemies, openRound } from './enemies';
 import { planFor, roundLen, isBossRound, FINAL_ROUND, ROUND_DIFF, type Plan } from './rounds';
 import { castUltimate, ULT_COOLDOWN } from './ultimates';
-import { newShop, type Shop } from './shop';
+import { newShop, refreshPrices, type Shop } from './shop';
 import { RELIC_BY_ID, RELIC_SLOTS, recomputeMods, onRoundStart, onLethal, onKill, rollRelics } from './relics';
 import { saveRunRecord, type RunRecord, type RoundRec } from '../core/analytics';
 import { ruleMods } from '../core/spell';
 import { updateCasting, updateEnts, processEvents } from './casting';
 
-export const ARENA = 1600;
+import { Arena, ARENA, tileCx, tileCy } from './arena';
+export { ARENA };
 const CELL = 64;
 
 const attuneTint = (a: string): number => {
@@ -108,6 +109,8 @@ export class Run {
   mutT = 0;
   imgPool: Img[] = [];
   telGfx: Phaser.GameObjects.Graphics;
+  floorGfx: Phaser.GameObjects.Graphics;
+  arena = new Arena();
   input = { x: 0, y: 0 };
   gemCount = 0;
   openerDone = false;
@@ -121,10 +124,11 @@ export class Run {
     this.quick = opts.quick;
     this.sandbox = !!opts.sandbox;
     this.fx = new Fx(scene);
+    this.floorGfx = scene.add.graphics().setDepth(0.5);
     this.telGfx = scene.add.graphics().setDepth(2);
     for (let i = 0; i < this.gridN * this.gridN; i++) this.grid.push([]);
     this.player = {
-      x: ARENA / 2, y: ARENA / 2, vx: 0, vy: 0, hp: 100, maxHp: 100, speed: 330, r: 10, inv: 0, hurtFlash: 0, regen: 0.05,
+      x: ARENA / 2, y: ARENA / 2, vx: 0, vy: 0, hp: 100, maxHp: 100, speed: 330, r: 10, inv: 0, hurtFlash: 0, regen: 0,
       dmgMul: 1, cdMul: 1, crit: 0.05, critMul: 1.8, pickup: 1, level: 1, xp: 0, xpNeed: this.xpFor(1),
       faceX: 1, walkT: 0, pullX: 0, pullY: 0, pullT: 0,
     };
@@ -155,6 +159,7 @@ export class Run {
       this.phase = 'prep';
       this.frozen = true; // the round briefing / editor opens first (see ui.pump)
     }
+    this.arena.reset();
     this.recalcEnemyIndex();
   }
 
@@ -190,6 +195,10 @@ export class Run {
   recompile(sp: ActiveSpell, silent = false) {
     sp.c = compileSpell(sp.def);
     this.recomputeMut(sp);
+    // Cracked Prism counts elements across the whole loadout, so keep it current whenever any spell changes
+    const els = new Set<string>();
+    for (const o of this.spells) if (o.c?.valid) for (const e of o.c.elements) if (e !== 'arcane') els.add(e);
+    this.mods.elements = els.size;
     if (sp.c.valid && sp.c.runeCount >= 3) {
       const first = store.discoverCombo(sp.c.signature, sp.c.name);
       if (first && !silent) {
@@ -222,6 +231,7 @@ export class Run {
   recomputeRelics() {
     recomputeMods(this);
     for (const sp of this.spells) this.recompile(sp, true);
+    refreshPrices(this); // Bargain Bell & co. take effect on the shelf immediately
   }
   addRelic(id: string, announce = true) {
     if (this.owned.includes(id)) return;
@@ -243,6 +253,17 @@ export class Run {
     RELIC_BY_ID[id].onUnequip?.(this);
     this.equipped.splice(i, 1);
     this.recomputeRelics();
+  }
+  /** Merge two same-type triggers from the pool into one with the summed chance. Returns an error message or null. */
+  mergeTriggers(a: string, b: string): string | null {
+    const res = mergeResult(a, b);
+    if (typeof res === 'string') return res;
+    const need: Record<string, number> = {};
+    need[a] = (need[a] ?? 0) + 1; need[b] = (need[b] ?? 0) + 1;
+    for (const [id, n] of Object.entries(need)) if ((this.inv[id] ?? 0) < n) return 'You need both triggers in your rune pool (take them out of the spell first).';
+    this.inv[a]--; this.inv[b]--;
+    this.addRune(res.id, 1);
+    return null;
   }
   forgeCost(): number { return Math.max(2, EVOLVE_COST - this.mods.forgeMinus); }
   private setCurse() { void ruleMods; }
@@ -352,7 +373,7 @@ export class Run {
   }
   dropPickup(type: 'heal' | 'magnet' | 'cache', x: number, y: number) {
     const tex = type === 'heal' ? 'heart' : type === 'magnet' ? 'magnet' : 'chest';
-    const pk: Pickup = { x, y, type, v: type === 'heal' ? 12 : 0, spr: this.img(tex, 3).setScale(type === 'cache' ? 3 : 2.4), fly: false, t: 0, dead: false };
+    const pk: Pickup = { x, y, type, v: type === 'heal' ? 6 : 0, spr: this.img(tex, 3).setScale(type === 'cache' ? 3 : 2.4), fly: false, t: 0, dead: false };
     this.pickups.push(pk);
   }
 
@@ -519,7 +540,10 @@ export class Run {
     this.spawnBudget = 36;
     const p = this.player;
 
+    this.updateArena(dt);
+
     // player movement
+    const ox = p.x, oy = p.y;
     let ix = this.input.x, iy = this.input.y;
     const il = Math.hypot(ix, iy);
     if (il > 1) { ix /= il; iy /= il; }
@@ -533,6 +557,7 @@ export class Run {
     }
     p.x = Math.max(24, Math.min(ARENA - 24, p.x));
     p.y = Math.max(24, Math.min(ARENA - 24, p.y));
+    this.arena.constrain(p, ox, oy);
     if (ix !== 0) p.faceX = ix > 0 ? 1 : -1;
     if (il > 0.1) p.walkT += dt;
     if (p.inv > 0) p.inv -= dt;
@@ -565,6 +590,40 @@ export class Run {
 
   /* ------------------------------ rounds ------------------------------ */
 
+  /** Crumbling floor: advance the schedule, announce waves, and drop whatever stands on a tile that falls. */
+  private updateArena(dt: number) {
+    const a = this.arena;
+    if (this.phase !== 'fight' || !a.active) return;
+    const r = a.update(dt);
+    if (r.warned.length) {
+      this.announce('THE FLOOR CRUMBLES', '#ff6a5a', 'Cracked red tiles are about to fall. Step off them!');
+      audio.play('warn');
+    }
+    if (r.fell.length) {
+      audio.play('boom');
+      this.fx.shake(4);
+      for (const t of r.fell) this.fx.burst(tileCx(t), tileCy(t), 0x8a7aa8, 8, 140, 0.5, 1.1);
+    }
+    const p = this.player;
+    if (!a.solid(p.x, p.y)) this.fallPlayer();
+    for (const e of this.enemies) {
+      if (e.dead || a.solid(e.x, e.y)) continue;
+      if (e.type === 'boss') { const [x, y] = a.nearestSolid(e.x, e.y); e.x = x; e.y = y; continue; }
+      this.fx.burst(e.x, e.y, 0x6a4cc0, 5, 90, 0.4, 0.8);
+      e.dead = true; this.freeImg(e.spr); this.freeImg(e.shadow); this.freeImg(e.badge);
+    }
+    for (const k of this.pickups) if (!k.dead && !a.solid(k.x, k.y)) { const [x, y] = a.nearestSolid(k.x, k.y); k.x = x; k.y = y; }
+  }
+
+  private fallPlayer() {
+    const p = this.player;
+    p.inv = 0;
+    this.hurtPlayer(Math.max(6, p.maxHp * 0.12), p.x, p.y, 'fell into the void');
+    const [x, y] = this.arena.nearestSolid(p.x, p.y);
+    p.x = x; p.y = y; p.vx = p.vy = 0; p.pullT = 0;
+    if (!this.over) p.inv = 1;
+  }
+
   /** Wipe the arena of everything transient (between rounds / sandbox reset). */
   clearField() {
     for (const e of this.enemies) { if (!e.dead) { e.dead = true; this.freeImg(e.spr); this.freeImg(e.shadow); this.freeImg(e.badge); } }
@@ -587,8 +646,9 @@ export class Run {
     this.plan = planFor(this.round, this.seed);
     const p = this.player;
     p.x = ARENA / 2; p.y = ARENA / 2; p.vx = p.vy = 0;
-    p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.05);
+    p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.02);
     p.inv = 1;
+    this.arena.start(this.round, this.seed, isBossRound(this.round) ? roundLen(false) : roundLen(this.quick), !this.sandbox);
     this.snap = { kills: this.kills, damage: this.totalDamage, taken: Object.values(this.hurtBy).reduce((a, b) => a + b, 0), spell: this.spells.map((x) => x.damage), t: this.time, coins: this.coins };
     onRoundStart(this);
     for (const sp of this.spells) sp.cd = 0.3;
@@ -641,6 +701,7 @@ export class Run {
     this.plan = planFor(this.round, this.seed);
     this.phase = 'prep';
     this.frozen = true;
+    this.arena.reset();
     this.shop = newShop(this);
     this.shopOpened = false;
   }
@@ -651,7 +712,7 @@ export class Run {
   coreCopies(el: string): number {
     const id = BASE_CORE_OF[el];
     let n = this.inv[id] ?? 0;
-    for (const sp of this.spells) if (sp.def.root) for (const c of sp.def.root.children) if (c.rune === id) n++;
+    for (const sp of this.spells) if (sp.def.root) walk(sp.def.root, (nd) => { if (nd.rune === id) n++; });
     return n;
   }
 
@@ -662,14 +723,18 @@ export class Run {
     const fromPool = Math.min(need, this.inv[id] ?? 0);
     this.inv[id] = (this.inv[id] ?? 0) - fromPool;
     need -= fromPool;
+    // then pull the rest out of equipped spells (any Form, including ones launched by triggers)
     for (const sp of this.spells) {
       if (need <= 0) break;
-      const root = sp.def.root;
-      if (root && root.children.some((c) => c.rune === id)) {
-        root.children = root.children.filter((c) => c.rune !== id);
-        need--;
-        this.recompile(sp);
-      }
+      if (!sp.def.root) continue;
+      let took = 0;
+      walk(sp.def.root, (nd) => {
+        if (need - took <= 0) return;
+        const hit = nd.children.filter((c) => c.rune === id);
+        const n = Math.min(hit.length, need - took);
+        if (n > 0) { const drop = new Set(hit.slice(0, n)); nd.children = nd.children.filter((c) => !drop.has(c)); took += n; }
+      });
+      if (took) { need -= took; this.recompile(sp); }
     }
     this.addRune(EVOLVED_OF[el], 1);
     return true;
@@ -835,6 +900,7 @@ export class Run {
   /** Sync enemy / player sprites after a tick (done each rendered frame). */
   syncSprites(playerSpr: Img, playerShadow: Img) {
     const p = this.player;
+    this.arena.draw(this.floorGfx, this.time);
     for (const e of this.enemies) {
       if (e.dead) continue;
       e.wob += 0.0;
@@ -880,6 +946,7 @@ export class Run {
 
   destroy() {
     this.telGfx.destroy();
+    this.floorGfx.destroy();
   }
 }
 

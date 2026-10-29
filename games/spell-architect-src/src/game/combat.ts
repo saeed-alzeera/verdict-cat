@@ -64,10 +64,13 @@ export function applyBurn(run: Run, e: Enemy, dps: number, src: Src | null) {
   e.burnSrc = src ?? e.burnSrc;
 }
 
-export function applyPoison(run: Run, e: Enemy, dps: number, src: Src | null, maxStacks = 5) {
+/** Poison stacks are capped lower and each extra stack adds less (see POISON_STACK_VALUE). */
+export const POISON_BASE_STACKS = 4;
+export const poisonStackValue = (stacks: number) => 1 + 0.55 * (stacks - 1);
+export function applyPoison(run: Run, e: Enemy, dps: number, src: Src | null, maxStacks = POISON_BASE_STACKS) {
   if (resMul(e, 'poison') < 0.5) return;
   e.poison = Math.min(maxStacks, e.poison + 1);
-  e.poisonT = 4.5;
+  e.poisonT = 3.5;
   e.poisonDps = Math.max(e.poisonDps, dps);
   e.poisonSrc = src ?? e.poisonSrc;
 }
@@ -156,7 +159,7 @@ export function updateStatus(run: Run, e: Enemy, dt: number) {
     }
   }
   if (e.poison > 0 && !e.dead) {
-    const d = e.poisonDps * e.poison * 0.25;
+    const d = e.poisonDps * poisonStackValue(e.poison) * 0.25;
     tot += d;
     dealDamage(run, e, d, 'poison', e.poisonSrc, { dot: true, noTrig: true });
     if (!e.dead && Math.random() < 0.25) run.fx.spark(e.x, e.y, (Math.random() - 0.5) * 30, -30, 0x7dff4a, 0.5, 0.6, -10);
@@ -265,7 +268,7 @@ export function arc(run: Run, from: Enemy | { x: number; y: number }, dmg: numbe
     if (!best.dead) {
       applyElement(run, best, dmg, el, src, true);
       if (poison > 0) {
-        applyPoison(run, best, Math.max(2, dmg * 0.3), poisonSrc ?? src);
+        applyPoison(run, best, Math.max(1.5, dmg * 0.2), poisonSrc ?? src);
         if (!best.dead) reactDamage(run, best, dmg * 0.5, ['poison'], src);
         reaction(run, 'toxicarc', best.x, best.y, src);
       }
@@ -296,7 +299,7 @@ export function applyElement(run: Run, e: Enemy, dmg: number, el: Element, src: 
     case 'lightning':
       if (!noArc && Math.random() < 0.28) arc(run, e, dmg * 0.5, 'lightning', src, 1, 140, [e]);
       break;
-    case 'poison': applyPoison(run, e, Math.max(1.5, dmg * 0.4), src, 5 + src.sp.mut.polStacks); break;
+    case 'poison': applyPoison(run, e, Math.max(1.2, dmg * 0.27), src, POISON_BASE_STACKS + src.sp.mut.polStacks); break;
     case 'water': applyWet(run, e, src); break;
     case 'gravity': {
       const px = ox ?? e.x, py = oy ?? e.y;
@@ -437,8 +440,8 @@ export function killEnemy(run: Run, e: Enemy, src: Src | null, el: Element) {
     const chance: Record<string, number> = { grunt: 0.1, swarmer: 0.05, archer: 0.16, charger: 0.16, shaman: 0.2, armored: 0.3 };
     if (e.elite) run.dropCoin(e.x, e.y, 3);
     else if (Math.random() < (chance[e.type] ?? 0.1)) run.dropCoin(e.x, e.y, 1);
-    if (e.elite) { if (Math.random() < 0.5) run.dropPickup('heal', e.x + 10, e.y); if (run.round >= 4 && Math.random() < 0.12) { const rl = rollRelics(run, 1, 'shop')[0]; if (rl) run.addRelic(rl.id); } }
-    else if (Math.random() < 0.002) run.dropPickup('heal', e.x, e.y);
+    if (e.elite) { if (Math.random() < 0.2) run.dropPickup('heal', e.x + 10, e.y); if (run.round >= 4 && Math.random() < 0.12) { const rl = rollRelics(run, 1, 'shop')[0]; if (rl) run.addRelic(rl.id); } }
+    else if (Math.random() < 0.0005) run.dropPickup('heal', e.x, e.y);
     if (Math.random() < 0.012) run.dropPickup('magnet', e.x, e.y);
   }
   onKill(run, e, run.critKill);
@@ -465,9 +468,9 @@ export function killEnemy(run: Run, e: Enemy, src: Src | null, el: Element) {
     let spread = 0;
     for (const n of run.query(e.x, e.y, r)) {
       if (n === e || n.dead) continue;
-      applyPoison(run, n, e.poisonDps, psrc, 5 + sp.mut.polStacks);
+      applyPoison(run, n, e.poisonDps * 0.7, psrc, POISON_BASE_STACKS + sp.mut.polStacks);
       spread++;
-      if (spread >= 5) break;
+      if (spread >= 3) break;
     }
     if (spread > 0) {
       sp.st.spreads += spread;

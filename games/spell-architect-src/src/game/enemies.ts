@@ -18,8 +18,11 @@ export const EDEFS: Record<Exclude<EType, 'boss'>, EDef> = {
   shaman: { tex: 'shaman', hp: 30, speed: 115, r: 10, dmg: 6, xp: 3, armor: 0, sc: 2.6 },
 };
 
-export const hpMul = (t: number) => 1 + (t / 60) * 0.45 + (t / 60) ** 2 * 0.06;
-const dmgMulT = (t: number) => 1 + (t / 60) * 0.07;
+/** Difficulty levers (raised: builds were trivially strong). HP and damage scale with the director clock; COUNT scales spawns. */
+export const HP_SCALE = 1.5;
+export const COUNT_SCALE = 1.4;
+export const hpMul = (t: number) => HP_SCALE * (1 + (t / 60) * 0.55 + (t / 60) ** 2 * 0.08);
+const dmgMulT = (t: number) => 1.25 * (1 + (t / 60) * 0.1);
 let eid = 1;
 
 function pickAff(run: Run, elite: boolean): Aff {
@@ -32,6 +35,7 @@ function pickAff(run: Run, elite: boolean): Aff {
 
 export function spawnEnemy(run: Run, type: Exclude<EType, 'boss'>, x: number, y: number, elite = false, forceAff?: Aff): Enemy {
   const d = EDEFS[type];
+  [x, y] = run.arena.fix(x, y);
   const t = run.dtime;
   const hpm = hpMul(t) * (elite ? 6 : 1) * (run.quick ? 0.55 : 1);
   let sc = d.sc * (elite ? 1.4 : 1);
@@ -57,17 +61,13 @@ export function spawnEnemy(run: Run, type: Exclude<EType, 'boss'>, x: number, y:
 }
 
 function spawnPoint(run: Run): [number, number] {
-  const w = run.viewW, h = run.viewH;
-  const R = Math.hypot(w, h) / 2 + 70;
   const p = run.player;
-  let x = p.x, y = p.y;
-  for (let i = 0; i < 8; i++) {
-    const a = Math.random() * 6.2832;
-    x = p.x + Math.cos(a) * R; y = p.y + Math.sin(a) * R;
-    x = Math.max(40, Math.min(ARENA - 40, x)); y = Math.max(40, Math.min(ARENA - 40, y));
-    if ((x - p.x) ** 2 + (y - p.y) ** 2 > 330 * 330) break;
+  // out of the player's immediate reach, on floor that is not about to crumble
+  for (let i = 0; i < 10; i++) {
+    const [x, y] = run.arena.randomSpot(p.x, p.y, 330);
+    if (!run.arena.doomed(x, y)) return [x, y];
   }
-  return [x, y];
+  return run.arena.randomSpot(p.x, p.y, 330);
 }
 
 type W = [Exclude<EType, 'boss'>, number][];
@@ -103,7 +103,7 @@ function spawnElite(run: Run) {
   const [x, y] = spawnPoint(run);
   const e = spawnEnemy(run, type, x, y, true);
   const tag = e.aff === 'neutral' ? 'Neutral' : `${ELEMENTS[e.aff].name}-attuned`;
-  run.announce('ELITE APPROACHES', '#ffd25a', `${tag} ${type}. Slay it for a healing orb and rich experience.`);
+  run.announce('ELITE APPROACHES', '#ffd25a', `${tag} ${type}. Slay it for coins and rich experience.`);
   audio.play('warn');
 }
 
@@ -112,23 +112,23 @@ export function openRound(run: Run) {
   const r = run.round;
   if (isBossRound(r)) {
     spawnBoss(run, bossKind(r));
-    for (let i = 0; i < 6; i++) { const [x, y] = spawnPoint(run); spawnEnemy(run, 'grunt', x, y); }
+    for (let i = 0; i < Math.round(6 * COUNT_SCALE); i++) { const [x, y] = spawnPoint(run); spawnEnemy(run, 'grunt', x, y); }
     return;
   }
-  const n = 3 + r;
+  const n = Math.round((3 + r) * COUNT_SCALE);
   for (let i = 0; i < n; i++) { const [x, y] = spawnPoint(run); spawnEnemy(run, i % 4 === 3 ? 'swarmer' : 'grunt', x, y); }
 }
 
 export function updateDirector(run: Run, dt: number) {
   const t = run.dtime;
   const bossOn = !!run.boss;
-  let rate = (0.95 + t * 0.0065) * (run.quick ? 2 : 1);
-  let cap = Math.min(200, 16 + t * 0.11) * (run.quick ? 1.1 : 1);
+  let rate = (0.95 + t * 0.0065) * COUNT_SCALE * (run.quick ? 2 : 1);
+  let cap = Math.min(260, (16 + t * 0.11) * COUNT_SCALE) * (run.quick ? 1.1 : 1);
   if (bossOn) { rate *= 0.15; cap = Math.min(cap * 0.5, 28); }
   run.spawnAcc += rate * dt;
   const alive = run.enemies.length;
   let guard = 0;
-  while (run.spawnAcc >= 1 && alive + guard < cap && guard < 6) { run.spawnAcc--; spawnWave(run, t); guard++; }
+  while (run.spawnAcc >= 1 && alive + guard < cap && guard < 8) { run.spawnAcc--; spawnWave(run, t); guard++; }
   if (run.spawnAcc > 3) run.spawnAcc = 3;
   if (bossOn || isBossRound(run.round)) return;
 
@@ -137,11 +137,11 @@ export function updateDirector(run: Run, dt: number) {
   const once = (id: string, at: number, fn: () => void) => { if (f >= at && !run.pieces.has(id)) { run.pieces.add(id); fn(); } };
   const r = run.round;
   if (r >= 2 && r % 2 === 0) once('swarm', 0.15, () => {
-    const n = Math.min(36, 14 + r * 2);
+    const n = Math.min(44, Math.round((14 + r * 2) * 1.2));
     const p = run.player;
     const a0 = Math.random() * 6.28;
     for (let i = 0; i < n; i++) {
-      const a = a0 + (i / n) * 6.2832, R = 420;
+      const a = a0 + (i / n) * 6.2832, R = 380;
       const x = Math.max(40, Math.min(ARENA - 40, p.x + Math.cos(a) * R)), y = Math.max(40, Math.min(ARENA - 40, p.y + Math.sin(a) * R));
       spawnEnemy(run, 'swarmer', x, y);
     }
@@ -150,12 +150,12 @@ export function updateDirector(run: Run, dt: number) {
   });
   if (r % 3 === 0) once('stampede', 0.35, () => {
     const [x, y] = spawnPoint(run);
-    const n = 3 + Math.floor(r / 3);
+    const n = Math.round((3 + Math.floor(r / 3)) * 1.3);
     for (let i = 0; i < n; i++) spawnEnemy(run, 'charger', x + (Math.random() - 0.5) * 120, y + (Math.random() - 0.5) * 120);
     run.announce('STAMPEDE', '#ff8a4a', 'Chargers incoming. Keep moving!');
     audio.play('warn');
   });
-  if (r >= 3) once('elite', 0.55, () => { const n = 1 + Math.floor(r / 8); for (let i = 0; i < n; i++) spawnElite(run); });
+  if (r >= 3) once('elite', 0.55, () => { const n = 1 + Math.floor(r / 6); for (let i = 0; i < n; i++) spawnElite(run); });
 }
 
 /* ---------------------------------- AI ---------------------------------- */
@@ -183,10 +183,19 @@ export function updateEnemies(run: Run, dt: number) {
     const dx = p.x - e.x, dy = p.y - e.y;
     const dist = Math.hypot(dx, dy) || 1;
     const nx = dx / dist, ny = dy / dist;
+    const ox = e.x, oy = e.y;
     if (run.dummy) { e.x += e.vx * dt; e.y += e.vy * dt; e.vx *= Math.pow(0.003, dt); e.vy *= Math.pow(0.003, dt); continue; }
     if (e.freeze <= 0) {
-      if (e.type === 'boss') updateBoss(run, e, dt, mul, dist, nx, ny);
-      else aiFor(run, e, dt, mul, dist, nx, ny);
+      if (run.arena.active && run.arena.doomed(e.x, e.y)) {
+        // adapt: the tile under us is cracking, so run for solid ground instead of chasing
+        const [sx, sy] = run.arena.nearestSolid(e.x, e.y);
+        step(e, sx, sy, e.speed * mul * 1.35, dt);
+        if (e.type === 'boss') updateBoss(run, e, dt, mul, dist, nx, ny);
+      } else {
+        const [gx, gy] = run.arena.goal(e.x, e.y, p.x, p.y);
+        if (e.type === 'boss') updateBoss(run, e, dt, mul, dist, nx, ny);
+        else aiFor(run, e, dt, mul, dist, nx, ny, gx, gy);
+      }
     }
     // knockback & integration
     e.x += e.vx * dt; e.y += e.vy * dt;
@@ -196,6 +205,7 @@ export function updateEnemies(run: Run, dt: number) {
     if (e.pulled <= 0 && e.type !== 'boss') separate(run, e, dt);
     e.x = Math.max(20, Math.min(ARENA - 20, e.x));
     e.y = Math.max(20, Math.min(ARENA - 20, e.y));
+    if (run.arena.active) run.arena.constrain(e, ox, oy);
     // contact damage
     if (e.contact <= 0 && e.freeze <= 0 && e.spawnT <= 0) {
       const rr = e.r + p.r;
@@ -240,12 +250,12 @@ function step(e: Enemy, tx: number, ty: number, speed: number, dt: number) {
   if (Math.abs(dx) > 2) e.face = dx > 0 ? 1 : -1;
 }
 
-function aiFor(run: Run, e: Enemy, dt: number, mul: number, dist: number, nx: number, ny: number) {
+function aiFor(run: Run, e: Enemy, dt: number, mul: number, dist: number, nx: number, ny: number, gx: number, gy: number) {
   const p = run.player;
   const sp = e.speed * mul;
   switch (e.type) {
     case 'grunt': {
-      step(e, p.x, p.y, sp, dt);
+      step(e, gx, gy, sp, dt);
       if (e.elite) {
         e.atk -= dt;
         if (e.atk <= 0 && dist < 260) {
@@ -265,7 +275,8 @@ function aiFor(run: Run, e: Enemy, dt: number, mul: number, dist: number, nx: nu
     case 'swarmer': {
       e.wob += dt * 7;
       const side = Math.sin(e.wob) * 0.7;
-      const ax = nx - ny * side, ay = ny + nx * side;
+      const gd = Math.hypot(gx - e.x, gy - e.y) || 1, gnx = (gx - e.x) / gd, gny = (gy - e.y) / gd;
+      const ax = gnx - gny * side, ay = gny + gnx * side;
       const l = Math.hypot(ax, ay) || 1;
       e.x += (ax / l) * sp * dt; e.y += (ay / l) * sp * dt;
       e.face = nx > 0 ? 1 : -1;
@@ -273,7 +284,7 @@ function aiFor(run: Run, e: Enemy, dt: number, mul: number, dist: number, nx: nu
     }
     case 'archer': {
       e.atk -= dt;
-      if (dist > 280) step(e, p.x, p.y, sp, dt);
+      if (dist > 280) step(e, gx, gy, sp, dt);
       else if (dist < 200) step(e, e.x - nx * 100, e.y - ny * 100, sp, dt);
       else { e.x += -ny * sp * 0.5 * dt * (e.id % 2 ? 1 : -1); e.y += nx * sp * 0.5 * dt * (e.id % 2 ? 1 : -1); }
       e.face = nx > 0 ? 1 : -1;
@@ -291,7 +302,7 @@ function aiFor(run: Run, e: Enemy, dt: number, mul: number, dist: number, nx: nu
     case 'charger': {
       e.atk -= dt;
       if (e.st === 0) {
-        step(e, p.x, p.y, sp, dt);
+        step(e, gx, gy, sp, dt);
         if (e.atk <= 0 && dist < 400) {
           e.st = 1;
           const ang = Math.atan2(ny, nx);
@@ -323,13 +334,13 @@ function aiFor(run: Run, e: Enemy, dt: number, mul: number, dist: number, nx: nu
       break;
     }
     case 'armored': {
-      step(e, p.x, p.y, sp, dt);
+      step(e, gx, gy, sp, dt);
       break;
     }
     case 'shaman': {
       e.atk -= dt;
       if (dist < 240) step(e, e.x - nx * 100, e.y - ny * 100, sp, dt);
-      else if (dist > 340) step(e, p.x, p.y, sp, dt);
+      else if (dist > 340) step(e, gx, gy, sp, dt);
       else { e.x += -ny * sp * 0.4 * dt; e.y += nx * sp * 0.4 * dt; }
       e.face = nx > 0 ? 1 : -1;
       if (e.atk <= 0 && e.st === 0) {
