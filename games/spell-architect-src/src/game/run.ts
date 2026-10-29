@@ -61,9 +61,8 @@ export class Run {
   capBase = 12;
   coins = 9;
   buys: Record<string, number> = {};
-  shop: Shop = { stock: [], rerolls: 0, buysLeft: 3, upBought: {} };
+  shop: Shop = { stock: [], rerolls: 0, ups: [] };
   shopOpened = true;
-  buysLeft = 3;
   seed = (Math.random() * 2147483647) | 0;
   startedAt = Date.now();
   owned: string[] = [];

@@ -1,11 +1,13 @@
 // Persistent settings + progression (localStorage, with safe fallbacks).
-import { RUNES } from '../data/runes';
+import { RUNES, RUNE_BY_ID, STARTER_RUNES } from '../data/runes';
 
 export interface Settings {
   master: number; sfx: number; music: number; muted: boolean; shake: boolean; numbers: boolean; quick: boolean;
 }
 export interface SaveData {
   v: 1;
+  /** 2 = constrained starter set (see STARTER_RUNES). Older saves are reset to it and refunded their shard purchases. */
+  unlockVer?: number;
   settings: Settings;
   shards: number;
   unlocked: string[];
@@ -19,13 +21,16 @@ export interface SaveData {
 }
 
 const KEY = 'spell-architect-save-v1';
+/** Runes that cost shards even before the starter set was trimmed (only these are refunded on migration). */
+const LEGACY_PAID = ['b_bounce', 'b_chain', 'b_orbit', 'b_pull', 'b_expand', 't_expiry', 't_crit', 'm_dup', 'm_acc', 'm_area'];
 
 function fresh(): SaveData {
   return {
     v: 1,
     settings: { master: 0.7, sfx: 0.8, music: 0.5, muted: false, shake: true, numbers: true, quick: false },
     shards: 0,
-    unlocked: RUNES.filter((r) => r.unlock === 0).map((r) => r.id),
+    unlockVer: 2,
+    unlocked: [...STARTER_RUNES],
     journal: { reactions: {}, combos: {}, runes: {} },
     stats: { runs: 0, wins: 0, bestTime: 0, kills: 0, shardsEarned: 0 },
     starter: { core: 'c_fire', form: 'f_projectile' },
@@ -48,8 +53,14 @@ function load(): SaveData {
         starter: { ...f.starter, ...(p.starter ?? {}) },
       } as SaveData;
       // make sure default unlocks always exist (new runes added in later versions)
+      if (p.unlockVer !== 2) {
+        // earlier builds started with almost everything unlocked: refund what was bought, then start from the small set
+        for (const id of d.unlocked) { const r = RUNE_BY_ID[id]; if (r && !STARTER_RUNES.includes(id) && LEGACY_PAID.includes(id)) d.shards += r.unlock; }
+        d.unlocked = [...STARTER_RUNES];
+        d.unlockVer = 2;
+      }
       d.unlocked = d.unlocked.filter((id) => RUNES.some((r) => r.id === id));
-      for (const r of RUNES) if (r.unlock === 0 && !d.unlocked.includes(r.id)) d.unlocked.push(r.id);
+      for (const id of STARTER_RUNES) if (!d.unlocked.includes(id)) d.unlocked.push(id);
       const kind = (id: string) => RUNES.find((r) => r.id === id)?.kind;
       if (d.starter.core && kind(d.starter.core) !== 'core') d.starter.core = 'c_fire';
       if (kind(d.starter.form) !== 'form') d.starter.form = 'f_projectile';
@@ -74,7 +85,7 @@ export function saveNow() {
 export const store = {
   get d() { return data; },
   get settings() { return data.settings; },
-  isUnlocked(id: string) { return data.unlocked.includes(id); },
+  isUnlocked(id: string): boolean { const t = RUNE_BY_ID[id]?.tierOf; return t ? data.unlocked.includes(t) : data.unlocked.includes(id); },
   unlock(id: string, cost: number): boolean {
     if (data.unlocked.includes(id) || data.shards < cost) return false;
     data.shards -= cost;
