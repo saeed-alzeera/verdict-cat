@@ -19,10 +19,20 @@ export const EDEFS: Record<Exclude<EType, 'boss'>, EDef> = {
 };
 
 /** Difficulty levers (raised: builds were trivially strong). HP and damage scale with the director clock; COUNT scales spawns. */
-export const HP_SCALE = 1.5;
-export const COUNT_SCALE = 1.4;
-export const hpMul = (t: number) => HP_SCALE * (1 + (t / 60) * 0.55 + (t / 60) ** 2 * 0.08);
-const dmgMulT = (t: number) => 1.25 * (1 + (t / 60) * 0.1);
+export const HP_SCALE = 1.7;
+export const DMG_SCALE = 1.3;
+export const COUNT_SCALE = 1.45;
+/** The extra toughness is phased in: none through round 3 (t < 100), full strength from round 12 (t = 550), so the first rounds are
+ *  the original curve and the player has time to build before the multipliers arrive. */
+const RAMP_FROM = 100, RAMP_LEN = 450;
+export const ramp = (t: number) => Math.max(0, Math.min(1, (t - RAMP_FROM) / RAMP_LEN));
+const lerp = (full: number, t: number) => 1 + (full - 1) * ramp(t);
+export const hpMul = (t: number) => lerp(HP_SCALE, t) * (1 + (t / 60) * 0.45 + (t / 60) ** 2 * 0.06);
+const dmgMulT = (t: number) => lerp(DMG_SCALE, t) * (1 + (t / 60) * 0.07);
+export const countScale = (t: number) => lerp(COUNT_SCALE, t);
+/** The arena is small, so the first rounds start with fewer enemies and fill in gradually (0.55x in round 1, full by round 6). */
+export const EARLY_FROM = 0.55, EARLY_T = 250;
+export const earlyDensity = (t: number) => EARLY_FROM + (1 - EARLY_FROM) * Math.min(1, Math.max(0, t / EARLY_T));
 let eid = 1;
 
 function pickAff(run: Run, elite: boolean): Aff {
@@ -61,7 +71,7 @@ export function spawnEnemy(run: Run, type: Exclude<EType, 'boss'>, x: number, y:
 }
 
 function spawnPoint(run: Run): [number, number] {
-  const p = run.player;
+  const p = run.randomPlayer().player;
   // out of the player's immediate reach, on floor that is not about to crumble
   for (let i = 0; i < 10; i++) {
     const [x, y] = run.arena.randomSpot(p.x, p.y, 330);
@@ -112,18 +122,18 @@ export function openRound(run: Run) {
   const r = run.round;
   if (isBossRound(r)) {
     spawnBoss(run, bossKind(r));
-    for (let i = 0; i < Math.round(6 * COUNT_SCALE); i++) { const [x, y] = spawnPoint(run); spawnEnemy(run, 'grunt', x, y); }
+    for (let i = 0; i < Math.round(6 * countScale(run.dtime) * earlyDensity(run.dtime)); i++) { const [x, y] = spawnPoint(run); spawnEnemy(run, 'grunt', x, y); }
     return;
   }
-  const n = Math.round((3 + r) * COUNT_SCALE);
+  const n = Math.max(3, Math.round((3 + r) * countScale(run.dtime) * earlyDensity(run.dtime)));
   for (let i = 0; i < n; i++) { const [x, y] = spawnPoint(run); spawnEnemy(run, i % 4 === 3 ? 'swarmer' : 'grunt', x, y); }
 }
 
 export function updateDirector(run: Run, dt: number) {
   const t = run.dtime;
   const bossOn = !!run.boss;
-  let rate = (0.95 + t * 0.0065) * COUNT_SCALE * (run.quick ? 2 : 1);
-  let cap = Math.min(260, (16 + t * 0.11) * COUNT_SCALE) * (run.quick ? 1.1 : 1);
+  let rate = (0.95 + t * 0.0065) * countScale(t) * earlyDensity(t) * (run.quick ? 2 : 1);
+  let cap = Math.min(260, (16 + t * 0.11) * countScale(t) * earlyDensity(t)) * (run.quick ? 1.1 : 1);
   if (bossOn) { rate *= 0.15; cap = Math.min(cap * 0.5, 28); }
   run.spawnAcc += rate * dt;
   const alive = run.enemies.length;
@@ -136,9 +146,9 @@ export function updateDirector(run: Run, dt: number) {
   const f = run.roundElapsed / roundLen(run.quick);
   const once = (id: string, at: number, fn: () => void) => { if (f >= at && !run.pieces.has(id)) { run.pieces.add(id); fn(); } };
   const r = run.round;
-  if (r >= 2 && r % 2 === 0) once('swarm', 0.15, () => {
-    const n = Math.min(44, Math.round((14 + r * 2) * 1.2));
-    const p = run.player;
+  if (r >= 4 && r % 2 === 0) once('swarm', 0.15, () => {
+    const n = Math.min(44, Math.round((8 + r * 2) * (1 + 0.2 * ramp(run.dtime))));
+    const p = run.randomPlayer().player;
     const a0 = Math.random() * 6.28;
     for (let i = 0; i < n; i++) {
       const a = a0 + (i / n) * 6.2832, R = 380;
@@ -148,25 +158,24 @@ export function updateDirector(run: Run, dt: number) {
     run.announce('SWARM', '#c26bff', 'A ring of fast enemies closes in!');
     audio.play('warn');
   });
-  if (r % 3 === 0) once('stampede', 0.35, () => {
+  if (r % 3 === 0 && r >= 6) once('stampede', 0.35, () => {
     const [x, y] = spawnPoint(run);
-    const n = Math.round((3 + Math.floor(r / 3)) * 1.3);
+    const n = Math.round((3 + Math.floor(r / 3)) * (1 + 0.3 * ramp(run.dtime)));
     for (let i = 0; i < n; i++) spawnEnemy(run, 'charger', x + (Math.random() - 0.5) * 120, y + (Math.random() - 0.5) * 120);
     run.announce('STAMPEDE', '#ff8a4a', 'Chargers incoming. Keep moving!');
     audio.play('warn');
   });
-  if (r >= 3) once('elite', 0.55, () => { const n = 1 + Math.floor(r / 6); for (let i = 0; i < n; i++) spawnElite(run); });
+  if (r >= 4) once('elite', 0.55, () => { const n = 1 + Math.floor(r / (run.dtime < 250 ? 8 : 6)); for (let i = 0; i < n; i++) spawnElite(run); });
 }
 
 /* ---------------------------------- AI ---------------------------------- */
 
-export function updateEnemies(run: Run, dt: number) {
-  const p = run.player;
-  const enemies = run.enemies;
+export function updateEnemies(world: Run, dt: number) {
+  const enemies = world.enemies;
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i];
     if (e.dead) continue;
-    updateStatus(run, e, dt);
+    updateStatus(world, e, dt);
     if (e.dead) continue;
     if (e.slowT <= 0) e.slowMul = 1;
     if (e.spawnT > 0) e.spawnT -= dt;
@@ -180,6 +189,9 @@ export function updateEnemies(run: Run, dt: number) {
       if (e.slowT > 0) mul *= e.slowMul;
       if (e.buff > 0) mul *= 1.3;
     }
+    // each enemy hunts the nearest living player; `run` is that player's context for everything below
+    const run = world.nearestPlayer(e.x, e.y) ?? world;
+    const p = run.player;
     const dx = p.x - e.x, dy = p.y - e.y;
     const dist = Math.hypot(dx, dy) || 1;
     const nx = dx / dist, ny = dy / dist;

@@ -2,7 +2,7 @@
 import type { Enemy } from './types';
 import type { Run } from './run';
 import { ARENA } from './run';
-import { hpMul, spawnEnemy } from './enemies';
+import { hpMul, ramp, spawnEnemy } from './enemies';
 import { audio } from '../core/audio';
 
 import { BOSS_RES } from './rounds';
@@ -18,7 +18,7 @@ export const BOSS_NAMES = BOSSES.map((b) => b.name);
 
 export function spawnBoss(run: Run, kind: number) {
   const d = BOSSES[kind];
-  const p = run.player;
+  const p = run.randomPlayer().player;
   const a = Math.random() * 6.28;
   const x = Math.max(80, Math.min(ARENA - 80, p.x + Math.cos(a) * 380));
   const y = Math.max(80, Math.min(ARENA - 80, p.y + Math.sin(a) * 380));
@@ -30,7 +30,7 @@ export function spawnBoss(run: Run, kind: number) {
   e.sc = d.sc; e.r = d.r; e.speed = d.speed * 1.35; e.elite = false;
   e.aff = 'neutral'; e.res = { ...BOSS_RES[kind] };
   e.maxHp = e.hp = d.hp * Math.pow(hpMul(run.dtime), 0.75) * (run.quick ? 0.8 : 1);
-  e.dmg = d.dmg * 1.25 * (1 + run.dtime / 60 * 0.05);
+  e.dmg = d.dmg * (1 + 0.25 * ramp(run.dtime)) * (1 + run.dtime / 60 * 0.05);
   e.xp = d.xp; e.armor = 2 + kind * 2; e.spawnT = 0.5;
   e.boss = {
     kind, name: d.name, phase: 0, cd: 2.2, atk: '', atkT: 0, dash: 0, dx: 0, dy: 0, spiral: 0, spiralAng: 0, pull: 0, last: '', enraged: false,
@@ -145,7 +145,7 @@ function startAttack(run: Run, e: Enemy, atk: string, ph: number) {
             run.fx.ring(tx, ty, 0xff8a3a, 10, 70, 0.35);
             run.fx.burst(tx, ty, 0xff8a3a, 12, 220, 0.5, 1.3);
             run.fx.shake(4); audio.play('boom');
-            if ((p.x - tx) ** 2 + (p.y - ty) ** 2 < (70 + p.r) ** 2) run.hurtPlayer(e.dmg * 1.3, tx, ty, `${e.boss?.name ?? 'Boss'} (slam)`);
+            for (const pr of run.world.players) if (!pr.down && (pr.player.x - tx) ** 2 + (pr.player.y - ty) ** 2 < (70 + pr.player.r) ** 2) pr.hurtPlayer(e.dmg * 1.3, tx, ty, `${e.boss?.name ?? 'Boss'} (slam)`);
           } });
         });
       }
@@ -185,10 +185,13 @@ function startAttack(run: Run, e: Enemy, atk: string, ph: number) {
           run.fx.bolt(e.x, e.y, e.x + Math.cos(a) * 1200, e.y + Math.sin(a) * 1200, d.color, 40, 0.3);
           run.fx.bolt(e.x, e.y, e.x + Math.cos(a) * 1200, e.y + Math.sin(a) * 1200, 0xffffff, 14, 0.25);
           run.fx.shake(5); audio.play('boom');
-          const rx = p.x - e.x, ry = p.y - e.y;
-          const along = rx * Math.cos(a) + ry * Math.sin(a);
-          const perp = Math.abs(-rx * Math.sin(a) + ry * Math.cos(a));
-          if (along > 0 && perp < 23 + p.r) run.hurtPlayer(e.dmg * 1.4, e.x, e.y, `${e.boss?.name ?? 'Boss'} (beam)`);
+          for (const pr of run.world.players) {
+            if (pr.down) continue;
+            const rx = pr.player.x - e.x, ry = pr.player.y - e.y;
+            const along = rx * Math.cos(a) + ry * Math.sin(a);
+            const perp = Math.abs(-rx * Math.sin(a) + ry * Math.cos(a));
+            if (along > 0 && perp < 23 + pr.player.r) pr.hurtPlayer(e.dmg * 1.4, e.x, e.y, `${e.boss?.name ?? 'Boss'} (beam)`);
+          }
         } });
       }
       break;

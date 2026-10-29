@@ -13,18 +13,24 @@ const ICON = { pending: '[ ]', in_progress: '[~]', completed: '[x]' } as const
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
-      name: 'tasks',
+      name: 'task-pane',
       description: 'Show the to-do list Claude is working through in a pane',
     })
-    void $.ui.open({ id: PANE, title: 'Tasks' })
+    // opened unasked, so a surface may hold it back (narrow window, no pane support): say so instead of failing silently
+    const opened = await $.ui.open({ id: PANE, title: 'Tasks' })
+    if (!opened.isPlaced) $.ui.toast(`Tasks pane not shown (${opened.reason}). Run /task-pane to open it.`)
 
     return next(e)
   })
 
-  on('command.run', { command: 'tasks' }, async $ => {
-    await $.ui.open({ id: PANE, title: 'Tasks' })
+  on('command.run', { command: 'task-pane' }, async $ => {
+    const opened = await $.ui.open({ id: PANE, title: 'Tasks' })
 
-    return { text: 'Tasks pane opened.' }
+    return {
+      text: opened.isPlaced
+        ? 'Tasks pane opened.'
+        : `Tasks pane is open but not drawn: ${opened.reason}`,
+    }
   })
 
   on('tool.call', { tool: 'TodoWrite' }, async ($, e, next) => {

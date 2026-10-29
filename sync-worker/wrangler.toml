@@ -10,8 +10,18 @@ compatibility_date = "2024-09-23"
 name = "STORE"
 class_name = "SyncStore"
 
+# Spell Architect co-op: one tiny Durable Object per room code, used only to
+# pass the WebRTC handshake between players (public routes under /mp/*).
+[[durable_objects.bindings]]
+name = "MP"
+class_name = "MPRoom"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["SyncStore"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["MPRoom"]
 
 # Required secret (not stored here):  wrangler secret put SYNC_KEY

@@ -84,7 +84,11 @@ class AudioSys {
     s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.02);
   }
 
+  /** Co-op host: sees every sound request (even when muted) so guests can play the same cues. */
+  tap: ((name: string) => void) | null = null;
+
   play(name: Sfx) {
+    this.tap?.(name);
     if (!this.ctx || store.settings.muted) return;
     const lim: Record<string, number> = {
       fire: 60, ice: 60, lightning: 50, poison: 80, water: 80, gravity: 100, hit: 35, kill: 30, gem: 40, hurt: 120,

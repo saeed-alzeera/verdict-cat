@@ -14,6 +14,8 @@ import { newShop, refreshPrices, type Shop } from './shop';
 import { RELIC_BY_ID, RELIC_SLOTS, recomputeMods, onRoundStart, onLethal, onKill, rollRelics } from './relics';
 import { saveRunRecord, type RunRecord, type RoundRec } from '../core/analytics';
 import { ruleMods } from '../core/spell';
+import { generateRewards } from './rewards';
+import { drawTelegraph } from './draw';
 import { updateCasting, updateEnts, processEvents } from './casting';
 
 import { Arena, ARENA, tileCx, tileCy } from './arena';
@@ -32,14 +34,54 @@ export type Pending =
   | { type: 'relic'; options: string[] }
   | { type: 'mutation'; sp: ActiveSpell; track: MutTrack };
 
-export interface RunOpts { quick: boolean; core: string; form: string; sandbox?: boolean } // core '' = no element (Arcane)
+/** Co-op plumbing handed to a Run (see net/coop.ts). */
+export interface CoopLink {
+  role: 'host' | 'guest';
+  code: string;
+  /** Host: false (with a message) while guests are not ready. Called before a round starts. */
+  beforeStart?(): string | null;
+  /** Host: a round has just started (tell the guests). */
+  onStart?(): void;
+  /** Host: the run moved back to the prep phase (send results to guests). */
+  onPrep?(): void;
+  /** Host: the run ended. */
+  onOver?(won: boolean): void;
+  /** Guest: Space pressed. Returns whether an ultimate was available. */
+  ult(): boolean;
+  /** Leave the game (guest) or end it for everyone (host). */
+  leave(): void;
+}
+export interface RunOpts { quick: boolean; core: string; form: string; sandbox?: boolean; mp?: import('../net/coop').MpOpts } // core '' = no element (Arcane)
 export interface RunSummary {
   won: boolean; time: number; level: number; kills: number; damage: number; shards: number;
   spells: { name: string; damage: number; kills: number; elements: string[] }[];
   discoveries: string[]; quick: boolean; bosses: number; reactions: number; round: number; id: string;
 }
 
+/** Per-player build handed between a guest and the host (plain JSON). */
+export interface Build {
+  spells: { def: SpellDef; mutations: string[]; tiers: Record<string, number>; st: ActiveSpell['st']; damage: number; ultCd: number }[];
+  player: Omit<Player, 'x' | 'y' | 'vx' | 'vy' | 'inv' | 'hurtFlash' | 'walkT' | 'pullX' | 'pullY' | 'pullT' | 'faceX'>;
+  owned: string[]; equipped: string[]; relicState: Record<string, Record<string, number>>;
+}
+
 export class Run {
+  /** The world (host) Run. Remote players are "shells": objects inheriting from the world that own their personal state. */
+  world: Run = this;
+  players: Run[] = [this];
+  pid = 0;
+  pname = 'You';
+  remote = false; // a shell for a remote guest (its build lives on the guest's machine)
+  down = false;
+  ownerMap = new WeakMap<object, Run>();
+  /** Set by the co-op session on the host: delivers a reward to a remote player. */
+  onRemotePending: (pr: Run, item: Pending) => void = () => {};
+  private _boss: Enemy | null = null;
+  private _sb = 36;
+  get boss(): Enemy | null { return this.world._boss; }
+  set boss(v: Enemy | null) { this.world._boss = v; }
+  get spawnBudget(): number { return this.world._sb; }
+  set spawnBudget(v: number) { this.world._sb = v; }
   fx: Fx;
   player: Player;
   enemies: Enemy[] = [];
@@ -86,7 +128,6 @@ export class Run {
   reactTxt: Record<string, number> = {};
   quick: boolean;
   spawnAcc = 0;
-  spawnBudget = 36;
   round = 1;
   roundElapsed = 0;
   phase: 'prep' | 'fight' | 'clearing' | 'sandbox' = 'prep';
@@ -96,7 +137,6 @@ export class Run {
   sandbox = false;
   god = false;
   dummy = false;
-  boss: Enemy | null = null;
   bossesKilled = 0;
   won = false;
   over = false;
@@ -112,10 +152,12 @@ export class Run {
   arena = new Arena();
   input = { x: 0, y: 0 };
   gemCount = 0;
+  boosts: string[] = []; // stat boosts gained from level-ups this run
   openerDone = false;
   viewW = 1280;
   viewH = 720;
 
+  coop: CoopLink | null = null;
   onAnnounce: (text: string, color: string, sub?: string) => void = () => {};
   onEnd: (s: RunSummary) => void = () => {};
 
@@ -162,6 +204,103 @@ export class Run {
     this.recalcEnemyIndex();
   }
 
+  /* ------------------------------ players (co-op) ------------------------------ */
+
+  /** The Run (player) that owns a spell: its caster's stats, relics and rewards apply. Solo: always this world. */
+  owner(sp: object | undefined): Run {
+    const w = this.world;
+    if (w.players.length < 2 || !sp) return w;
+    return w.ownerMap.get(sp) ?? w;
+  }
+  rebuildOwners() {
+    const w = this.world;
+    w.ownerMap = new WeakMap();
+    for (const pr of w.players) for (const sp of pr.spells) w.ownerMap.set(sp, pr);
+  }
+  alive(): Run[] { return this.world.players.filter((p) => !p.down); }
+  /** The nearest living player to a point (null when everyone is down). */
+  nearestPlayer(x: number, y: number): Run | null {
+    let best: Run | null = null, bd = Infinity;
+    for (const pr of this.world.players) {
+      if (pr.down) continue;
+      const d = (pr.player.x - x) ** 2 + (pr.player.y - y) ** 2;
+      if (d < bd) { bd = d; best = pr; }
+    }
+    return best;
+  }
+  randomPlayer(): Run {
+    const a = this.alive();
+    return a.length ? a[(Math.random() * a.length) | 0] : this.world;
+  }
+
+  /** Create a shell for a remote player: shares the world, owns its personal state (spells, stats, relics, rewards). */
+  addRemotePlayer(pid: number, name: string): Run {
+    const w = this.world;
+    const s = Object.create(w) as Run;
+    const p = this.freshPlayer();
+    Object.assign(s, {
+      pid, pname: name, remote: true, down: false,
+      player: p, spells: [] as ActiveSpell[], slots: 0, inv: {}, coins: 0, buys: {}, owned: [] as string[], equipped: [] as string[],
+      relicState: {}, inRelic: false, critKill: false, kills: 0, totalDamage: 0, reactionCount: 0, hurtBy: {}, lastHurt: '', pending: [] as Pending[],
+      boosts: [] as string[], input: { x: 0, y: 0 }, ultTrack: null, capExtra: 0,
+      mods: { elements: 0, poisonCap: 0, coinMul: 1, priceMul: 1, rerollMul: 1, rerollMinus: 0, pickupMul: 1, forgeMinus: 0 },
+    });
+    w.players.push(s);
+    return s;
+  }
+  removePlayer(pr: Run) {
+    const w = this.world;
+    const i = w.players.indexOf(pr);
+    if (i > 0) w.players.splice(i, 1);
+    pr.down = true;
+    w.rebuildOwners();
+    if (w.players.every((q) => q.down) && !w.over && w.phase === 'fight') w.finish(false);
+  }
+
+  freshPlayer(): Player {
+    return {
+      x: ARENA / 2, y: ARENA / 2, vx: 0, vy: 0, hp: 100, maxHp: 100, speed: 330, r: 10, inv: 0, hurtFlash: 0, regen: 0,
+      dmgMul: 1, cdMul: 1, crit: 0.05, critMul: 1.8, pickup: 1, level: 1, xp: 0, xpNeed: this.xpFor(1),
+      faceX: 1, walkT: 0, pullX: 0, pullY: 0, pullT: 0,
+    };
+  }
+
+  /** Everything a guest's machine needs to know to describe its character to the host. */
+  exportBuild(): Build {
+    const { x, y, vx, vy, inv, hurtFlash, walkT, pullX, pullY, pullT, faceX, ...stats } = this.player;
+    void x; void y; void vx; void vy; void inv; void hurtFlash; void walkT; void pullX; void pullY; void pullT; void faceX;
+    return {
+      spells: this.spells.map((sp) => ({ def: JSON.parse(JSON.stringify(sp.def)), mutations: [...sp.mutations], tiers: { ...sp.tiers }, st: { ...sp.st }, damage: sp.damage, ultCd: sp.ultCd })),
+      player: { ...stats }, owned: [...this.owned], equipped: [...this.equipped], relicState: JSON.parse(JSON.stringify(this.relicState)),
+    };
+  }
+
+  /** Host side: instantiate a guest's build on its shell (compiled with that guest's relic rules). */
+  applyBuild(b: Build) {
+    const w = this.world;
+    Object.assign(this.player, b.player);
+    this.owned = [...b.owned]; this.equipped = [...b.equipped];
+    this.relicState = JSON.parse(JSON.stringify(b.relicState));
+    recomputeMods(this); // sets this.mods and the global trigger rules for this player's relics
+    this.spells = b.spells.map((bs) => {
+      const def: SpellDef = JSON.parse(JSON.stringify(bs.def));
+      const sp: ActiveSpell = {
+        uid: def.uid, def, c: compileSpell(def), cd: 0.3, live: 0, mut: defaultMut(), mutations: [...bs.mutations], tiers: { ...bs.tiers },
+        st: { ...bs.st }, damage: bs.damage, ultCd: bs.ultCd, casts: 0, crits: 0,
+      };
+      this.recomputeMut(sp);
+      return sp;
+    });
+    this.slots = this.spells.length;
+    recomputeMods(w); // put the world's own trigger rules back
+    w.rebuildOwners();
+  }
+
+  /** Stats to hand back to a guest after a round (their build plus what the round changed). */
+  roundResult() {
+    return { build: this.exportBuild(), coins: this.coins, kills: this.kills, damage: Math.round(this.totalDamage), boosts: [...this.boosts] };
+  }
+
   /* ------------------------------ helpers ------------------------------ */
 
   xpFor(l: number) { return 8 + 8 * l + 0.5 * l * l; }
@@ -198,7 +337,7 @@ export class Run {
     const els = new Set<string>();
     for (const o of this.spells) if (o.c?.valid) for (const e of o.c.elements) if (e !== 'arcane') els.add(e);
     this.mods.elements = els.size;
-    if (sp.c.valid && sp.c.runeCount >= 3) {
+    if (!this.remote && sp.c.valid && sp.c.runeCount >= 3) {
       const first = store.discoverCombo(sp.c.signature, sp.c.name);
       if (first && !silent) {
         this.discoveries.push(`combo:${sp.c.signature}`);
@@ -230,7 +369,7 @@ export class Run {
   recomputeRelics() {
     recomputeMods(this);
     for (const sp of this.spells) this.recompile(sp, true);
-    refreshPrices(this); // Bargain Bell & co. take effect on the shelf immediately
+    if (!this.remote) refreshPrices(this); // Bargain Bell & co. take effect on the shelf immediately
   }
   addRelic(id: string, announce = true) {
     if (this.owned.includes(id)) return;
@@ -288,6 +427,12 @@ export class Run {
     }
     if (this.events.length > 300) return;
     this.events.push({ type, src, x, y, ang });
+  }
+
+  /** Queue a reward for this player: locally, or sent to their machine when they are a remote guest. */
+  pushPending(item: Pending) {
+    if (this.remote) this.world.onRemotePending(this, item);
+    else this.pending.push(item);
   }
 
   later(t: number, fn: () => void) { this.laters.push({ t, fn }); }
@@ -376,7 +521,10 @@ export class Run {
     this.pickups.push(pk);
   }
 
-  addXp(v: number) {
+  /** XP is shared: every player in the run levels together. */
+  addXp(v: number) { for (const pr of this.world.players) pr.gainXp(v); }
+
+  gainXp(v: number) {
     const p = this.player;
     p.xp += v * (this.quick ? 3 : 1);
     while (p.xp >= p.xpNeed) {
@@ -384,11 +532,23 @@ export class Run {
       p.level++;
       p.xpNeed = this.xpFor(p.level);
       p.dmgMul += 0.015;
-      this.pending.push({ type: 'levelup' });
+      this.applyLevelBoost();
       audio.play('level');
       this.fx.ring(p.x, p.y, 0xffe08a, 10, 160, 0.6);
       this.fx.burst(p.x, p.y, 0xffe08a, 20, 220, 0.8, 1.4);
     }
+  }
+
+  /** Level-ups give a random stat boost right away, mid-round, with no menu. */
+  applyLevelBoost() {
+    const p = this.player;
+    const opts = generateRewards(this, 'levelup', 3);
+    if (!opts.length) return;
+    const pick = opts[(Math.random() * opts.length) | 0];
+    pick.apply(this);
+    this.fx.text(p.x, p.y - 52, `LEVEL ${p.level}`, '#ffe08a', 14, 1.4);
+    this.fx.text(p.x, p.y - 70, `${pick.icon} ${pick.title}`, '#ffffff', 11, 1.6);
+    this.boosts.push(`${pick.icon} ${pick.title}`);
   }
 
   /* -------------------------- enemy projectiles etc -------------------------- */
@@ -414,7 +574,7 @@ export class Run {
 
   hurtPlayer(dmg: number, sx: number, sy: number, cause = 'enemy') {
     const p = this.player;
-    if (this.over || p.inv > 0 || this.god || this.phase === 'clearing') return;
+    if (this.over || this.down || p.inv > 0 || this.god || this.phase === 'clearing') return;
     const d = Math.max(1, Math.round(dmg * (this.quick ? 0.6 : 1)));
     p.hp -= d;
     this.hurtBy[cause] = (this.hurtBy[cause] ?? 0) + d;
@@ -430,11 +590,22 @@ export class Run {
     if (p.hp <= 0) {
       if (onLethal(this)) return;
       if (this.sandbox) { p.hp = p.maxHp; return; }
-      p.hp = 0; this.finish(false);
+      p.hp = 0; this.downPlayer();
     }
   }
 
+  /** A player ran out of health. The run ends when nobody is left standing; downed players return next round. */
+  downPlayer() {
+    const w = this.world;
+    this.down = true;
+    this.fx.burst(this.player.x, this.player.y, 0xff4a4a, 16, 220, 0.6, 1.2);
+    w.lastHurt = this.lastHurt;
+    if (w.players.length > 1) w.announce(`${this.pname.toUpperCase()} IS DOWN`, '#ff6b6b', this === w ? 'Your teammates can carry on. You return next round.' : 'They return next round.');
+    if (w.players.every((q) => q.down)) w.finish(false);
+  }
+
   onBossDeath(e: Enemy) {
+    if (this !== this.world) { this.world.onBossDeath(e); return; }
     this.boss = null;
     this.bossesKilled++;
     const kind = e.boss!.kind;
@@ -449,11 +620,18 @@ export class Run {
       this.dropGem(e.x + Math.cos(a) * 40, e.y + Math.sin(a) * 40, 6);
     }
     if (kind < 3) {
-      this.dropPickup('cache', e.x, e.y);
+      const co = this.players.length > 1; // co-op: everyone gets their own cache and relic pick, no shared chest
+      if (!co) this.dropPickup('cache', e.x, e.y);
       this.dropPickup('heal', e.x + 30, e.y);
-      if (!this.sandbox) { const opts = rollRelics(this, 3, 'boss'); if (opts.length) this.pending.push({ type: 'relic', options: opts.map((r) => r.id) }); }
+      if (!this.sandbox) {
+        for (const pr of this.players) {
+          if (co) pr.pushPending({ type: 'cache' });
+          const opts = rollRelics(pr, 3, 'boss');
+          if (opts.length) pr.pushPending({ type: 'relic', options: opts.map((r) => r.id) });
+        }
+      }
       this.announce(`${e.boss!.name.toUpperCase()} DEFEATED`, '#ffd25a', 'A Rune Cache has dropped. Collecting your spoils...');
-      this.addCoins(8 + 2 * kind);
+      for (const pr of this.players) pr.addCoins(8 + 2 * kind);
       if (!this.sandbox) this.later(1.8, () => this.endRound());
     } else if (this.sandbox) {
       this.announce('BOSS DEFEATED', '#ffd25a');
@@ -492,6 +670,7 @@ export class Run {
   }
 
   finish(won: boolean) {
+    if (this !== this.world) { this.world.finish(won); return; }
     if (this.over) return;
     this.over = true;
     this.won = won;
@@ -513,6 +692,7 @@ export class Run {
       spells: this.spells.filter((sp) => sp.c.valid).map((sp) => ({ name: sp.c.name, damage: sp.damage, kills: sp.st.kills, elements: sp.c.elements })),
       discoveries: this.discoveries, quick: this.quick, bosses: this.bossesKilled, reactions: this.reactionCount, round: this.round,
     });
+    this.coop?.onOver?.(won);
   }
 
   /* ------------------------------ main loop ------------------------------ */
@@ -531,17 +711,52 @@ export class Run {
       this.clearT -= dt;
       if (this.clearT <= 0) this.enterPrep();
     }
-    for (const sp of this.spells) if (sp.ultCd > 0) sp.ultCd -= dt;
-    if (this.ultTrack && this.time - this.ultTrack.t >= 4) {
-      if (this.equipped.includes('archive') && this.kills - this.ultTrack.kills >= 20) { this.ultTrack.sp.ultCd *= 0.5; this.fx.text(this.player.x, this.player.y - 40, 'ARCHIVE REFUND', '#ffd25a', 12, 1); }
-      this.ultTrack = null;
-    }
+    for (const pr of this.players) pr.tickUlt(dt);
     this.spawnBudget = 36;
-    const p = this.player;
 
     this.updateArena(dt);
 
-    // player movement
+    for (const pr of this.players) if (!pr.down) pr.movePlayer(dt);
+
+    this.recalcEnemyIndex();
+    if (!this.over && this.phase === 'fight') updateDirector(this, dt);
+    updateEnemies(this, dt);
+    if (!this.over && this.phase !== 'clearing') for (const pr of this.players) if (!pr.down) updateCasting(pr, dt);
+    if (this.sandbox) this.pending.length = 0;
+    updateEnts(this, dt);
+    processEvents(this);
+    this.updateBullets(dt);
+    this.updateTelegraphs(dt);
+    this.updateZones(dt);
+    this.updatePickups(dt);
+    for (let i = this.laters.length - 1; i >= 0; i--) {
+      const l = this.laters[i];
+      l.t -= dt;
+      if (l.t <= 0) { this.laters.splice(i, 1); l.fn(); }
+    }
+    this.mutT -= dt;
+    if (this.mutT <= 0) { this.mutT = 0.4; for (const pr of this.players) pr.checkMutations(); }
+    this.compact();
+    this.fx.update(dt);
+    if (this.victoryT > 0) { this.victoryT -= dt; if (this.victoryT <= 0) { this.over = false; this.finish(true); } }
+    audio.intensity = Math.min(1, this.enemies.length / 120 + (this.boss ? 0.5 : 0));
+  }
+
+  /* ------------------------------ rounds ------------------------------ */
+
+  /** Per-player ultimate cooldown and the Archive refund bookkeeping. */
+  tickUlt(dt: number) {
+    for (const sp of this.spells) if (sp.ultCd > 0) sp.ultCd -= dt;
+    const w = this.world;
+    if (this.ultTrack && w.time - this.ultTrack.t >= 4) {
+      if (this.equipped.includes('archive') && this.kills - this.ultTrack.kills >= 20) { this.ultTrack.sp.ultCd *= 0.5; this.fx.text(this.player.x, this.player.y - 40, 'ARCHIVE REFUND', '#ffd25a', 12, 1); }
+      this.ultTrack = null;
+    }
+  }
+
+  /** Move this player by its input, resolve the floor, tick timers and regen. */
+  movePlayer(dt: number) {
+    const p = this.player;
     const ox = p.x, oy = p.y;
     let ix = this.input.x, iy = this.input.y;
     const il = Math.hypot(ix, iy);
@@ -562,32 +777,7 @@ export class Run {
     if (p.inv > 0) p.inv -= dt;
     if (p.hurtFlash > 0) p.hurtFlash -= dt;
     p.hp = Math.min(p.maxHp, p.hp + p.regen * dt);
-
-    this.recalcEnemyIndex();
-    if (!this.over && this.phase === 'fight') updateDirector(this, dt);
-    updateEnemies(this, dt);
-    if (!this.over && this.phase !== 'clearing') updateCasting(this, dt);
-    if (this.sandbox) this.pending.length = 0;
-    updateEnts(this, dt);
-    processEvents(this);
-    this.updateBullets(dt);
-    this.updateTelegraphs(dt);
-    this.updateZones(dt);
-    this.updatePickups(dt);
-    for (let i = this.laters.length - 1; i >= 0; i--) {
-      const l = this.laters[i];
-      l.t -= dt;
-      if (l.t <= 0) { this.laters.splice(i, 1); l.fn(); }
-    }
-    this.mutT -= dt;
-    if (this.mutT <= 0) { this.mutT = 0.4; this.checkMutations(); }
-    this.compact();
-    this.fx.update(dt);
-    if (this.victoryT > 0) { this.victoryT -= dt; if (this.victoryT <= 0) { this.over = false; this.finish(true); } }
-    audio.intensity = Math.min(1, this.enemies.length / 120 + (this.boss ? 0.5 : 0));
   }
-
-  /* ------------------------------ rounds ------------------------------ */
 
   /** Crumbling floor: advance the schedule, announce waves, and drop whatever stands on a tile that falls. */
   private updateArena(dt: number) {
@@ -603,8 +793,7 @@ export class Run {
       this.fx.shake(4);
       for (const t of r.fell) this.fx.burst(tileCx(t), tileCy(t), 0x8a7aa8, 8, 140, 0.5, 1.1);
     }
-    const p = this.player;
-    if (!a.solid(p.x, p.y)) this.fallPlayer();
+    for (const pr of this.players) if (!pr.down && !a.solid(pr.player.x, pr.player.y)) pr.fallPlayer();
     for (const e of this.enemies) {
       if (e.dead || a.solid(e.x, e.y)) continue;
       if (e.type === 'boss') { const [x, y] = a.nearestSolid(e.x, e.y); e.x = x; e.y = y; continue; }
@@ -614,7 +803,7 @@ export class Run {
     for (const k of this.pickups) if (!k.dead && !a.solid(k.x, k.y)) { const [x, y] = a.nearestSolid(k.x, k.y); k.x = x; k.y = y; }
   }
 
-  private fallPlayer() {
+  fallPlayer() {
     const p = this.player;
     p.inv = 0;
     this.hurtPlayer(Math.max(6, p.maxHp * 0.12), p.x, p.y, 'fell into the void');
@@ -643,20 +832,29 @@ export class Run {
     this.pieces.clear();
     this.spawnAcc = 0;
     this.plan = planFor(this.round, this.seed);
-    const p = this.player;
-    p.x = ARENA / 2; p.y = ARENA / 2; p.vx = p.vy = 0;
-    p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.02);
-    p.inv = 1;
+    // everyone starts clustered at the centre; players who went down last round are back on their feet
+    this.players.forEach((pr, i) => {
+      const p = pr.player, a = (i / Math.max(1, this.players.length)) * 6.2832;
+      const off = this.players.length > 1 ? 36 : 0;
+      p.x = ARENA / 2 + Math.cos(a) * off; p.y = ARENA / 2 + Math.sin(a) * off; p.vx = p.vy = 0; p.pullT = 0;
+      if (pr.down) { pr.down = false; p.hp = Math.max(p.hp, p.maxHp * 0.35); }
+      p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.02);
+      p.inv = 1;
+      pr.coins = pr.remote ? 0 : pr.coins; // a remote shell reports the coins earned this round
+      pr.kills = pr.remote ? 0 : pr.kills; pr.totalDamage = pr.remote ? 0 : pr.totalDamage;
+      pr.boosts = pr.remote ? [] : pr.boosts;
+    });
+    this.rebuildOwners();
     this.arena.start(this.round, this.seed, isBossRound(this.round) ? roundLen(false) : roundLen(this.quick), !this.sandbox);
     this.snap = { kills: this.kills, damage: this.totalDamage, taken: Object.values(this.hurtBy).reduce((a, b) => a + b, 0), spell: this.spells.map((x) => x.damage), t: this.time, coins: this.coins };
-    onRoundStart(this);
-    for (const sp of this.spells) sp.cd = 0.3;
+    for (const pr of this.players) { onRoundStart(pr); for (const sp of pr.spells) sp.cd = 0.3; }
     this.frozen = false;
     this.dtime = (this.round - 1) * ROUND_DIFF;
     openRound(this);
     const boss = isBossRound(this.round);
     this.announce(boss ? `ROUND ${this.round}: BOSS` : `ROUND ${this.round}`, boss ? '#ff6b6b' : '#9fd8ff', boss ? 'Defeat the boss to finish the round.' : `Survive ${roundLen(this.quick)} seconds.`);
     audio.play(boss ? 'boss' : 'warn');
+    this.coop?.onStart?.();
   }
 
   private pushRoundRecord() {
@@ -672,11 +870,10 @@ export class Run {
   /** The round is won: sweep the field, collect everything, then open the prep screen. */
   endRound() {
     if (this.phase !== 'fight') return;
-    if (this.round === 1 && !this.pending.some((q) => q.type === 'levelup')) this.pending.push({ type: 'levelup' }); // always at least one reward after round 1
     this.phase = 'clearing';
     this.clearT = 1.5;
     this.pushRoundRecord();
-    this.addCoins(3 + this.round);
+    for (const pr of this.players) pr.addCoins(3 + this.round);
     for (const e of this.enemies) {
       if (e.dead) continue;
       this.fx.burst(e.x, e.y, 0xffe08a, 4, 120, 0.5, 1);
@@ -703,6 +900,7 @@ export class Run {
     this.arena.reset();
     this.shop = newShop(this);
     this.shopOpened = false;
+    this.coop?.onPrep?.();
   }
 
   /* ------------------------------ evolution & ultimates ------------------------------ */
@@ -762,7 +960,7 @@ export class Run {
     return false;
   }
 
-  private checkMutations() {
+  checkMutations() {
     if (this.pending.some((q) => q.type === 'mutation')) return;
     for (const sp of this.spells) {
       if (!sp.c.valid) continue;
@@ -771,7 +969,7 @@ export class Run {
         if (sp.tiers[tr.id]) continue;
         if (sp.st[tr.stat] >= tr.threshold) {
           sp.tiers[tr.id] = 1;
-          this.pending.push({ type: 'mutation', sp, track: tr });
+          this.pushPending({ type: 'mutation', sp, track: tr });
           return;
         }
       }
@@ -779,17 +977,21 @@ export class Run {
   }
 
   private updateBullets(dt: number) {
-    const p = this.player;
+    const alive = this.players.filter((q) => !q.down);
     for (const b of this.bullets) {
       if (b.dead) continue;
       b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
       b.spr.setPosition(b.x, b.y);
       if (b.life <= 0 || b.x < -20 || b.y < -20 || b.x > ARENA + 20 || b.y > ARENA + 20) { b.dead = true; continue; }
-      const rr = b.r + p.r * 0.8;
-      if ((b.x - p.x) ** 2 + (b.y - p.y) ** 2 < rr * rr) {
-        this.hurtPlayer(b.dmg, b.x - b.vx, b.y - b.vy, 'projectile');
-        b.dead = true;
-        this.fx.burst(b.x, b.y, 0xff4a6a, 4, 90, 0.3, 0.7);
+      for (const pr of alive) {
+        const p = pr.player;
+        const rr = b.r + p.r * 0.8;
+        if ((b.x - p.x) ** 2 + (b.y - p.y) ** 2 < rr * rr) {
+          pr.hurtPlayer(b.dmg, b.x - b.vx, b.y - b.vy, 'projectile');
+          b.dead = true;
+          this.fx.burst(b.x, b.y, 0xff4a6a, 4, 90, 0.3, 0.7);
+          break;
+        }
       }
     }
   }
@@ -805,32 +1007,11 @@ export class Run {
       }
       t.t -= dt;
       if (t.t <= 0) { t.dead = true; t.onDone(); continue; }
-      const k = 1 - t.t / t.total;
-      if (t.shape === 'line') {
-        const nx = Math.cos(t.ang), ny = Math.sin(t.ang);
-        const px = -ny, py = nx;
-        const draw = (w: number, a: number) => {
-          g.fillStyle(t.color, a);
-          g.fillPoints([
-            { x: t.x + px * w / 2, y: t.y + py * w / 2 }, { x: t.x + nx * t.len + px * w / 2, y: t.y + ny * t.len + py * w / 2 },
-            { x: t.x + nx * t.len - px * w / 2, y: t.y + ny * t.len - py * w / 2 }, { x: t.x - px * w / 2, y: t.y - py * w / 2 },
-          ], true);
-        };
-        draw(t.w, 0.1 + 0.12 * k);
-        draw(t.w * k, 0.28);
-      } else {
-        g.fillStyle(t.color, 0.08 + 0.12 * k);
-        g.fillCircle(t.x, t.y, t.r);
-        g.fillStyle(t.color, 0.2);
-        g.fillCircle(t.x, t.y, t.r * k);
-        g.lineStyle(2, t.color, 0.75);
-        g.strokeCircle(t.x, t.y, t.r);
-      }
+      drawTelegraph(g, t);
     }
   }
 
   private updateZones(dt: number) {
-    const p = this.player;
     for (const z of this.zones) {
       if (z.dead) continue;
       z.t -= dt;
@@ -839,38 +1020,43 @@ export class Run {
       z.tick -= dt;
       if (z.tick <= 0) {
         z.tick = 0.5;
-        if ((p.x - z.x) ** 2 + (p.y - z.y) ** 2 < (z.r + p.r) ** 2) this.hurtPlayer(z.dmg, z.x, z.y, 'hazard zone');
+        for (const pr of this.players) {
+          const p = pr.player;
+          if (!pr.down && (p.x - z.x) ** 2 + (p.y - z.y) ** 2 < (z.r + p.r) ** 2) pr.hurtPlayer(z.dmg, z.x, z.y, 'hazard zone');
+        }
         if (Math.random() < 0.5) this.fx.spark(z.x + (Math.random() - 0.5) * z.r, z.y + (Math.random() - 0.5) * z.r, 0, -30, 0x7dff4a, 0.6, 1);
       }
     }
   }
 
   private updatePickups(dt: number) {
-    const p = this.player;
-    const pr = 85 * p.pickup * this.mods.pickupMul;
     for (const k of this.pickups) {
       if (k.dead) continue;
       k.t += dt;
+      const pr = this.nearestPlayer(k.x, k.y) ?? this.world;
+      const p = pr.player;
+      const reach = 85 * p.pickup * pr.mods.pickupMul;
       const dx = p.x - k.x, dy = p.y - k.y;
       const d2 = dx * dx + dy * dy;
-      if (!k.fly && (k.type === 'coin' || k.type === 'heal') && d2 < pr * pr) k.fly = true;
-      if (!k.fly && (k.type === 'magnet' || k.type === 'cache') && d2 < 50 * 50) k.fly = true;
+      const can = !pr.down;
+      if (can && !k.fly && (k.type === 'coin' || k.type === 'heal') && d2 < reach * reach) k.fly = true;
+      if (can && !k.fly && (k.type === 'magnet' || k.type === 'cache') && d2 < 50 * 50) k.fly = true;
       if (k.fly) {
         const d = Math.sqrt(d2) || 1;
         const sp = Math.min(700, 260 + k.t * 500);
         k.x += (dx / d) * sp * dt; k.y += (dy / d) * sp * dt;
       }
       k.spr.setPosition(k.x, k.y + Math.sin(k.t * 4 + k.x) * 1.5);
-      if (d2 < 22 * 22) {
+      if (can && d2 < 22 * 22) {
         k.dead = true;
-        if (k.type === 'coin') { const v = k.v * this.mods.coinMul; this.coins += v; this.fx.text(p.x, p.y - 26, `+${Math.round(v * 10) / 10}`, '#ffd25a', 11, 0.5); audio.play('gem'); }
-        else if (k.type === 'heal') { this.heal(k.v); audio.play('pick'); }
+        if (k.type === 'coin') { const v = k.v * pr.mods.coinMul; pr.coins += v; this.fx.text(p.x, p.y - 26, `+${Math.round(v * 10) / 10}`, '#ffd25a', 11, 0.5); if (!pr.remote) audio.play('gem'); }
+        else if (k.type === 'heal') { pr.heal(k.v); if (!pr.remote) audio.play('pick'); }
         else if (k.type === 'magnet') {
           for (const o of this.pickups) if (o.type === 'coin' || o.type === 'heal') o.fly = true;
           this.fx.text(p.x, p.y - 30, 'MAGNET!', '#ff9a9a', 16, 0.9);
           audio.play('pick');
         } else if (k.type === 'cache') {
-          this.pending.push({ type: 'cache' });
+          pr.pushPending({ type: 'cache' });
           audio.play('pick');
         }
       }

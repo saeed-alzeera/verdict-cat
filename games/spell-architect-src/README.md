@@ -26,7 +26,7 @@ Requires Node 18+.
 | `Space` | Fire an Ultimate (needs an equipped evolved Core) |
 | Between rounds | Spell Editor opens from the round briefing (`E` in the Sandbox) |
 | `Esc` / `P` | Pause / resume / close overlays |
-| `1` `2` `3` | Pick a level-up stat boost · `1` `2` pick a mutation |
+| `1` `2` | Pick a mutation |
 | `R` or `Enter` | Retry from the game-over / victory screen |
 
 Editor: click a rune in the **Rune Pool**, then click a glowing card to place it (or drag runes onto cards, or use the dashed **+** buttons for a menu that also explains why a rune *can't* go somewhere). Drag chips and cards between cards to rearrange, drag them to the pool (or right-click / X) to remove them. Hover anything for a tooltip.
@@ -72,7 +72,7 @@ Each spell tracks its own performance (burning kills, chain jumps, enemies captu
 
 ### Rounds
 
-A run is **20 rounds**. Each normal round is a 45 s survival timer (12 s in accelerated mode); **every 5th round is a boss** (Stone Warden, Plague Matron, Storm Colossus, Void Architect) and ends when the boss falls. Between rounds the field is swept, rewards are chosen, and you get a **briefing** (enemy mix with attunements, boss resistances, tips) before you edit your spells and start the next round. Level-ups (stat boosts only) earned during a round are cashed in at its end, followed by the **shop**. Enemies have individual speeds (fast sprinters, slow brutes) and get faster in later rounds.
+A run is **20 rounds**. Each normal round is a 45 s survival timer (12 s in accelerated mode); **every 5th round is a boss** (Stone Warden, Plague Matron, Storm Colossus, Void Architect) and ends when the boss falls. Between rounds the field is swept, rewards are chosen, and you get a **briefing** (enemy mix with attunements, boss resistances, tips) before you edit your spells and start the next round. Level-ups apply a random stat boost **instantly**, mid-round, with a floating label; between rounds you get the shop.
 
 ### Attunement, resistance and Arcane
 
@@ -86,7 +86,7 @@ Reactions come from simple systemic rules, not scripted upgrades. Each reaction 
 
 ### Crumbling floor
 
-The arena is a small 11x11 tile map. Every round a seeded share of the tiles falls away in three waves: 10% in round 1, +10% per round up to 50% from round 5 on. It resets every round (not cumulative). Doomed tiles crack and pulse red for a few seconds first. The remaining floor always stays connected. Enemies on a cracking tile run for solid ground, path around holes, and die if they are still there when it drops; you take 12% max HP and are put back on solid floor. Implemented in `src/game/arena.ts`.
+The arena is a small 11x11 tile map. Every round a seeded share of the tiles falls away in three waves: 10% in round 1, 20% from round 2 on. It resets every round (not cumulative). Doomed tiles crack and pulse red for a few seconds first. The remaining floor always stays connected. Enemies on a cracking tile run for solid ground, path around holes, and die if they are still there when it drops; you take 12% max HP and are put back on solid floor. Implemented in `src/game/arena.ts`.
 
 ### Shop and economy
 
@@ -110,6 +110,12 @@ Every run (won, lost or abandoned) is recorded with its spells, relics, per-roun
 
 Collect **6 copies of the same Core** (pool or equipped, including Cores in nested trigger Forms) and **forge** an evolved Core in the editor's **Forge** tab (the Forge tab and the round briefing glow when you can): Inferno, Glacier, Tempest, Pestilence, Tsunami, Singularity. An evolved Core gives +40% damage, a new passive, and unlocks that element's **Ultimate** on `Space` (Meteor Storm, Absolute Zero, Thunderstorm, Plague Wave, Tidal Surge, Event Horizon). Ultimates recharge over 45 s and faster with kills.
 
+### Online co-op
+
+Main menu → **🌐 Online Co-op**. One player **hosts** and gets a 5-character room code (click the code on the prep screen to copy a join link such as `.../games/spell-architect/?join=ABCDE`); up to 3 friends **join**. Everyone shares one arena, one horde, one boss and one round timer, but each player keeps their own spells, runes, shop, relics, coins, stat boosts and cache/relic rewards (every player gets a boss cache and relic pick). Between rounds each player shops and edits on their own and presses **Ready**; the host starts the round once everyone is ready. XP is shared, so everyone levels together. A player at 0 health is down (spectating a teammate) and returns at the start of the next round; the run ends when everyone is down at once.
+
+How it works: connections are peer-to-peer (WebRTC data channels). The **host's computer runs the only simulation** and every guest just sends its movement and draws what the host mirrors (the host sends the visible sprites, floor tiles, telegraphs, HUD data and sound cues about 20 times a second, roughly 3-6 KB per frame). The sync worker (`sync-worker/mp.js`, public `/mp/*` routes) only hands out room codes and relays the connection handshake; no game data passes through it. A guest's character is sent to the host as plain JSON when they press Ready and is validated first; the host's copy of it (level-ups, mutation progress, relic counters) is merged back into the guest's character after every round. Limits: no joining a run already in progress, no host migration (if the host leaves, the game ends for everyone), and strict networks that block peer-to-peer traffic can't connect because there is no TURN relay. To point the game at another signaling server (for example a local `wrangler dev`), open it with `?mp=http://localhost:8787`.
+
 ### Sandbox
 
 The **Sandbox** (main menu) unlocks every rune and evolved core, gives 5 slots and huge capacity, and opens the editor any time. A side panel spawns any enemy type with any attunement (elite optional), bosses, toggles god mode and enemy dummies, clears the field, resets ultimate cooldowns and scales enemy strength.
@@ -132,7 +138,8 @@ src/
     save.ts               localStorage persistence
     audio.ts              procedural WebAudio SFX + music
   game/
-    run.ts                simulation state & main tick loop
+    run.ts                simulation state & main tick loop (one world; remote co-op players are "shell" Runs that inherit the world and own their personal state)
+    arena.ts              crumbling floor tiles, flow-field navigation
     casting.ts            casting, per-form entity simulation, trigger event executor
     combat.ts             damage pipeline, statuses, elemental reactions, kills
     enemies.ts            archetypes, AI, spawn director
@@ -141,7 +148,8 @@ src/
     fx.ts                 pooled particles / bolts / numbers / shake
   gfx/textures.ts         procedural pixel-art generation
   scenes/                 Boot, Menu backdrop, Game (rendering glue)
-  ui/                     DOM UI: menus, HUD, overlays, editor (editor.ts), overview.ts (spell overview pane), styles.css
+  net/                    Co-op: coop.ts (host and guest sessions), rtc.ts (WebRTC), mirror.ts (snapshot codec), signaling.ts
+  ui/                     DOM UI: menus, HUD, overlays, editor (editor.ts), overview.ts (spell overview pane), lobby.ts (co-op menus), styles.css
 ```
 
 ### Adding a rune
