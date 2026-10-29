@@ -651,8 +651,8 @@ class UI {
   showGrimoire() {
     const kinds: RuneKind[] = ['core', 'form', 'behavior', 'trigger', 'modifier'];
     const build = () => {
-      const body = el(`<div class="grim"><div class="shardbar">◆ <b>${store.d.shards}</b> Arcane Shards · ${store.d.unlocked.filter((id) => !RUNE_BY_ID[id]?.evolved).length}/${RUNES.filter((r) => !r.evolved && !r.merged).length} runes unlocked</div>${kinds.map((k) => `
-        <h3 style="color:${KIND_COLOR[k]}">${KIND_LABEL[k]} Runes</h3><div class="ggrid">${RUNES.filter((r) => r.kind === k && !r.evolved && !r.merged).map((r) => {
+      const body = el(`<div class="grim"><div class="shardbar">◆ <b>${store.d.shards}</b> Arcane Shards · ${store.d.unlocked.filter((id) => !RUNE_BY_ID[id]?.evolved && !RUNE_BY_ID[id]?.tierOf).length}/${RUNES.filter((r) => !r.evolved && !r.merged && !r.tierOf).length} runes unlocked</div>${kinds.map((k) => `
+        <h3 style="color:${KIND_COLOR[k]}">${KIND_LABEL[k]} Runes</h3><div class="ggrid">${RUNES.filter((r) => r.kind === k && !r.evolved && !r.merged && !r.tierOf).map((r) => {
           const un = store.isUnlocked(r.id);
           return `<div class="gcard ${un ? 'un' : 'lock'}" style="--c:${runeColor(r)};--rc:${RARITY[r.rarity].color}">
             <div class="gi">${r.icon}</div><div class="gb"><b>${r.name}</b><small>${RARITY[r.rarity].name} · cost ${r.cost}</small><p>${r.desc}</p></div>

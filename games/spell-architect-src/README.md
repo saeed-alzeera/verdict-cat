@@ -90,7 +90,7 @@ The arena is a small 11x11 tile map. Every round a seeded share of the tiles fal
 
 ### Shop and economy
 
-Enemies drop **coins** as pickups (roughly 1 per ten kills; elites pay 3; clearing a round and bosses pay a bonus) and XP is awarded directly on kill. A **Magnet** drop vacuums every pickup. After each round the **shop** is deliberately constrained: a small rerollable stock (5 runes plus 2 relics, Cores roll like any other common rune), **only 3 purchases per visit**, upgrades that are capped per run and once per visit (Capacity +2, Spell Slot, Spell Power, Haste, Vitality, Keen Edge crit), prices that climb for every copy of a rune you already own, per-rune ownership caps and a reroll cost that rises with each reroll. Runes sell for half. Level-ups give stat boosts only.
+Enemies drop **coins** as pickups (roughly 1 per ten kills; elites pay 3; clearing a round and bosses pay a bonus) and XP is awarded directly on kill. A **Magnet** drop vacuums every pickup. After each round the **shop** is deliberately small: **4 offers** (3 runes plus a relic, Cores roll like any other common rune) and **3 random permanent upgrades** picked from Capacity +2, Spell Slot, Spell Power, Haste, Vitality, Keen Edge crit and Healing Draught. A reroll refreshes both. There is no limit on purchases per visit, but upgrades are capped per run, prices climb for every copy of a rune you already own, there are per-rune ownership caps and the reroll cost rises each time. Runes sell for half. Level-ups give stat boosts only.
 
 ### Rarity and Triggers
 
@@ -116,7 +116,7 @@ The **Sandbox** (main menu) unlocks every rune and evolved core, gives 5 slots a
 
 ### Persistence
 
-Stored in `localStorage` (key `spell-architect-save-v1`): settings, **Arcane Shards**, unlocked runes, starting-spell choice, run stats and the **Discovery Journal** (reactions + spell combinations + runes seen). Spend shards in the **Grimoire** to unlock runes — progression adds variety, not raw power.
+Stored in `localStorage` (key `spell-architect-save-v1`): settings, **Arcane Shards**, unlocked runes, starting-spell choice, run stats and the **Discovery Journal** (reactions + spell combinations + runes seen). A new save starts with only six runes (Fire, Projectile, Nova, Pierce, On Hit, Grow); spend shards in the **Grimoire** to unlock the rest — progression adds variety, not raw power.
 
 ## Project layout
 

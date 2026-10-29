@@ -1,6 +1,5 @@
-// Between-round shop. Constraint-led: a small randomized stock, a limited number of purchases per visit, per-run caps on
-// upgrades, prices that climb with every copy you already own, and a rising reroll cost. You can't buy your way to a build;
-// you have to choose which three things matter this round.
+// Between-round shop. Constraint-led: a tiny randomized shelf (4 offers + 3 random permanent upgrades), per-run caps on
+// upgrades, prices that climb with every copy you already own, and a rising reroll cost. You can't buy your way to a build.
 import { RUNES, RUNE_BY_ID, RARITY, type Rarity, type RuneDef } from '../data/runes';
 import { store } from '../core/save';
 import { formsInPlay, relevance } from './rewards';
@@ -15,10 +14,12 @@ export interface Offer {
   price: number;
   sold: boolean;
 }
-export interface Shop { stock: Offer[]; rerolls: number; buysLeft: number; upBought: Record<string, boolean> }
+export interface Shop { stock: Offer[]; rerolls: number; ups: string[] }
 
-export const BUYS_PER_VISIT = 3;
-export const RUNE_OFFERS = 5;
+export const RUNE_OFFERS = 3;
+export const RELIC_OFFERS = 1;
+export const SHOP_SIZE = RUNE_OFFERS + RELIC_OFFERS; // at most 4 offers
+export const UPGRADES_SHOWN = 3;
 
 const BASE: Record<string, number> = { core: 4, form: 5, behavior: 3, trigger: 3, modifier: 3 };
 const RMUL: Record<Rarity, number> = { common: 1, uncommon: 1.5, rare: 2.2, epic: 3.4, legendary: 5 };
@@ -71,7 +72,7 @@ export function generateStock(run: Run): Offer[] {
     let x = Math.random() * tot;
     for (const r of c) { x -= weight(r); if (x <= 0) { taken.add(r.id); out.push({ id: `o${out.length}-${r.id}`, rune: r.id, price: runePrice(run, r), sold: false }); break; } }
   }
-  const rl = rollRelics(run, 2, 'shop');
+  const rl = rollRelics(run, RELIC_OFFERS, 'shop');
   for (const r of rl) out.push({ id: `r${out.length}-${r.id}`, rune: r.id, relic: true, price: Math.max(2, Math.round(relicPrice(r) * run.mods.priceMul)), sold: false });
   return out;
 }
@@ -84,21 +85,20 @@ export function reroll(run: Run): boolean {
   // keep bought items marked sold; only replace what is still on the shelf
   const kept = run.shop.stock.filter((o) => o.sold);
   const fresh = generateStock(run).filter((o) => !kept.some((k) => k.rune === o.rune));
-  run.shop.stock = [...kept, ...fresh].slice(0, RUNE_OFFERS + 2 + kept.length);
+  run.shop.stock = [...kept, ...fresh].slice(0, SHOP_SIZE);
+  run.shop.ups = pickUpgrades(run);
   refreshPrices(run);
   return true;
 }
 
-export function newShop(run: Run): Shop { return { stock: generateStock(run), rerolls: 0, buysLeft: BUYS_PER_VISIT, upBought: {} }; }
+export function newShop(run: Run): Shop { return { stock: generateStock(run), rerolls: 0, ups: pickUpgrades(run) }; }
 
 export function buyOffer(run: Run, offer: Offer): string | null {
   if (offer.sold) return 'Already sold.';
-  if (run.shop.buysLeft <= 0) return 'No purchases left this visit. Choose wisely next round.';
   if (run.coins < offer.price) return `Not enough coins (need ${offer.price}).`;
   if (offer.relic && !RELIC_BY_ID[offer.rune]) return 'Unknown relic.';
   run.coins -= offer.price;
   offer.sold = true;
-  run.shop.buysLeft--;
   if (offer.relic) run.addRelic(offer.rune);
   else run.addRune(offer.rune, 1);
   refreshPrices(run);
@@ -114,14 +114,15 @@ export function sellRune(run: Run, id: string): number {
   return v;
 }
 
-/* ---- always-available upgrades: capped per run, once per visit, escalating prices ---- */
+/* ---- always-available upgrades: capped per run, escalating prices; 3 random ones are shown each visit ---- */
 export interface Always { id: string; title: string; desc: string; icon: string; rarity: Rarity; price: number; needsSpell?: boolean; avail: boolean; note?: string }
 const CAPS: Record<string, number> = { cap: 6, power: 4, haste: 4, maxhp: 3, heal: 3 };
+const UPGRADE_IDS = ['cap', 'slot', 'power', 'haste', 'maxhp', 'crit', 'heal'];
 
 export function alwaysOffers(run: Run): Always[] {
   const b = run.buys;
   const left = (id: string) => (CAPS[id] ?? 99) - (b[id] ?? 0);
-  const visit = (id: string) => !run.shop.upBought[id];
+  const visit = (_id: string) => true; // no per-visit limit; per-run caps still apply
   const pm = run.mods.priceMul;
   const P = (n: number) => Math.max(2, Math.round(n * pm));
   const slotCost = run.slots === 3 ? 18 : 30;
@@ -136,6 +137,13 @@ export function alwaysOffers(run: Run): Always[] {
   ];
 }
 
+/** Which permanent upgrades are on offer this visit: a random few of those still available (re-rolled with the stock). */
+export function pickUpgrades(run: Run): string[] {
+  const live = alwaysOffers(run).filter((a) => a.avail && UPGRADE_IDS.includes(a.id)).map((a) => a.id);
+  for (let i = live.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [live[i], live[j]] = [live[j], live[i]]; }
+  return live.slice(0, UPGRADES_SHOWN);
+}
+
 export function buyAlways(run: Run, id: string, spellIndex = -1): string | null {
   const o = alwaysOffers(run).find((x) => x.id === id);
   if (!o || !o.avail) return 'Not available.';
@@ -143,7 +151,6 @@ export function buyAlways(run: Run, id: string, spellIndex = -1): string | null 
   if (o.needsSpell && !run.spells[spellIndex]) return 'Pick a spell.';
   run.coins -= o.price;
   run.buys[id] = (run.buys[id] ?? 0) + 1;
-  run.shop.upBought[id] = true;
   const p = run.player;
   switch (id) {
     case 'cap': run.spells[spellIndex].def.capacity += 2; break;

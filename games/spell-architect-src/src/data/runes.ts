@@ -24,6 +24,7 @@ export interface RuneDef {
   chance?: number; // trigger: chance (0..1) that it fires each time its condition happens
   key?: string; // behavior / modifier key used by the compiler
   evolved?: boolean; // forged core (4 copies of a core combined)
+  tierOf?: string; // higher tier of a trigger: unlocked together with its base trigger
   merged?: boolean; // trigger made by merging two triggers (never sold, rewarded or unlocked)
   forms?: FormId[]; // compatible forms (omitted = all)
   maxStack?: number; // how many may sit on one form
@@ -95,15 +96,15 @@ export const RUNES: RuneDef[] = [
   // ---------- CORES ----------
   { id: 'c_fire', kind: 'core', name: 'Fire', icon: '🔥', rarity: 'common', cost: 2, element: 'fire', unlock: 0,
     desc: 'Socket into a Form. Burning and explosive damage. Burning enemies take damage over time, spread fire to neighbours and ignite poison clouds.' },
-  { id: 'c_ice', kind: 'core', name: 'Ice', icon: '❄️', rarity: 'common', cost: 2, element: 'ice', unlock: 0,
+  { id: 'c_ice', kind: 'core', name: 'Ice', icon: '❄️', rarity: 'common', cost: 2, element: 'ice', unlock: 15,
     desc: 'Chills enemies. Three chills freeze them solid; frozen enemies take bonus damage. Wet enemies freeze instantly.' },
-  { id: 'c_lightning', kind: 'core', name: 'Lightning', icon: '⚡', rarity: 'uncommon', cost: 2, element: 'lightning', unlock: 0,
+  { id: 'c_lightning', kind: 'core', name: 'Lightning', icon: '⚡', rarity: 'uncommon', cost: 2, element: 'lightning', unlock: 25,
     desc: 'Fast casts, extra crit chance and random arcs. Electrifies puddles and deals +50% to wet enemies.' },
-  { id: 'c_poison', kind: 'core', name: 'Poison', icon: '☠️', rarity: 'uncommon', cost: 2, element: 'poison', unlock: 0,
+  { id: 'c_poison', kind: 'core', name: 'Poison', icon: '☠️', rarity: 'uncommon', cost: 2, element: 'poison', unlock: 25,
     desc: 'Stacking poison that ignores armor and spreads to neighbours on death. Leaves clouds that fire can detonate.' },
-  { id: 'c_water', kind: 'core', name: 'Water', icon: '💧', rarity: 'common', cost: 1, element: 'water', unlock: 0,
+  { id: 'c_water', kind: 'core', name: 'Water', icon: '💧', rarity: 'common', cost: 1, element: 'water', unlock: 15,
     desc: 'Makes enemies Wet and leaves puddles. Wet enemies freeze faster and conduct lightning.' },
-  { id: 'c_gravity', kind: 'core', name: 'Gravity', icon: '🌀', rarity: 'rare', cost: 3, element: 'gravity', unlock: 0,
+  { id: 'c_gravity', kind: 'core', name: 'Gravity', icon: '🌀', rarity: 'rare', cost: 3, element: 'gravity', unlock: 35,
     desc: 'Pulls enemies into tight groups. Gravity wells collapse for bonus damage when they expire.' },
 
   // ---------- EVOLVED CORES (forged from 4 copies of a core in the editor's Forge tab) ----------
@@ -123,21 +124,21 @@ export const RUNES: RuneDef[] = [
   // ---------- FORMS ----------
   { id: 'f_projectile', kind: 'form', name: 'Projectile', icon: '☄️', rarity: 'common', cost: 1, form: 'projectile', unlock: 0,
     desc: 'Fires at the nearest enemy. The workhorse form; pairs with every behavior.' },
-  { id: 'f_beam', kind: 'form', name: 'Beam', icon: '🔆', rarity: 'rare', cost: 2, form: 'beam', unlock: 0,
+  { id: 'f_beam', kind: 'form', name: 'Beam', icon: '🔆', rarity: 'rare', cost: 2, form: 'beam', unlock: 35,
     desc: 'A short-lived beam that tracks enemies and damages everything along its length.' },
-  { id: 'f_orb', kind: 'form', name: 'Orbiting Orb', icon: '🔮', rarity: 'uncommon', cost: 2, form: 'orb', unlock: 0,
+  { id: 'f_orb', kind: 'form', name: 'Orbiting Orb', icon: '🔮', rarity: 'uncommon', cost: 2, form: 'orb', unlock: 25,
     desc: 'Two orbs circle you. Great defence and a reliable trigger source.' },
-  { id: 'f_aura', kind: 'form', name: 'Aura', icon: '⭕', rarity: 'common', cost: 2, form: 'aura', unlock: 0,
+  { id: 'f_aura', kind: 'form', name: 'Aura', icon: '⭕', rarity: 'common', cost: 2, form: 'aura', unlock: 15,
     desc: 'A field around you that damages everything inside every half-second.' },
-  { id: 'f_mine', kind: 'form', name: 'Mine', icon: '💣', rarity: 'uncommon', cost: 1, form: 'mine', unlock: 0,
+  { id: 'f_mine', kind: 'form', name: 'Mine', icon: '💣', rarity: 'uncommon', cost: 1, form: 'mine', unlock: 25,
     desc: 'Drops a trap that detonates when enemies come close. Strong against chargers.' },
   { id: 'f_nova', kind: 'form', name: 'Nova', icon: '💫', rarity: 'common', cost: 2, form: 'nova', unlock: 0,
     desc: 'A shockwave ring bursts out from you, hitting everything it passes and shoving it back. Water and poison leave puddles and clouds behind.' },
-  { id: 'f_meteor', kind: 'form', name: 'Meteor', icon: '☄', rarity: 'uncommon', cost: 2, form: 'meteor', unlock: 0,
+  { id: 'f_meteor', kind: 'form', name: 'Meteor', icon: '☄', rarity: 'uncommon', cost: 2, form: 'meteor', unlock: 30,
     desc: 'Marks the densest enemy cluster, then drops a big explosion on it after a short warning. Water and poison leave puddles and clouds.' },
 
   // ---------- BEHAVIORS ----------
-  { id: 'b_split', kind: 'behavior', name: 'Split', icon: '🔱', rarity: 'uncommon', cost: 2, key: 'split', forms: ['projectile', 'mine', 'meteor'], maxStack: 1, unlock: 0,
+  { id: 'b_split', kind: 'behavior', name: 'Split', icon: '🔱', rarity: 'uncommon', cost: 2, key: 'split', forms: ['projectile', 'mine', 'meteor'], maxStack: 1, unlock: 25,
     desc: 'On first impact or expiry, splits into three smaller copies (55% damage) that keep your triggers. Mines and meteors burst into projectiles.' },
   { id: 'b_pierce', kind: 'behavior', name: 'Pierce', icon: '➶', rarity: 'common', cost: 1, key: 'pierce', forms: P, maxStack: 1, unlock: 0,
     desc: 'Projectile passes through up to 3 enemies.' },
@@ -147,7 +148,7 @@ export const RUNES: RuneDef[] = [
     desc: 'On hit, arcs to up to 3 nearby enemies for 70% damage. Passes poison along; conducts through wet enemies.' },
   { id: 'b_orbit', kind: 'behavior', name: 'Orbit', icon: '🪐', rarity: 'rare', cost: 2, key: 'orbit', forms: ['projectile'], maxStack: 1, unlock: 50,
     desc: 'The projectile circles you instead of flying away, hitting anything it sweeps through.' },
-  { id: 'b_homing', kind: 'behavior', name: 'Homing', icon: '🎯', rarity: 'common', cost: 1, key: 'homing', forms: ['projectile', 'mine', 'meteor'], maxStack: 1, unlock: 0,
+  { id: 'b_homing', kind: 'behavior', name: 'Homing', icon: '🎯', rarity: 'common', cost: 1, key: 'homing', forms: ['projectile', 'mine', 'meteor'], maxStack: 1, unlock: 15,
     desc: 'Steers toward the nearest enemy. Mines crawl toward their prey.' },
   { id: 'b_pull', kind: 'behavior', name: 'Pull', icon: '🧲', rarity: 'uncommon', cost: 2, key: 'pull', maxStack: 1, unlock: 40,
     desc: 'Drags nearby enemies toward the form. Gather them into puddles, clouds and flames.' },
@@ -157,7 +158,7 @@ export const RUNES: RuneDef[] = [
   // ---------- TRIGGERS ----------
   { id: 't_hit', kind: 'trigger', name: 'On Hit', icon: '💥', rarity: 'common', cost: 1, trigger: 'hit', chance: 0.2, forms: ['projectile', 'beam', 'orb', 'mine', 'nova', 'meteor'], maxStack: 1, unlock: 0,
     desc: 'When the form hits an enemy, every effect below activates at the impact point.' },
-  { id: 't_kill', kind: 'trigger', name: 'On Kill', icon: '💀', rarity: 'uncommon', cost: 1, trigger: 'kill', chance: 0.2, maxStack: 1, unlock: 0,
+  { id: 't_kill', kind: 'trigger', name: 'On Kill', icon: '💀', rarity: 'uncommon', cost: 1, trigger: 'kill', chance: 0.2, maxStack: 1, unlock: 20,
     desc: 'When this spell kills an enemy (including by burn or poison), connected branches activate where it died.' },
   { id: 't_expiry', kind: 'trigger', name: 'On Expiry', icon: '⏳', rarity: 'uncommon', cost: 1, trigger: 'expiry', chance: 1, forms: ['projectile', 'beam', 'orb', 'mine', 'nova', 'meteor'], maxStack: 1, unlock: 30,
     desc: 'When the form ends (timeout, spent or detonated), the effects below activate at its final position.' },
@@ -171,13 +172,16 @@ export const RUNES: RuneDef[] = [
     desc: '+40% speed: faster projectiles, orbs, beam sweeps and quicker damage ticks.' },
   { id: 'm_grow', kind: 'modifier', name: 'Grow', icon: '⬆️', rarity: 'common', cost: 1, key: 'grow', maxStack: 3, unlock: 0,
     desc: '+30% size and +15% damage.' },
-  { id: 'm_duration', kind: 'modifier', name: 'Increase Duration', icon: '⌛', rarity: 'common', cost: 1, key: 'dur', forms: ['projectile', 'beam', 'orb', 'aura', 'mine'], maxStack: 3, unlock: 0,
+  { id: 'm_duration', kind: 'modifier', name: 'Increase Duration', icon: '⌛', rarity: 'common', cost: 1, key: 'dur', forms: ['projectile', 'beam', 'orb', 'aura', 'mine'], maxStack: 3, unlock: 10,
     desc: '+50% lifetime. More time to tick, orbit, chain and wait for triggers.' },
   { id: 'm_area', kind: 'modifier', name: 'Increase Area', icon: '🔆', rarity: 'common', cost: 1, key: 'area', maxStack: 3, unlock: 30,
     desc: '+35% radius of zones, auras, explosions, splashes and orbits.' },
-  { id: 'm_cooldown', kind: 'modifier', name: 'Reduce Cooldown', icon: '⏱️', rarity: 'uncommon', cost: 2, key: 'cd', maxStack: 3, unlock: 0,
+  { id: 'm_cooldown', kind: 'modifier', name: 'Reduce Cooldown', icon: '⏱️', rarity: 'uncommon', cost: 2, key: 'cd', maxStack: 3, unlock: 25,
     desc: '-20% cooldown on this spell (multiplicative).' },
 ];
+
+/** Runes available from the very first run (everything else is bought with Arcane Shards in the Grimoire). */
+export const STARTER_RUNES = ['c_fire', 'f_projectile', 'f_nova', 'b_pierce', 't_hit', 'm_grow'];
 
 // Trigger rarity tiers: Hit / Kill / Crit triggers fire only a fraction of the time.
 // common 20%, uncommon 45%, rare 60%, epic 80%. (On Expiry is a timing event and always fires.)
@@ -188,7 +192,7 @@ for (const baseId of ['t_hit', 't_kill', 't_crit']) {
   const baseDesc = b.desc;
   b.desc = `${baseDesc} Fires 20% of the time.`;
   for (const [suf, rar, ch, num] of tiers) {
-    RUNES.push({ ...b, id: baseId + suf, name: `${b.name} ${num}`, rarity: rar, chance: ch, cost: rar === 'epic' ? 2 : 1, unlock: 0, desc: `${baseDesc} Fires ${Math.round(ch * 100)}% of the time.` });
+    RUNES.push({ ...b, id: baseId + suf, name: `${b.name} ${num}`, rarity: rar, chance: ch, cost: rar === 'epic' ? 2 : 1, unlock: 0, tierOf: baseId, desc: `${baseDesc} Fires ${Math.round(ch * 100)}% of the time.` });
   }
 }
 

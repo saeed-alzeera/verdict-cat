@@ -123,7 +123,10 @@ export function generateRewards(run: Run, mode: 'levelup' | 'cache', count = 3):
     return out;
   }
   const forms = formsInPlay(run);
-  const pool = RUNES.filter((r) => store.isUnlocked(r.id) && !r.evolved && r.rarity !== 'common')
+  // with a small unlocked set there may be few non-common runes: top the pool up with commons rather than hand out nothing
+  const unlocked = RUNES.filter((r) => store.isUnlocked(r.id) && !r.evolved);
+  const rare = unlocked.filter((r) => r.rarity !== 'common');
+  const pool = (rare.length >= count ? rare : unlocked)
     .map((r) => ({ v: r, w: RARITY[r.rarity].weight * relevance(run, r, forms) }));
   for (let g = 0; g < 30 && out.length < count; g++) {
     const cand = pool.filter((x) => !out.some((o) => o.rune === x.v.id));
