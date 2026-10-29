@@ -24,6 +24,7 @@ import { store, save, saveNow } from '../core/save';
 import { audio } from '../core/audio';
 import { spellCooldown } from '../core/spell';
 import type { Run, RunOpts, RunSummary } from '../game/run';
+import { objectiveMet, objectiveProgress, objectiveText } from '../game/rituals';
 import { generateRewards, type Reward } from '../game/rewards';
 import { openEditor } from './editor';
 
@@ -47,7 +48,7 @@ class Hud {
   hp!: HTMLElement; hpTxt!: HTMLElement; xp!: HTMLElement; lvl!: HTMLElement; timer!: HTMLElement; kills!: HTMLElement;
   bossBox!: HTMLElement; bossFill!: HTMLElement; bossName!: HTMLElement; slotsEl!: HTMLElement; ann!: HTMLElement; toasts!: HTMLElement; badge!: HTMLElement; coinEl!: HTMLElement; lastCoin = -1; ultsEl!: HTMLElement; ultKey = '';
   ultEls: HTMLElement[] = [];
-  partyEl!: HTMLElement; partyKey = '';
+  partyEl!: HTMLElement; partyKey = ''; ritEl!: HTMLElement; ritKey = '';
   slotKey = '';
   frame = 0; relEl!: HTMLElement; hpBar!: HTMLElement; relKey = '';
   cdEls: HTMLElement[] = [];
@@ -61,6 +62,7 @@ class Hud {
         <div class="hud-relics"></div>
         <div class="rewardbadge hidden"></div>
         <div class="hud-party"></div>
+        <div class="hud-rit"></div>
       </div>
       <div class="hud-ults"></div>
       <div class="hud-tc"><div class="timer">0:00</div><div class="kills">0 slain</div>
@@ -76,6 +78,7 @@ class Hud {
     </div>`);
     uiRef.root.appendChild(this.root);
     this.partyEl = $('.hud-party', this.root);
+    this.ritEl = $('.hud-rit', this.root);
     this.relEl = $('.hud-relics', this.root); this.hpBar = $('.bar.hp', this.root);
     this.hp = $('.hp .fill', this.root); this.hpTxt = $('.hp span', this.root);
     this.xp = $('.xp .fill', this.root); this.lvl = $('.lvl', this.root);
@@ -116,7 +119,7 @@ class Hud {
     const rk = run.equipped.join(',');
     if (rk !== this.relKey) {
       this.relKey = rk;
-      this.relEl.innerHTML = run.equipped.map((id) => { const r = RELIC_BY_ID[id]; return `<div class="hrel ${r.cursed ? 'cursed' : ''}" data-r="${id}" style="--rc:${relicColor(r)}" title="${r.name} — ${r.cond}: ${r.desc}"><span>${r.icon}</span><em></em></div>`; }).join('');
+      this.relEl.innerHTML = run.equipped.map((id) => { const r = RELIC_BY_ID[id]; return `<div class="hrel ${r.cursed ? 'cursed' : ''}" data-r="${id}" style="--rc:${relicColor(r)}" title="${r.name}: ${r.desc}"><span>${r.icon}</span><em></em></div>`; }).join('');
     }
     if (run.equipped.length && (this.frame++ & 7) === 0) this.relEl.querySelectorAll<HTMLElement>('.hrel').forEach((h) => { const d = RELIC_BY_ID[h.dataset.r!]; h.querySelector('em')!.textContent = d.badge ? d.badge(run) : ''; });
     if (hp !== this.last.hp) {
@@ -137,6 +140,7 @@ class Hud {
     const kills = run.coop?.role === 'host' ? run.players.reduce((n, q) => n + q.kills, 0) : run.kills;
     if (kills !== this.last.kl) { this.last.kl = kills; this.kills.textContent = `${kills} slain`; }
     this.updateParty(run);
+    this.updateRituals(run);
     const cn = Math.floor(run.coins);
     if (cn !== this.lastCoin) { this.lastCoin = cn; this.coinEl.textContent = String(cn); }
     const pend = run.pending.filter((q) => q.type !== 'mutation').length;
@@ -187,6 +191,14 @@ class Hud {
       const e = this.cdEls[ci++];
       if (e) e.style.height = `${f * 100}%`;
     }
+  }
+  /** The running rituals' objectives under the health bars. */
+  updateRituals(run: Run) {
+    const act = run.rituals.filter((r) => r.state === 'active');
+    const key = act.map((r) => `${r.def.id}${r.roundsDone}${r.prog.join(',')}${Math.round(run.ritualRound.hurt)}`).join('|');
+    if (key === this.ritKey) return;
+    this.ritKey = key;
+    this.ritEl.innerHTML = act.map((r) => `<div class="rit"><b>${r.def.icon} ${r.def.name}</b> <small>${r.def.rounds - r.roundsDone} round${r.def.rounds - r.roundsDone === 1 ? '' : 's'} left</small>${r.def.objectives.map((o, k) => `<div class="${objectiveMet(r, k) ? 'met' : ''}">${objectiveText(o)} <em>${objectiveProgress(r, k, run)}</em></div>`).join('')}</div>`).join('');
   }
   /** Teammates' health (co-op). */
   updateParty(run: Run) {
@@ -718,7 +730,7 @@ class UI {
       <p><b>Reactions.</b> Elements from different slots interact with each other's puddles, clouds and statuses. Each reaction deals <b>both</b> damage types. The editor's Reactions tab shows which ones your loadout can trigger.</p>
       <p><b>Evolution.</b> Collect ${EVOLVE_COST} copies of the same Core and forge an evolved Core in the editor's Forge tab: +40% damage, a new passive, and an <b>Ultimate</b> on Space. The editor and briefing flash when you can forge.</p>
       <p><b>Co-op.</b> Choose <b>Online Co-op</b> in the main menu to host a room or join a friend's with their 5-letter code. You share the arena and the horde; everyone keeps their own build, shop and rewards, and the round starts when the host presses Start after everyone is Ready.</p>
-      <p><b>Shop.</b> Kills and cleared rounds earn coins. After every round, spend them on new Cores, Forms and runes (rerollable stock), spell capacity, extra slots and buffs, or sell runes you don't need. <b>Level-ups</b> instantly give a random stat boost, even mid-round; boss caches give a choice of strong runes.</p>
+      <p><b>Shop.</b> Kills and cleared rounds earn coins. After every round, one shelf offers runes, a relic and permanent upgrades (capacity, spell slots, vitality, power...); upgrades never sell out but every copy costs more, and rerolling replaces the whole shelf. You can also sell runes you don't need, and accept a <b>Ritual</b>: a multi-round contract that pays a permanent upgrade if you meet every objective. <b>Level-ups</b> instantly give a random stat boost, even mid-round; boss caches give a choice of strong runes.</p>
       <p><b>Capacity</b> limits runes per spell. <b>Mutations</b> evolve spells that perform well. Spend Arcane Shards in the Grimoire to unlock more runes (behaviors, triggers, modifiers). The <b>Sandbox</b> lets you test any build against any enemy.</p>
     </div>`);
     this.openModal(m, 'help');

@@ -1,6 +1,6 @@
 # Rituals: scope
 
-**Status:** tabled (proposal only, nothing built; revisit after the health/starter rebalance and more normal-mode run data). **Goal:** a run-long goal system that rewards playing well and building with intent. A Ritual is a contract with a few objectives that must all be met within a few rounds; meet them and you get a permanent upgrade for the rest of the run.
+**Status:** implemented in v1 (`game/rituals.ts`). Differences from this scope: offered in the shop's RITUALS tab (not the prep screen); solo and host-local only (not offered in co-op yet); objective catalogue is the 13 in `rituals.ts`; reward amounts and targets are first-pass numbers to tune from run data. **Goal:** a run-long goal system that rewards playing well and building with intent. A Ritual is a contract with a few objectives that must all be met within a few rounds; meet them and you get a permanent upgrade for the rest of the run.
 
 ## Why this, and why now
 

@@ -41,7 +41,7 @@ export function validateBuild(b: unknown): string | null {
   const num = (v: unknown, lo: number, hi: number) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
   const p = x.player as unknown as Record<string, unknown>;
   if (!num(p.maxHp, 1, 3000) || !num(p.hp, 0, 3000) || !num(p.dmgMul, 0.1, 30) || !num(p.cdMul, 0.05, 5) || !num(p.crit, 0, 1) || !num(p.critMul, 1, 20)
-    || !num(p.speed, 50, 900) || !num(p.regen, 0, 50) || !num(p.pickup, 0.1, 20) || !num(p.level, 1, 500) || !num(p.xp, 0, 1e7) || !num(p.xpNeed, 1, 1e7) || !num(p.r, 1, 60)) return 'bad player stats';
+    || !num(p.speed, 50, 900) || !num(p.regen, 0, 50) || !num(p.level, 1, 500) || !num(p.xp, 0, 1e7) || !num(p.xpNeed, 1, 1e7) || !num(p.r, 1, 60)) return 'bad player stats';
   for (const sp of x.spells) {
     if (!sp || !sp.def || typeof sp.def.capacity !== 'number' || sp.def.capacity < 1 || sp.def.capacity > 200) return 'bad spell';
     let n = 0;

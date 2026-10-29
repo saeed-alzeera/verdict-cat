@@ -106,7 +106,7 @@ export interface EBullet {
 }
 
 export interface Pickup {
-  id: number; x: number; y: number; type: 'xp' | 'coin' | 'heal' | 'magnet' | 'cache'; v: number; spr: Img; fly: boolean; t: number; dead: boolean;
+  id: number; x: number; y: number; type: 'xp' | 'coin' | 'heal' | 'cache'; v: number; spr: Img; fly: boolean; t: number; dead: boolean;
 }
 
 export interface Telegraph {
@@ -128,7 +128,7 @@ export interface Player {
   x: number; y: number; vx: number; vy: number;
   hp: number; maxHp: number; speed: number; r: number;
   inv: number; hurtFlash: number; regen: number;
-  dmgMul: number; cdMul: number; crit: number; critMul: number; pickup: number;
+  dmgMul: number; cdMul: number; crit: number; critMul: number;
   level: number; xp: number; xpNeed: number;
   faceX: number; walkT: number; pullX: number; pullY: number; pullT: number;
 }

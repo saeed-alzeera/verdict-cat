@@ -9,5 +9,7 @@ import { planFor } from './game/rounds';
 import * as shop from './game/shop';
 import { spawnEnemy, playerScale } from './game/enemies';
 import { TEXTURE_KEYS } from './gfx/textures';
+import * as rituals from './game/rituals';
+import * as runes from './data/runes';
 
-(window as unknown as Record<string, unknown>).__SA = { checkAttach, newNode, findNode, walk, compileSpell, spellCost, RUNES, RUNE_BY_ID, generateRewards, store, ui, planFor, shop, HostNet, GuestNet, spawnEnemy, playerScale, TEXTURE_KEYS };
+(window as unknown as Record<string, unknown>).__SA = { checkAttach, newNode, findNode, walk, compileSpell, spellCost, RUNES, RUNE_BY_ID, generateRewards, store, ui, planFor, shop, HostNet, GuestNet, spawnEnemy, playerScale, TEXTURE_KEYS, rituals, runes };

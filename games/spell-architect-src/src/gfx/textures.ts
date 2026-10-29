@@ -242,9 +242,6 @@ export function generateTextures(scene: Phaser.Scene) {
     px(c, '#6b3b12', 0, 3, 14, 9); px(c, '#a8641f', 1, 4, 12, 7); px(c, '#6b3b12', 0, 0, 14, 4); px(c, '#c98a35', 1, 1, 12, 3);
     px(c, '#ffd25a', 6, 4, 2, 3); px(c, '#ffd25a', 0, 6, 14, 1);
   });
-  canvasTex(scene, 'magnet', 10, 10, (c) => {
-    px(c, '#ff4a4a', 0, 0, 3, 7); px(c, '#4a7aff', 7, 0, 3, 7); px(c, '#ddd', 0, 7, 10, 3); px(c, '#999', 3, 7, 4, 3);
-  });
   canvasTex(scene, 'ebullet', 10, 10, (c) => { pixDisc(c, 5, 5, 4, '#ff2a4a'); pixDisc(c, 5, 5, 2, '#ffd0d8'); });
   canvasTex(scene, 'shard', 8, 8, (c) => { c.fillStyle = '#fff'; c.beginPath(); c.moveTo(0, 4); c.lineTo(8, 0); c.lineTo(8, 8); c.closePath(); c.fill(); });
 

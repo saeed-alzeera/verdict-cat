@@ -9,7 +9,7 @@ export const relicCard = (id: string, run: Run | null, extra = '') => {
   const r = RELIC_BY_ID[id];
   const badge = run && r.badge && run.equipped.includes(id) ? `<em class="rbadge">${r.badge(run)}</em>` : '';
   return `<div class="relic ${r.cursed ? 'cursed' : ''}" data-relic="${id}" style="--rc:${relicColor(r)}" title="${r.name}: ${r.desc}">
-    <span class="rlic">${r.icon}</span><div class="rlt"><b>${r.name}</b><small>${r.cursed ? 'CURSED' : RARITY[r.rarity].name} · ${r.tag}</small></div>${badge}${extra}</div>`;
+    <span class="rlic">${r.icon}</span><div class="rlt"><b>${r.name}</b><small>${r.cursed ? 'Cursed' : RARITY[r.rarity].name}</small></div>${badge}${extra}</div>`;
 };
 
 /** Equip/stash manager markup + wiring. `rerender` is called after any change. */
@@ -18,9 +18,9 @@ export function relicManager(run: Run, rerender: () => void): { html: string; bi
   const stash = run.owned.filter((id) => !run.equipped.includes(id));
   const html = `<div class="relmgr">
     <h4>EQUIPPED <small>${run.equipped.length}/${RELIC_SLOTS}</small></h4>
-    <div class="relslots">${slots.map((id) => id ? `<div class="rslot full" data-un="${id}">${relicCard(id, run)}<p>${RELIC_BY_ID[id].cond}: ${RELIC_BY_ID[id].desc}</p><button class="mini">Unequip</button></div>` : '<div class="rslot"><span>empty slot</span></div>').join('')}</div>
+    <div class="relslots">${slots.map((id) => id ? `<div class="rslot full" data-un="${id}">${relicCard(id, run)}<p>${RELIC_BY_ID[id].desc}</p><button class="mini">Unequip</button></div>` : '<div class="rslot"><span>empty slot</span></div>').join('')}</div>
     <h4>STASH <small>${stash.length}</small></h4>
-    <div class="relslots">${stash.length ? stash.map((id) => `<div class="rslot full" data-eq="${id}">${relicCard(id, run)}<p>${RELIC_BY_ID[id].cond}: ${RELIC_BY_ID[id].desc}</p><button class="mini">${run.equipped.length < RELIC_SLOTS ? 'Equip' : 'Swap in'}</button></div>`).join('') : '<p class="muted">Relics you own but are not wearing wait here. Swap them freely between rounds.</p>'}</div>
+    <div class="relslots">${stash.length ? stash.map((id) => `<div class="rslot full" data-eq="${id}">${relicCard(id, run)}<p>${RELIC_BY_ID[id].desc}</p><button class="mini">${run.equipped.length < RELIC_SLOTS ? 'Equip' : 'Swap in'}</button></div>`).join('') : '<p class="muted">Relics you own but are not wearing wait here. Swap them freely between rounds.</p>'}</div>
   </div>`;
   const bind = (root: HTMLElement) => {
     root.querySelectorAll<HTMLElement>('[data-un]').forEach((b) => b.addEventListener('click', () => { run.unequipRelic(b.dataset.un!); audio.play('ui'); rerender(); }));
@@ -49,8 +49,8 @@ export function showRelicPick(ui: UI, run: Run, options: string[]) {
   const n = el(`<div class="overlay lv relicpick"><div class="panel rewardp">
     <div class="rtitle"><small>BOSS REWARD</small><h2>Choose a Relic</h2><p class="sub">Relics are passive. You can wear ${RELIC_SLOTS}; extras go to your stash and can be swapped between rounds.</p></div>
     <div class="cards">${options.map((id, i) => { const r = RELIC_BY_ID[id]; return `<div class="card ${r.cursed ? 'cursedc' : ''}" data-i="${i}" style="--rc:${relicColor(r)};--c:${relicColor(r)}">
-      <div class="ck">${i + 1}</div><div class="cicon">${r.icon}</div><div class="cname">${r.name}</div><div class="crar">${r.cursed ? 'CURSED' : RARITY[r.rarity].name} · ${r.tag}</div>
-      <p><b>${r.cond}.</b> ${r.desc}</p></div>`; }).join('')}</div>
+      <div class="ck">${i + 1}</div><div class="cicon">${r.icon}</div><div class="cname">${r.name}</div><div class="crar">${r.cursed ? 'Cursed' : RARITY[r.rarity].name}</div>
+      <p>${r.desc}</p></div>`; }).join('')}</div>
     <div class="rbtns"><button class="big" data-skip>Skip</button></div></div></div>`);
   const choose = (i: number) => { run.addRelic(options[i]); audio.play('level'); ui.pop('relic'); };
   n.addEventListener('click', (e) => {

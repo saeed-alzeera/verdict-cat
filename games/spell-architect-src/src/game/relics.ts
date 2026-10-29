@@ -5,6 +5,7 @@ import { ruleMods } from '../core/spell';
 import { dealDamage, arc } from './combat';
 import { castForm } from './casting';
 import type { Run } from './run';
+import { ritualEvent } from './rituals';
 import type { Enemy, Src, ActiveSpell } from './types';
 
 export const RELIC_SLOTS = 6;
@@ -15,8 +16,6 @@ export interface RelicDef {
   icon: string;
   rarity: Rarity;
   cursed?: boolean;
-  tag: string;
-  cond: string; // the condition, short
   desc: string;
   badge?: (run: Run) => string; // live counter shown on the relic
   onEquip?: (run: Run) => void;
@@ -27,42 +26,41 @@ const st = (run: Run, id: string) => (run.relicState[id] ??= {} as Record<string
 
 export const RELICS: RelicDef[] = [
   // ---- common
-  { id: 'prism', name: 'Cracked Prism', icon: '🔶', rarity: 'common', tag: 'ELEMENTS', cond: 'Per different element in your loadout',
-    desc: '+4% damage for each different element equipped across your spells (max +24%).', badge: (r) => `+${Math.min(6, r.mods.elements) * 4}%` },
-  { id: 'whetstone', name: 'Whetstone', icon: '🪨', rarity: 'common', tag: 'DAMAGE', cond: 'First hit on each enemy', desc: 'The first hit on every enemy deals +30% damage.' },
-  { id: 'penny', name: 'Lucky Penny', icon: '🪙', rarity: 'common', tag: 'ECONOMY', cond: 'Kill a Wet, Burning, Poisoned or Frozen enemy', desc: 'Enemies that die while Wet, Burning, Poisoned or Frozen drop +1 coin.' },
-  { id: 'thimble', name: "Healer's Thimble", icon: '🧵', rarity: 'common', tag: 'SURVIVAL', cond: 'Every 25 kills', desc: 'Heal 1 HP every 25 kills.', badge: (r) => `${st(r, 'thimble').n ?? 0}/25` },
-  { id: 'ember', name: 'Ember Heart', icon: '❤️‍🔥', rarity: 'common', tag: 'ELEMENTS', cond: 'Target is burning', desc: 'Burning enemies take +15% damage from every source.' },
+  { id: 'prism', name: 'Cracked Prism', icon: '🔶', rarity: 'common', desc: '+4% damage for each different element equipped across your spells (max +24%).', badge: (r) => `+${Math.min(6, r.mods.elements) * 4}%` },
+  { id: 'whetstone', name: 'Whetstone', icon: '🪨', rarity: 'common', desc: 'The first hit on every enemy deals +30% damage.' },
+  { id: 'penny', name: 'Lucky Penny', icon: '🪙', rarity: 'common', desc: 'Enemies that die while Wet, Burning, Poisoned or Frozen drop +1 coin.' },
+  { id: 'thimble', name: "Healer's Thimble", icon: '🧵', rarity: 'common', desc: 'Heal 1 HP every 25 kills.', badge: (r) => `${st(r, 'thimble').n ?? 0}/25` },
+  { id: 'ember', name: 'Ember Heart', icon: '❤️‍🔥', rarity: 'common', desc: 'Burning enemies take +15% damage from every source.' },
   // ---- uncommon
-  { id: 'purist', name: 'Arcane Purist', icon: '✦', rarity: 'uncommon', tag: 'ARCANE', cond: 'Spells with no Core', desc: 'Spells whose main Form has no Core deal +50% damage and recharge 25% faster.' },
-  { id: 'echo', name: 'Echo Chamber', icon: '🔔', rarity: 'uncommon', tag: 'TRIGGERS', cond: 'Always', desc: '+8 percentage points to every On Hit / On Kill / On Crit chance.',
+  { id: 'purist', name: 'Arcane Purist', icon: '✦', rarity: 'uncommon', desc: 'Spells whose main Form has no Core deal +50% damage and recharge 25% faster.' },
+  { id: 'echo', name: 'Echo Chamber', icon: '🔔', rarity: 'uncommon', desc: '+8 percentage points to every On Hit / On Kill / On Crit chance.',
     onEquip: (r) => r.recomputeRelics(), onUnequip: (r) => r.recomputeRelics() },
-  { id: 'sock', name: 'Static Sock', icon: '🧦', rarity: 'uncommon', tag: 'TEMPO', cond: 'Every 8th cast', desc: 'Every 8th spell cast is cast a second time for free.', badge: (r) => `${st(r, 'sock').n ?? 0}/8` },
-  { id: 'resin', name: 'Resin Vial', icon: '🧪', rarity: 'uncommon', tag: 'ELEMENTS', cond: 'Poisoned enemies die', desc: '+2 poison stack cap, and poisoned enemies drop +1 coin when they die.',
+  { id: 'sock', name: 'Static Sock', icon: '🧦', rarity: 'uncommon', desc: 'Every 8th spell cast is cast a second time for free.', badge: (r) => `${st(r, 'sock').n ?? 0}/8` },
+  { id: 'resin', name: 'Resin Vial', icon: '🧪', rarity: 'uncommon', desc: '+2 poison stack cap, and poisoned enemies drop +1 coin when they die.',
     onEquip: (r) => r.recomputeRelics(), onUnequip: (r) => r.recomputeRelics() },
-  { id: 'compass', name: 'Storm Compass', icon: '🧭', rarity: 'uncommon', tag: 'TRIGGERS', cond: 'Critical hit', desc: 'Critical hits release a free arc of lightning to 2 nearby enemies.' },
-  { id: 'bell', name: 'Bargain Bell', icon: '🛎️', rarity: 'uncommon', tag: 'ECONOMY', cond: 'In the shop', desc: 'Shop prices -10% and rerolls cost 1 less.' },
-  { id: 'lodestone', name: 'Lodestone', icon: '🧲', rarity: 'uncommon', tag: 'ECONOMY', cond: 'Collecting drops', desc: 'Pickup radius doubled and coins are worth +20%.' },
+  { id: 'compass', name: 'Storm Compass', icon: '🧭', rarity: 'uncommon', desc: 'Critical hits release a free arc of lightning to 2 nearby enemies.' },
+  { id: 'bell', name: 'Bargain Bell', icon: '🛎️', rarity: 'uncommon', desc: 'Shop prices -10% and rerolls cost 1 less.' },
+  { id: 'lodestone', name: 'Lodestone', icon: '🧲', rarity: 'uncommon', desc: 'Coins are worth +20%.' },
   // ---- rare
-  { id: 'nulllens', name: 'Null Lens', icon: '🔍', rarity: 'rare', tag: 'ARCANE', cond: 'Hitting an immune enemy', desc: 'Elemental damage against enemies immune to that element is converted into 30% Arcane damage.' },
-  { id: 'baton', name: "Conductor's Baton", icon: '🪄', rarity: 'rare', tag: 'ELEMENTS', cond: 'Each different reaction per round', desc: 'Every different reaction you trigger this round adds +4% damage until the round ends (stacks).', badge: (r) => `+${(Object.keys(st(r, 'baton')).length) * 4}%` },
-  { id: 'glove', name: "Duelist's Glove", icon: '🥊', rarity: 'rare', tag: 'TEMPO', cond: 'Critical hit', desc: 'A critical hit refunds 0.4s of that spell\'s cooldown (once per second per spell).' },
-  { id: 'mirror', name: 'Mirror Shard', icon: '🪞', rarity: 'rare', tag: 'TEMPO', cond: 'Slot 1 casts', desc: 'Whenever slot 1 casts, slot 2 also casts at 50% damage.' },
-  { id: 'fang', name: 'Vampire Fang', icon: '🦷', rarity: 'rare', tag: 'SURVIVAL', cond: 'Kill with a critical hit', desc: 'Killing an enemy with a critical hit heals 1 HP (max 3 HP per round).' },
+  { id: 'nulllens', name: 'Null Lens', icon: '🔍', rarity: 'rare', desc: 'Elemental damage against enemies immune to that element is converted into 30% Arcane damage.' },
+  { id: 'baton', name: "Conductor's Baton", icon: '🪄', rarity: 'rare', desc: 'Every different reaction you trigger this round adds +4% damage until the round ends (stacks).', badge: (r) => `+${(Object.keys(st(r, 'baton')).length) * 4}%` },
+  { id: 'glove', name: "Duelist's Glove", icon: '🥊', rarity: 'rare', desc: 'A critical hit refunds 0.4s of that spell\'s cooldown (once per second per spell).' },
+  { id: 'mirror', name: 'Mirror Shard', icon: '🪞', rarity: 'rare', desc: 'Whenever slot 1 casts, slot 2 also casts at 50% damage.' },
+  { id: 'fang', name: 'Vampire Fang', icon: '🦷', rarity: 'rare', desc: 'Killing an enemy with a critical hit heals 1 HP (max 3 HP per round).' },
   // ---- epic
-  { id: 'metronome', name: 'Metronome', icon: '🎼', rarity: 'epic', tag: 'TEMPO', cond: 'Every cast', desc: 'Each cast shortens the NEXT slot\'s cooldown by 0.5 seconds, chaining multi-slot builds.' },
-  { id: 'phoenix', name: 'Phoenix Feather', icon: '🪶', rarity: 'epic', tag: 'SURVIVAL', cond: 'Lethal damage (once per run)', desc: 'Once per run, lethal damage instead revives you at 40% health and blasts nearby enemies. The feather is consumed.', badge: (r) => (st(r, 'phoenix').used ? 'USED' : 'READY') },
-  { id: 'ledger', name: "Alchemist's Ledger", icon: '📒', rarity: 'epic', tag: 'ELEMENTS', cond: 'Reactions', desc: 'Reactions deal +60% damage, and the first reaction each round pays 1 coin.' },
+  { id: 'metronome', name: 'Metronome', icon: '🎼', rarity: 'epic', desc: 'Each cast shortens the NEXT slot\'s cooldown by 0.5 seconds, chaining multi-slot builds.' },
+  { id: 'phoenix', name: 'Phoenix Feather', icon: '🪶', rarity: 'epic', desc: 'Once per run, lethal damage instead revives you at 40% health and blasts nearby enemies. The feather is consumed.', badge: (r) => (st(r, 'phoenix').used ? 'USED' : 'READY') },
+  { id: 'ledger', name: "Alchemist's Ledger", icon: '📒', rarity: 'epic', desc: 'Reactions deal +60% damage, and the first reaction each round pays 1 coin.' },
   // ---- legendary
-  { id: 'archive', name: 'Heart of the Archive', icon: '📚', rarity: 'legendary', tag: 'TEMPO', cond: 'Round start / big ultimates', desc: 'Your ultimates start every round ready, and refund half their cooldown if they kill 20+ enemies.' },
-  { id: 'hammer', name: "Forgemaster's Hammer", icon: '🔨', rarity: 'legendary', tag: 'ELEMENTS', cond: 'Forging', desc: 'Forging costs 2 fewer Cores, and evolved Cores deal an extra +20% damage.' },
+  { id: 'archive', name: 'Heart of the Archive', icon: '📚', rarity: 'legendary', desc: 'Your ultimates start every round ready, and refund half their cooldown if they kill 20+ enemies.' },
+  { id: 'hammer', name: "Forgemaster's Hammer", icon: '🔨', rarity: 'legendary', desc: 'Forging costs 2 fewer Cores, and evolved Cores deal an extra +20% damage.' },
   // ---- cursed (big upside, real downside)
-  { id: 'idol', name: 'Glass Cannon Idol', icon: '🗿', rarity: 'rare', cursed: true, tag: 'RISK', cond: 'Always', desc: '+50% damage, but -40% maximum health.',
+  { id: 'idol', name: 'Glass Cannon Idol', icon: '🗿', rarity: 'rare', cursed: true, desc: '+50% damage, but -40% maximum health.',
     onEquip: (r) => { const p = r.player; const lose = Math.round(p.maxHp * 0.4); st(r, 'idol').lost = lose; p.maxHp -= lose; p.hp = Math.min(p.hp, p.maxHp); },
     onUnequip: (r) => { const p = r.player; p.maxHp += st(r, 'idol').lost ?? 0; st(r, 'idol').lost = 0; } },
-  { id: 'dice', name: "Gambler's Dice", icon: '🎲', rarity: 'epic', cursed: true, tag: 'RISK', cond: 'Always', desc: 'Trigger chances ×1.5, but every Trigger rune costs +1 capacity.',
+  { id: 'dice', name: "Gambler's Dice", icon: '🎲', rarity: 'epic', cursed: true, desc: 'Trigger chances ×1.5, but every Trigger rune costs +1 capacity.',
     onEquip: (r) => r.recomputeRelics(), onUnequip: (r) => r.recomputeRelics() },
-  { id: 'purse', name: 'Hungry Purse', icon: '👛', rarity: 'uncommon', cursed: true, tag: 'RISK', cond: 'Always', desc: 'Coins are worth ×1.5, but shop rerolls cost double.' },
+  { id: 'purse', name: 'Hungry Purse', icon: '👛', rarity: 'uncommon', cursed: true, desc: 'Coins are worth ×1.5, but shop rerolls cost double.' },
 ];
 export const RELIC_BY_ID: Record<string, RelicDef> = Object.fromEntries(RELICS.map((r) => [r.id, r]));
 
@@ -82,12 +80,11 @@ export function recomputeMods(run: Run) {
   ruleMods.triggerChanceMul = has(run, 'dice') ? 1.5 : 1;
   ruleMods.triggerCost = has(run, 'dice') ? 1 : 0;
   m.poisonCap = has(run, 'resin') ? 2 : 0;
-  m.coinMul = (has(run, 'purse') ? 1.5 : 1) * (has(run, 'lodestone') ? 1.2 : 1);
-  m.priceMul = has(run, 'bell') ? 0.9 : 1;
+  m.coinMul = (has(run, 'purse') ? 1.5 : 1) * (has(run, 'lodestone') ? 1.2 : 1) * run.ritualBonus.coinMul;
+  m.priceMul = (has(run, 'bell') ? 0.9 : 1) * run.ritualBonus.priceMul;
   m.rerollMul = has(run, 'purse') ? 2 : 1;
   m.rerollMinus = has(run, 'bell') ? 1 : 0;
-  m.pickupMul = has(run, 'lodestone') ? 2 : 1;
-  m.forgeMinus = has(run, 'hammer') ? 2 : 0;
+  m.forgeMinus = (has(run, 'hammer') ? 2 : 0) + run.ritualBonus.forgeMinus;
 }
 
 /** Conditional damage multiplier from relics, applied to every damage instance. */
@@ -116,6 +113,7 @@ export function onReaction(run: Run, id: string) {
 }
 
 export function onCrit(run: Run, e: Enemy, src: Src, dmg: number) {
+  ritualEvent(run, { t: 'crit' });
   if (has(run, 'glove')) { const g = st(run, 'glove'); if (run.time >= (g[src.sp.uid] ?? 0)) { g[src.sp.uid] = run.time + 1; src.sp.cd = Math.max(0, src.sp.cd - 0.4); } }
   if (has(run, 'compass') && !run.inRelic) { run.inRelic = true; arc(run, e, dmg * 0.5, 'lightning', src, 2, 170, [e]); run.inRelic = false; }
 }

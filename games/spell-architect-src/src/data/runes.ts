@@ -223,6 +223,30 @@ export function mergeResult(a: string, b: string): RuneDef | string {
   }
   return RUNE_BY_ID[id];
 }
+/** Level of a trigger rune (1-4) within its family, or 0 when it is not a levelled trigger. */
+export function triggerLevel(id: string): number {
+  const r = RUNE_BY_ID[id];
+  if (!r || r.kind !== 'trigger' || r.merged || !r.trigger || !MERGEABLE.includes(r.trigger)) return 0;
+  const m = /_(\d)$/.exec(id);
+  return m ? Number(m[1]) : 1;
+}
+
+/** Forge two identical triggers of one level into the next level (level 1 x2 -> level 2, level 2 x2 -> level 3 ...), or the reason it can't be done. */
+export function tierUpResult(a: string, b: string): RuneDef | string {
+  const la = triggerLevel(a), lb = triggerLevel(b);
+  if (!la || !lb) return 'Only On Hit, On Kill and On Critical Hit triggers have levels.';
+  if (a !== b) return 'Forge two triggers of the SAME type and level (two level 1s make a level 2, two level 2s make a level 3, ...).';
+  if (la >= 4) return `${RUNE_BY_ID[a].name} is already the highest level.`;
+  const base = a.replace(/_\d$/, '');
+  return RUNE_BY_ID[`${base}_${la + 1}`];
+}
+
+/** How likely a rune is to be offered, relative to its rarity: higher trigger levels are mostly made by forging, not found. */
+export function dropWeight(r: RuneDef): number {
+  const l = triggerLevel(r.id);
+  return l === 2 ? 0.2 : l === 3 ? 0.04 : l >= 4 ? 0 : 1;
+}
+
 export const KIND_LABEL: Record<RuneKind, string> = {
   core: 'Core', form: 'Form', behavior: 'Behavior', trigger: 'Trigger', modifier: 'Modifier',
 };
