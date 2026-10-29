@@ -119,28 +119,113 @@ export function decodeFrame(buf: ArrayBuffer): { meta: Record<string, unknown> &
   return { meta, recs };
 }
 
-/** Guest-side pool: images keyed by the host's ids, eased towards the latest snapshot. */
+/** One decoded snapshot, stamped with the host's clock. */
+export interface Frame {
+  seq: number; ts: number; recs: Map<number, Rec>; texts: TextRec[];
+  me: { x: number; y: number } | null; pl: { pid: number; x: number; y: number; down: boolean }[];
+}
+
+/**
+ * Guest-side renderer. Snapshots arrive about 20 times a second with network jitter, so drawing each one as it lands looks
+ * steppy. Instead frames are buffered with the host's timestamps and the world is drawn a short, adaptive time in the past,
+ * interpolating every sprite (and the camera position) between the two frames around that moment.
+ */
 export class MirrorLayer {
-  private imgs = new Map<number, { img: Phaser.GameObjects.Image; tx: number; ty: number; seen: number }>();
+  private imgs = new Map<number, { img: Phaser.GameObjects.Image; shown: number }>();
   private free: Phaser.GameObjects.Image[] = [];
   private texts: Phaser.GameObjects.Text[] = [];
-  private frame = 0;
+  private frames: Frame[] = [];
+  private lastStatic: Frame | null = null;
+  private playT: number | null = null;
+  private lastNow = 0;
+  private tick = 0;
+  private offWin: { at: number; d: number }[] = [];
+  private jitter = 0;
+  private lastTs = 0;
+  private gap = 50;
+  /** How far behind the newest data we draw (ms); adapts to measured jitter. */
+  delay = 110;
+  /** Set each render: the interpolated camera/player positions. */
+  view: { me: { x: number; y: number } | null; pl: Map<number, { x: number; y: number; down: boolean }> } = { me: null, pl: new Map() };
 
   constructor(private scene: Phaser.Scene, private names: string[]) {}
 
-  apply(recs: Rec[], texts: TextRec[]) {
-    this.frame++;
-    for (const r of recs) {
+  /** Add a snapshot (arrival time `now` in ms on this machine). Out-of-order frames are dropped. */
+  push(meta: Record<string, any>, recs: Rec[], texts: TextRec[], now: number): boolean { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const last = this.frames[this.frames.length - 1];
+    if (last && meta.seq <= last.seq) return false;
+    const ts = meta.ts as number;
+    // the smallest (arrival - host time) over a sliding window is the best estimate of the clock offset
+    const d = now - ts;
+    this.offWin.push({ at: now, d });
+    while (this.offWin.length && now - this.offWin[0].at > 4000) this.offWin.shift();
+    if (this.lastTs) {
+      const g = ts - this.lastTs;
+      if (g > 0 && g < 400) this.gap += (g - this.gap) * 0.1;
+      const j = Math.abs(d - this.minOffset());
+      this.jitter += (j - this.jitter) * 0.1;
+    }
+    this.lastTs = ts;
+    this.delay = Math.max(85, Math.min(300, 1.6 * this.gap + 2.5 * this.jitter + 20));
+    const map = new Map<number, Rec>();
+    for (const r of recs) map.set(r.id, r);
+    this.frames.push({ seq: meta.seq, ts, recs: map, texts, me: meta.me ? { x: meta.me.x, y: meta.me.y } : null, pl: meta.pl ?? [] });
+    while (this.frames.length > 10) this.frames.shift();
+    return true;
+  }
+
+  private minOffset(): number { let m = Infinity; for (const o of this.offWin) if (o.d < m) m = o.d; return m === Infinity ? 0 : m; }
+
+  /** Draw the world as it was `delay` ms ago on the host. */
+  render(now: number) {
+    const fs = this.frames;
+    if (!fs.length) return;
+    // playback clock (host time): advances in real time and only gently steers toward the estimate, so a noisy
+    // estimate never makes the world jump or run backwards
+    const target = now - this.minOffset() - this.delay;
+    if (this.playT === null || Math.abs(target - this.playT) > 500) this.playT = target;
+    else { this.playT += now - this.lastNow; this.playT += (target - this.playT) * 0.06; }
+    this.lastNow = now;
+    const T = this.playT;
+    let f0 = fs[0], f1 = fs[0], alpha = 0;
+    if (fs.length > 1) {
+      if (T >= fs[fs.length - 1].ts) { f0 = fs[fs.length - 2]; f1 = fs[fs.length - 1]; alpha = Math.min(1.8, (T - f0.ts) / Math.max(1, f1.ts - f0.ts)); } // starved: extrapolate briefly
+      else if (T <= fs[0].ts) { f0 = fs[0]; f1 = fs[1]; alpha = 0; }
+      else {
+        for (let i = 1; i < fs.length; i++) if (fs[i].ts >= T) { f0 = fs[i - 1]; f1 = fs[i]; alpha = (T - f0.ts) / Math.max(1, f1.ts - f0.ts); break; }
+      }
+    }
+    if (f1 !== this.lastStatic) { this.applyStatic(f1); this.lastStatic = f1; }
+    for (const [id, e] of this.imgs) {
+      const r = f1.recs.get(id);
+      if (!r) continue;
+      const p = f0.recs.get(id);
+      if (p && p !== r && Math.abs(r.x - p.x) < 220 && Math.abs(r.y - p.y) < 220) e.img.setPosition(p.x + (r.x - p.x) * alpha, p.y + (r.y - p.y) * alpha);
+      else e.img.setPosition(r.x, r.y);
+    }
+    // camera inputs, interpolated the same way
+    const lerp = (a: number, b: number) => a + (b - a) * alpha;
+    this.view.me = f1.me && f0.me ? { x: lerp(f0.me.x, f1.me.x), y: lerp(f0.me.y, f1.me.y) } : f1.me;
+    this.view.pl.clear();
+    for (const q of f1.pl) {
+      const o = f0.pl.find((z) => z.pid === q.pid);
+      this.view.pl.set(q.pid, o ? { x: lerp(o.x, q.x), y: lerp(o.y, q.y), down: q.down } : { x: q.x, y: q.y, down: q.down });
+    }
+  }
+
+  /** Everything except position, set once per new target frame. */
+  private applyStatic(f: Frame) {
+    this.tick++;
+    for (const r of f.recs.values()) {
       let e = this.imgs.get(r.id);
       if (!e) {
         const img = this.free.pop() ?? this.scene.add.image(0, 0, this.names[r.tex]);
-        e = { img, tx: r.x, ty: r.y, seen: this.frame };
         img.setPosition(r.x, r.y);
+        e = { img, shown: this.tick };
         this.imgs.set(r.id, e);
       }
       const im = e.img;
-      e.seen = this.frame; e.tx = r.x; e.ty = r.y;
-      if (Math.abs(im.x - r.x) > 220 || Math.abs(im.y - r.y) > 220) im.setPosition(r.x, r.y);
+      e.shown = this.tick;
       const name = this.names[r.tex];
       if (name && im.texture.key !== name) im.setTexture(name);
       const [ox, oy] = ORIGINS[r.origin] ?? ORIGINS[0];
@@ -149,9 +234,9 @@ export class MirrorLayer {
       if (r.tintMode === 2) im.setTintFill(r.tint); else if (r.tintMode === 1) im.setTint(r.tint); else im.clearTint();
     }
     for (const [id, e] of this.imgs) {
-      if (e.seen !== this.frame) { e.img.setVisible(false); this.free.push(e.img); this.imgs.delete(id); }
+      if (e.shown !== this.tick) { e.img.setVisible(false); this.free.push(e.img); this.imgs.delete(id); }
     }
-    // floating text
+    const texts = f.texts;
     while (this.texts.length < texts.length) {
       this.texts.push(this.scene.add.text(0, 0, '', { fontFamily: '"Press Start 2P", monospace', fontSize: '10px', color: '#fff', stroke: '#000', strokeThickness: 4 }).setOrigin(0.5).setVisible(false));
     }
@@ -162,25 +247,18 @@ export class MirrorLayer {
     });
   }
 
-  /** Ease the images towards their targets (called every rendered frame). */
-  update(dt: number) {
-    const k = 1 - Math.exp(-dt * 22);
-    for (const e of this.imgs.values()) {
-      e.img.x += (e.tx - e.img.x) * k;
-      e.img.y += (e.ty - e.img.y) * k;
-    }
-  }
-
   clear() {
     for (const e of this.imgs.values()) { e.img.setVisible(false); this.free.push(e.img); }
     this.imgs.clear();
     for (const t of this.texts) t.setVisible(false);
+    this.frames = []; this.lastStatic = null; this.offWin = []; this.jitter = 0; this.lastTs = 0; this.gap = 50; this.playT = null;
+    this.view = { me: null, pl: new Map() };
   }
 
   destroy() {
     for (const e of this.imgs.values()) e.img.destroy();
     for (const i of this.free) i.destroy();
     for (const t of this.texts) t.destroy();
-    this.imgs.clear(); this.free = []; this.texts = [];
+    this.imgs.clear(); this.free = []; this.texts = []; this.frames = [];
   }
 }

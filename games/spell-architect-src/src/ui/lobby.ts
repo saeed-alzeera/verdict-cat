@@ -74,7 +74,7 @@ export function showMultiplayer(ui: UI, prefillCode = '') {
         await net.connect(code, name);
         const w = await Promise.race([welcome, new Promise<never>((_, rej) => setTimeout(() => rej(new Error('The host did not respond.')), 8000))]);
         ui.closeModal(m);
-        const opts: MpOpts = { role: 'guest', name, code, guest: net, welcome: { pid: Number(w.pid), seed: Number(w.seed), round: Number(w.round) }, early };
+        const opts: MpOpts = { role: 'guest', name, code, guest: net, welcome: { pid: Number(w.pid), seed: Number(w.seed), round: Number(w.round), host: String(w.host ?? 'Host') }, early };
         ui.startMp(opts);
       } catch (err) { net.close(); say((err as Error).message, true); busy = false; }
     }

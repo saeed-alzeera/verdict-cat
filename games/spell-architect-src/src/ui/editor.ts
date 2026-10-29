@@ -12,7 +12,7 @@ import {
   checkAttach, findNode, newNode, spellCost, subtreeRunes, estimate, walk, type SpellNode,
 } from '../core/spell';
 import { audio } from '../core/audio';
-import type { Run } from '../game/run';
+import { earlyPower, type Run } from '../game/run';
 import type { ActiveSpell } from '../game/types';
 import { el, type UI } from './ui';
 import { relicManager } from './relics';
@@ -419,7 +419,7 @@ class Editor {
     const rm = this.tab === 'relics' ? relicManager(run, () => this.render()) : null;
     const pl = run.player;
     const statsInfo = `<div class="spname">STATS</div><div class="statgrid">
-      <span>Spell power</span><b>x${pl.dmgMul.toFixed(2)}</b><span>Cooldown</span><b>x${pl.cdMul.toFixed(2)}</b>
+      <span>Spell power</span><b>x${pl.dmgMul.toFixed(2)}${earlyPower(run.round) > 1.001 ? ` (+${Math.round((earlyPower(run.round) - 1) * 100)}% early)` : ''}</b><span>Cooldown</span><b>x${pl.cdMul.toFixed(2)}</b>
       <span>Crit chance</span><b>${Math.round(pl.crit * 100)}%</b><span>Crit damage</span><b>x${pl.critMul.toFixed(2)}</b>
       <span>Max health</span><b>${Math.round(pl.maxHp)}</b><span>Regen</span><b>${pl.regen.toFixed(2)}/s</b>
       <span>Move speed</span><b>${Math.round(pl.speed)}</b><span>Pickup range</span><b>x${(pl.pickup * run.mods.pickupMul).toFixed(2)}</b>

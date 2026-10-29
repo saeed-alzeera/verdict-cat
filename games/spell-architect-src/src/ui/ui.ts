@@ -419,6 +419,33 @@ class UI {
     this.push('pause', n);
   }
 
+  /** Co-op guest: the host paused. Same look as the pause menu, but only the host can resume. */
+  showHostPause(hostName: string) {
+    const run = this.run;
+    if (!run || this.stack.some((l) => l.kind === 'hostpause')) return;
+    const n = el(`<div class="overlay"><div class="panel pausep">
+      <h2>Paused</h2>
+      <p class="muted" style="line-height:2">${hostName.replace(/[<>&]/g, '')} paused the game. It resumes when they do.</p>
+      <div class="btns">
+        <button class="big" data-a="overview">🔮 Spell Overview</button>
+        <button class="big" data-a="journal">📜 Journal</button>
+        <button class="big danger" data-a="quit">Leave Game</button>
+      </div>
+      <div class="sett"></div>
+    </div></div>`);
+    $('.sett', n).appendChild(this.settingsPanel(true));
+    n.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('button[data-a]') as HTMLElement | null;
+      if (!b) return;
+      audio.play('ui');
+      if (b.dataset.a === 'overview') showSpellOverview(this, run);
+      else if (b.dataset.a === 'journal') this.showJournal();
+      else if (b.dataset.a === 'quit') this.quitToMenu();
+    });
+    this.push('hostpause', n, (e) => e.key === 'Escape' && this.stack[this.stack.length - 1]?.kind === 'hostpause'); // only the host can resume
+  }
+  hideHostPause() { this.pop('hostpause'); }
+
   openEditorFromPlay() {
     const run = this.run;
     if (!run || run.over || !(run.sandbox || run.phase === 'prep')) return;

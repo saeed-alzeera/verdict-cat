@@ -23,7 +23,7 @@ export interface MpOpts {
   host?: HostNet;
   guest?: GuestNet;
   /** Guest: what the host told us on connecting, plus any messages that arrived while the scene was starting. */
-  welcome?: { pid: number; seed: number; round: number };
+  welcome?: { pid: number; seed: number; round: number; host?: string };
   early?: Record<string, unknown>[];
 }
 
@@ -230,7 +230,7 @@ export class HostSession implements CoopLink {
     const boss = run.boss && !run.boss.dead && run.boss.boss ? { n: run.boss.boss.name, hp: Math.round(run.boss.hp), mh: Math.round(run.boss.maxHp) } : null;
     const teamKills = run.players.reduce((n, p) => n + p.kills, 0);
     const base = {
-      seq: ++this.seq, t: run.time, round: run.round, phase: run.phase, el: run.roundElapsed, quick: run.quick, kills: teamKills,
+      seq: ++this.seq, ts: performance.now(), paused: run.frozen && run.phase === 'fight' && !run.over ? 1 : 0, t: run.time, round: run.round, phase: run.phase, el: run.roundElapsed, quick: run.quick, kills: teamKills,
       pl: run.players.map((p) => ({ pid: p.pid, name: p.pname, x: Math.round(p.player.x), y: Math.round(p.player.y), hp: Math.round(p.player.hp), mh: p.player.maxHp, down: p.down })),
       boss, ta: a.active ? 1 : 0, tiles: [...a.state].join(''), tt, tels, sfx: this.sfx, shake: Math.round(run.fx.shakeMag * 10) / 10,
     };
@@ -298,8 +298,8 @@ export class GuestSession implements CoopLink {
   inFight = false;
   private layer: MirrorLayer;
   private names: string[];
-  private latest: ArrayBuffer | null = null;
-  private lastSeq = -1;
+  private queue: ArrayBuffer[] = [];
+  private pausedShown = false;
   private lastInput = '';
   private inputT = 0;
   private lastView = '';
@@ -316,6 +316,7 @@ export class GuestSession implements CoopLink {
   constructor(public run: Run, private scene: Phaser.Scene, private net: GuestNet, private opts: MpOpts) {
     this.code = opts.code;
     this.pid = opts.welcome?.pid ?? 0;
+    this.hostName = opts.welcome?.host ?? 'Host';
     run.coop = this;
     run.pname = opts.name;
     if (opts.welcome) { run.seed = opts.welcome.seed; run.round = opts.welcome.round; run.plan = planFor(run.round, run.seed); }
@@ -323,7 +324,7 @@ export class GuestSession implements CoopLink {
     this.layer = new MirrorLayer(scene, this.names);
     net.h = {
       onCtl: (m) => this.onCtl(m),
-      onSnap: (b) => { this.latest = b; },
+      onSnap: (b) => { this.queue.push(b); if (this.queue.length > 12) this.queue.shift(); },
       onClose: (why) => this.onClosed(why),
     };
     for (const m of opts.early ?? []) this.onCtl(m);
@@ -374,7 +375,7 @@ export class GuestSession implements CoopLink {
     run.phase = 'fight'; run.frozen = false;
     this.coinBase = run.coins;
     this.inFight = true;
-    this.lastSeq = -1;
+    this.queue = [];
     this.layer.clear();
     ui.closePrep();
     run.announce(isBoss(round) ? `ROUND ${round}: BOSS` : `ROUND ${round}`, isBoss(round) ? '#ff6b6b' : '#9fd8ff');
@@ -385,6 +386,7 @@ export class GuestSession implements CoopLink {
     const r = m.res;
     this.inFight = false;
     this.layer.clear();
+    if (this.pausedShown) { this.pausedShown = false; ui.hideHostPause(); }
     run.fx.reset();
     // the host's copy of this character is authoritative for what the round changed (level-ups, mutation progress, relic counters)
     const keep = { x: run.player.x, y: run.player.y };
@@ -475,19 +477,18 @@ export class GuestSession implements CoopLink {
     const vk = `${Math.round(viewW)}x${Math.round(viewH)}`;
     if (vk !== this.lastView) { this.lastView = vk; this.net.sendCtl({ t: 'view', w: Math.round(viewW), h: Math.round(viewH) }); }
 
-    if (this.latest) {
-      const f = decodeFrame(this.latest);
-      this.latest = null;
-      const stale = typeof f.meta.seq === 'number' && f.meta.seq <= this.lastSeq; // an older frame arrived late (unordered channel)
-      if (!stale) {
-        this.lastSeq = f.meta.seq as number;
-        this.applyMeta(f.meta);
-        this.layer.apply(f.recs, f.meta.texts);
-      }
-    }
-    this.layer.update(dt);
-    // keep telegraphs ticking between snapshots, then draw them and the floor
     const now = performance.now();
+    // decode everything that arrived; the layer drops out-of-order frames, and the HUD/floor data comes from the newest one
+    let newest: Record<string, any> | null = null; // eslint-disable-line @typescript-eslint/no-explicit-any
+    for (const buf of this.queue) {
+      const f = decodeFrame(buf);
+      if (this.layer.push(f.meta, f.recs, f.meta.texts, now)) newest = f.meta;
+    }
+    this.queue = [];
+    if (newest) this.applyMeta(newest);
+    this.layer.render(now); // draws slightly in the past, interpolated
+    this.syncPause();
+    // keep telegraphs ticking between snapshots, then draw them and the floor
     const g = run.telGfx;
     g.clear();
     for (const t of this.tels) {
@@ -495,6 +496,14 @@ export class GuestSession implements CoopLink {
       if (left > 0) drawTelegraph(g, { ...t.v, t: left });
     }
     run.arena.draw(run.floorGfx, run.time);
+  }
+
+  /** The host paused: show the guests a pause screen (and take it away when play resumes). */
+  private syncPause() {
+    const paused = !!this.meta?.paused && this.inFight;
+    if (paused === this.pausedShown) return;
+    this.pausedShown = paused;
+    if (paused) ui.showHostPause(this.hostName); else ui.hideHostPause();
   }
 
   private applyMeta(meta: Record<string, any>) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -527,12 +536,12 @@ export class GuestSession implements CoopLink {
 
   /** Where the camera should look: you, or a teammate while you are down. */
   cameraTarget(): { x: number; y: number } {
+    const v = this.layer.view;
     const m = this.meta;
     if (m && m.me.down) {
-      const mate = (m.pl as { pid: number; x: number; y: number; down: boolean }[]).find((q) => !q.down && q.pid !== this.pid);
-      if (mate) return mate;
+      for (const [pid, q] of v.pl) if (pid !== this.pid && !q.down) return q;
     }
-    return this.run.player;
+    return v.me ?? this.run.player;
   }
 
   destroy() { this.layer.destroy(); }

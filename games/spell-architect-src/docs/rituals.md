@@ -1,6 +1,6 @@
 # Rituals: scope
 
-**Status:** proposal, nothing built. **Goal:** a run-long goal system that rewards playing well and building with intent. A Ritual is a contract with a few objectives that must all be met within a few rounds; meet them and you get a permanent upgrade for the rest of the run.
+**Status:** tabled (proposal only, nothing built; revisit after the health/starter rebalance and more normal-mode run data). **Goal:** a run-long goal system that rewards playing well and building with intent. A Ritual is a contract with a few objectives that must all be met within a few rounds; meet them and you get a permanent upgrade for the rest of the run.
 
 ## Why this, and why now
 

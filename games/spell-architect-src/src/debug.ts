@@ -2,11 +2,12 @@
 import { checkAttach, newNode, findNode, walk, compileSpell, spellCost } from './core/spell';
 import { RUNES, RUNE_BY_ID } from './data/runes';
 import { HostNet, GuestNet } from './net/rtc';
+import { MirrorLayer } from './net/mirror';
 import { generateRewards } from './game/rewards';
 import { store } from './core/save';
 import { ui } from './ui/ui';
 import { planFor } from './game/rounds';
 import * as shop from './game/shop';
-import { spawnEnemy } from './game/enemies';
+import { spawnEnemy, playerScale } from './game/enemies';
 
-(window as unknown as Record<string, unknown>).__SA = { checkAttach, newNode, findNode, walk, compileSpell, spellCost, RUNES, RUNE_BY_ID, generateRewards, store, ui, planFor, shop, HostNet, GuestNet, spawnEnemy };
+(window as unknown as Record<string, unknown>).__SA = { checkAttach, newNode, findNode, walk, compileSpell, spellCost, RUNES, RUNE_BY_ID, generateRewards, store, ui, planFor, shop, HostNet, GuestNet, spawnEnemy, MirrorLayer, playerScale };

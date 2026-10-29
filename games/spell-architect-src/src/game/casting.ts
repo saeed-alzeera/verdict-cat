@@ -5,7 +5,7 @@ import { copiesOf, baseDamage, lifeOf, spellCooldown, type CForm } from '../core
 import { audio } from '../core/audio';
 import type { ActiveSpell, Enemy, GameEvent, SEnt, Src } from './types';
 import type { Run } from './run';
-import { ARENA } from './run';
+import { ARENA, earlyPower } from './run';
 import { onCast, cooldownMul } from './relics';
 import {
   dealDamage, applyElement, applyWet, applyPoison, POISON_BASE_STACKS, arc, explode, envReact, gravityImpulse, pullResist, reaction, reactDamage,
@@ -67,7 +67,7 @@ export function spawnEnt(run: Run, sp: ActiveSpell, f: CForm, x: number, y: numb
   const size = (1 + 0.3 * f.m.grow) * mut.size * (o.sizeMul ?? 1);
   const rad = (1 + 0.35 * f.m.area) * (1 + 0.15 * f.m.grow) * mut.area * (o.sizeMul ?? 1);
   const spd = 1 + 0.4 * f.m.acc;
-  en.dmg = baseDamage(f, mut) * pm.dmgMul * (o.dmgMul ?? 1);
+  en.dmg = baseDamage(f, mut) * pm.dmgMul * earlyPower(run.world.round) * (o.dmgMul ?? 1);
   en.life = en.maxLife = o.life ?? lifeOf(f);
   en.root = !!o.root;
   en.anchor = o.anchor ?? false;
