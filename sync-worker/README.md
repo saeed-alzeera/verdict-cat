@@ -62,6 +62,7 @@ logic in `mp.js`, tests in `mp.test.mjs` (`node --test sync-worker/mp.test.mjs`)
 | POST | `/mp/rooms/:code/join` | `{ name }` -> `{ peerId, peerKey }` (max 4 players) |
 | POST | `/mp/rooms/:code/signal` | `{ as, key, to, kind, data }`, kind is offer / answer / ice / bye |
 | GET | `/mp/rooms/:code/signal?as=&key=&after=&wait=` | long-poll the mailbox |
+| POST | `/mp/rooms/:code/lock` | `{ key }` (host only): the game started, no new players, but players already in the room may still signal (to reconnect after a drop) |
 | POST | `/mp/rooms/:code/close` | `{ key }` (host only) |
 
 Deploying this change runs the `v2` migration that adds the `MPRoom` class.

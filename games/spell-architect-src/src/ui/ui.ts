@@ -191,11 +191,8 @@ class Hud {
   /** Teammates' health (co-op). */
   updateParty(run: Run) {
     let list: { name: string; hp: number; mh: number; down: boolean; me: boolean }[] = [];
-    if (run.coop?.role === 'host') list = run.players.map((q) => ({ name: q.pname, hp: q.player.hp, mh: q.player.maxHp, down: q.down, me: q === run }));
-    else if (run.coop?.role === 'guest') {
-      const m = (run.coop as unknown as { meta?: { pl?: { pid: number; name: string; hp: number; mh: number; down: boolean }[]; me?: { pid: number } } }).meta;
-      list = (m?.pl ?? []).map((q) => ({ name: q.name, hp: q.hp, mh: q.mh, down: q.down, me: q.pid === m?.me?.pid }));
-    }
+    const co = run.coop as unknown as { party?: () => typeof list } | null;
+    if (co?.party) list = co.party();
     const key = list.map((q) => `${q.name}${Math.round(q.hp)}${q.down}`).join('|');
     if (key === this.partyKey) return;
     this.partyKey = key;

@@ -4,7 +4,20 @@ import Phaser from 'phaser';
 
 type Ctx = CanvasRenderingContext2D;
 
+/** Every generated texture, in creation order. This order is identical on every machine running the same build, so it doubles
+ *  as the numeric sprite id used on the wire (co-op). Phaser's own textures (e.g. one per Text object, keyed by a random UUID)
+ *  differ per machine and must never be used for that. */
+export const TEXTURE_KEYS: string[] = [];
+export const TEXTURE_ID = new Map<string, number>();
+/** A short fingerprint of the texture table; host and joiner compare it on connect so a stale cached build is refused up front. */
+export const textureHash = (): number => {
+  let h = 2166136261;
+  for (const k of TEXTURE_KEYS) for (let i = 0; i < k.length; i++) { h ^= k.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h ^ TEXTURE_KEYS.length) >>> 0;
+};
+
 function canvasTex(scene: Phaser.Scene, key: string, w: number, h: number, draw: (c: Ctx) => void, smooth = false) {
+  if (!TEXTURE_ID.has(key)) { TEXTURE_ID.set(key, TEXTURE_KEYS.length); TEXTURE_KEYS.push(key); }
   if (scene.textures.exists(key)) return;
   const t = scene.textures.createCanvas(key, w, h)!;
   const c = t.getContext();

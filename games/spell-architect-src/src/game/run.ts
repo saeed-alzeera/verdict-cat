@@ -19,7 +19,13 @@ import { drawTelegraph } from './draw';
 import { updateCasting, updateEnts, processEvents } from './casting';
 
 import { Arena, ARENA, tileCx, tileCy } from './arena';
+import { stepMove } from './move';
+import { applyTint, poseEnemy, poseWizard, tintKey } from './render';
 export { ARENA };
+
+/** Ids for the small world objects (enemy bullets, pickups, zones) so a co-op joiner can follow each one between snapshots. */
+let oid = 1;
+const nextOid = () => (oid = (oid + 1) & 0xffff || 1);
 const CELL = 64;
 /** Health income (the run-long health budget was the main killer in the saved runs): a slow baseline regen and a modest heal at each round start. */
 export const BASE_REGEN = 0.15; // HP per second, about 7 HP over a 45 s round
@@ -28,17 +34,14 @@ export const ROUND_START_HEAL = 0.06; // of max HP
 export const EARLY_POWER = 0.6;
 export const earlyPower = (round: number) => 1 + EARLY_POWER * Math.max(0, 1 - (round - 1) / 4);
 
-const attuneTint = (a: string): number => {
-  const c = a in ELEMENTS ? ELEMENTS[a as keyof typeof ELEMENTS].color : 0xffffff;
-  const l = (v: number) => Math.round(255 - (255 - v) * 0.85);
-  return (l((c >> 16) & 255) << 16) | (l((c >> 8) & 255) << 8) | l(c & 255);
-};
-
 export type Pending =
   | { type: 'levelup' }
   | { type: 'cache' }
   | { type: 'relic'; options: string[] }
   | { type: 'mutation'; sp: ActiveSpell; track: MutTrack };
+
+/** One frame of a joiner's input: stick direction as signed bytes and how long it was held (seconds, quantised to 1/4000 s). */
+export interface Cmd { seq: number; ix: number; iy: number; dt: number }
 
 /** Co-op plumbing handed to a Run (see net/coop.ts). */
 export interface CoopLink {
@@ -157,6 +160,12 @@ export class Run {
   floorGfx: Phaser.GameObjects.Graphics;
   arena = new Arena();
   input = { x: 0, y: 0 };
+  /** Remote shells (host): joiner input commands waiting to be applied, the time budget left to apply them, the newest queued
+   *  and the newest applied sequence numbers. */
+  cmdQ: Cmd[] = [];
+  cmdCredit = 0.25;
+  cmdSeq = 0;
+  cmdAck = 0;
   gemCount = 0;
   boosts: string[] = []; // stat boosts gained from level-ups this run
   openerDone = false;
@@ -248,7 +257,7 @@ export class Run {
       pid, pname: name, remote: true, down: false,
       player: p, spells: [] as ActiveSpell[], slots: 0, inv: {}, coins: 0, buys: {}, owned: [] as string[], equipped: [] as string[],
       relicState: {}, inRelic: false, critKill: false, kills: 0, totalDamage: 0, reactionCount: 0, hurtBy: {}, lastHurt: '', pending: [] as Pending[],
-      boosts: [] as string[], input: { x: 0, y: 0 }, ultTrack: null, capExtra: 0,
+      boosts: [] as string[], input: { x: 0, y: 0 }, ultTrack: null, capExtra: 0, cmdQ: [] as Cmd[], cmdCredit: 0.25, cmdSeq: 0, cmdAck: 0,
       mods: { elements: 0, poisonCap: 0, coinMul: 1, priceMul: 1, rerollMul: 1, rerollMinus: 0, pickupMul: 1, forgeMinus: 0 },
     });
     w.players.push(s);
@@ -518,12 +527,12 @@ export class Run {
   /** Coins drop as pickups (collect them, or grab a magnet); everything is swept up at round end. */
   dropCoin(x: number, y: number, v: number) {
     if (this.pickups.length > 150) { this.coins += v * this.mods.coinMul; return; }
-    const pk: Pickup = { x: x + (Math.random() - 0.5) * 14, y: y + (Math.random() - 0.5) * 14, type: 'coin', v, spr: this.img('coin', 3).setScale(1.7 + 0.3 * Math.min(2, v)), fly: false, t: Math.random() * 6, dead: false };
+    const pk: Pickup = { id: nextOid(), x: x + (Math.random() - 0.5) * 14, y: y + (Math.random() - 0.5) * 14, type: 'coin', v, spr: this.img('coin', 3).setScale(1.7 + 0.3 * Math.min(2, v)), fly: false, t: Math.random() * 6, dead: false };
     this.pickups.push(pk);
   }
   dropPickup(type: 'heal' | 'magnet' | 'cache', x: number, y: number) {
     const tex = type === 'heal' ? 'heart' : type === 'magnet' ? 'magnet' : 'chest';
-    const pk: Pickup = { x, y, type, v: type === 'heal' ? 6 : 0, spr: this.img(tex, 3).setScale(type === 'cache' ? 3 : 2.4), fly: false, t: 0, dead: false };
+    const pk: Pickup = { id: nextOid(), x, y, type, v: type === 'heal' ? 6 : 0, spr: this.img(tex, 3).setScale(type === 'cache' ? 3 : 2.4), fly: false, t: 0, dead: false };
     this.pickups.push(pk);
   }
 
@@ -562,12 +571,12 @@ export class Run {
   fireBullet(x: number, y: number, ang: number, speed: number, dmg: number, color = 0xff2a4a) {
     if (this.bullets.length > 320) return;
     const spr = this.img('ebullet', 11, true).setTint(color).setScale(1.6);
-    this.bullets.push({ x, y, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, r: 7, dmg, life: 6, spr, dead: false });
+    this.bullets.push({ id: nextOid(), x, y, vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed, r: 7, dmg, life: 6, spr, dead: false });
   }
 
   addTelegraph(o: Partial<Telegraph> & { shape: Telegraph['shape']; dur: number; color: number; onDone: () => void; follow: Enemy | null }) {
     this.tels.push({
-      shape: o.shape, x: o.x ?? 0, y: o.y ?? 0, r: o.r ?? 0, ang: o.ang ?? 0, len: o.len ?? 0, w: o.w ?? 0,
+      id: nextOid(), shape: o.shape, x: o.x ?? 0, y: o.y ?? 0, r: o.r ?? 0, ang: o.ang ?? 0, len: o.len ?? 0, w: o.w ?? 0,
       t: o.dur, total: o.dur, color: o.color, follow: o.follow, onDone: o.onDone, dead: false,
     });
   }
@@ -575,7 +584,7 @@ export class Run {
   addZone(x: number, y: number, r: number, life: number, dmg: number) {
     const spr = this.img('zone', 1).setTint(0x66dd33).setAlpha(0.55).setScale(r / 61);
     spr.setPosition(x, y);
-    this.zones.push({ x, y, r, t: life, dmg, tick: 0, spr, dead: false });
+    this.zones.push({ id: nextOid(), x, y, r, t: life, dmg, tick: 0, spr, dead: false });
   }
 
   hurtPlayer(dmg: number, sx: number, sy: number, cause = 'enemy') {
@@ -619,7 +628,7 @@ export class Run {
     for (const t of this.tels) t.dead = true;
     this.fx.shake(12);
     this.fx.ring(e.x, e.y, 0xffe08a, 20, 400, 0.8);
-    this.scene.cameras.main.flash(250, 255, 240, 200);
+    this.fx.flash(250, 255, 240, 200);
     audio.play('boom');
     for (let i = 0; i < 14; i++) {
       const a = (i / 14) * 6.28;
@@ -722,7 +731,7 @@ export class Run {
 
     this.updateArena(dt);
 
-    for (const pr of this.players) if (!pr.down) pr.movePlayer(dt);
+    for (const pr of this.players) { if (!pr.down) pr.movePlayer(dt); else if (pr.remote) pr.dropCmds(); }
 
     this.recalcEnemyIndex();
     if (!this.over && this.phase === 'fight') updateDirector(this, dt);
@@ -760,29 +769,53 @@ export class Run {
     }
   }
 
-  /** Move this player by its input, resolve the floor, tick timers and regen. */
+  /** Move this player by its input, resolve the floor, tick timers and regen. A co-op joiner's character is moved by the
+   *  input commands the joiner sent instead (see driveRemote): the host never guesses at what a remote player is pressing. */
   movePlayer(dt: number) {
+    if (this.remote) this.driveRemote(dt);
+    else stepMove(this.player, this.arena, this.input.x, this.input.y, dt);
+    this.tickBody(dt);
+  }
+
+  /** Host: a downed remote player's input is ignored; keep the acknowledgement current. */
+  dropCmds() { this.cmdQ.length = 0; this.cmdAck = this.cmdSeq; }
+
+  /** Timers and regeneration that run on host time for every player. */
+  private tickBody(dt: number) {
     const p = this.player;
-    const ox = p.x, oy = p.y;
-    let ix = this.input.x, iy = this.input.y;
-    const il = Math.hypot(ix, iy);
-    if (il > 1) { ix /= il; iy /= il; }
-    p.x += (ix * p.speed + p.vx) * dt;
-    p.y += (iy * p.speed + p.vy) * dt;
-    p.vx *= Math.pow(0.002, dt); p.vy *= Math.pow(0.002, dt);
-    if (p.pullT > 0) {
-      p.pullT -= dt;
-      const dx = p.pullX - p.x, dy = p.pullY - p.y, d = Math.hypot(dx, dy) || 1;
-      p.x += (dx / d) * 150 * dt; p.y += (dy / d) * 150 * dt;
-    }
-    p.x = Math.max(24, Math.min(ARENA - 24, p.x));
-    p.y = Math.max(24, Math.min(ARENA - 24, p.y));
-    this.arena.constrain(p, ox, oy);
-    if (ix !== 0) p.faceX = ix > 0 ? 1 : -1;
-    if (il > 0.1) p.walkT += dt;
     if (p.inv > 0) p.inv -= dt;
     if (p.hurtFlash > 0) p.hurtFlash -= dt;
     p.hp = Math.min(p.maxHp, p.hp + p.regen * dt);
+  }
+
+  /** Host: queue input commands from a joiner (already de-duplicated and in order). */
+  pushCmds(cmds: Cmd[]) {
+    const q = this.cmdQ;
+    for (const c of cmds) {
+      if (((c.seq - this.cmdSeq) & 0xffff) > 0x8000 || c.seq === this.cmdSeq) continue; // old or duplicate (16-bit wraparound)
+      this.cmdSeq = c.seq;
+      q.push(c);
+    }
+    if (q.length > 120) q.splice(0, q.length - 120);
+  }
+
+  /** Host: apply the joiner's queued commands, each for exactly the duration the joiner applied it on its own screen, so the
+   *  joiner's prediction and this authoritative result agree. Time is metered (about 1.15x real time, with a short burst
+   *  allowance for network jitter) so a modified client cannot make its character faster than allowed. */
+  private driveRemote(dt: number) {
+    this.cmdCredit = Math.min(0.25, this.cmdCredit + dt * 1.15);
+    const q = this.cmdQ;
+    let n = 0;
+    while (n < q.length && this.cmdCredit > 0) {
+      const c = q[n++];
+      const ix = c.ix / 127, iy = c.iy / 127;
+      stepMove(this.player, this.arena, ix, iy, c.dt);
+      this.cmdCredit -= c.dt;
+      this.cmdAck = c.seq;
+      this.input.x = ix; this.input.y = iy;
+    }
+    if (n) q.splice(0, n);
+    else if (!q.length) { this.input.x = 0; this.input.y = 0; }
   }
 
   /** Crumbling floor: advance the schedule, announce waves, and drop whatever stands on a tile that falls. */
@@ -1091,45 +1124,11 @@ export class Run {
     this.arena.draw(this.floorGfx, this.time);
     for (const e of this.enemies) {
       if (e.dead) continue;
-      e.wob += 0.0;
-      const t = this.time * 9 + e.id;
-      const bob = Math.sin(t) * 0.06;
-      const fadeIn = e.spawnT > 0 ? 1 - e.spawnT / 0.3 : 1;
-      e.spr.setPosition(e.x, e.y - e.sc * 2 + Math.abs(Math.sin(t)) * -2).setFlipX(e.face < 0)
-        .setScale(e.sc * (1 + bob), e.sc * (1 - bob)).setAlpha(fadeIn).setDepth(5 + e.y / 4000);
-      e.shadow.setPosition(e.x, e.y + e.r * 0.7).setAlpha(0.7 * fadeIn);
-      if (e.badge) e.badge.setPosition(e.x, e.y - e.r - 12 + Math.sin(this.time * 5 + e.id) * 2).setAlpha(0.8 * fadeIn).setScale(0.85 + 0.12 * Math.sin(this.time * 8 + e.id));
-      let key = 0;
-      if (e.flash > 0) key = 1;
-      else if (e.freeze > 0) key = 2;
-      else if (e.burn > 0) key = 3;
-      else if (e.poison > 0) key = 4;
-      else if (e.wet > 0) key = 5;
-      else if (e.buff > 0) key = 6;
-      else if (e.aff !== 'neutral') key = 8;
-      else if (e.elite) key = 7;
-      if (key !== e.tint) {
-        e.tint = key;
-        switch (key) {
-          case 0: e.spr.clearTint(); break;
-          case 1: e.spr.setTintFill(0xffffff); break;
-          case 2: e.spr.setTint(0x9fd8ff); break;
-          case 3: e.spr.setTint(0xffb27a); break;
-          case 4: e.spr.setTint(0xb0ff90); break;
-          case 5: e.spr.setTint(0xa6c4ff); break;
-          case 6: e.spr.setTint(0xffe27a); break;
-          case 7: e.spr.setTint(0xffd9a0); break;
-          case 8: e.spr.setTint(attuneTint(e.aff)); break;
-        }
-      }
+      poseEnemy(e, e.spr, e.shadow, e.badge, this.time);
+      const key = tintKey(e);
+      if (key !== e.tint) { e.tint = key; applyTint(e.spr, key, e.aff); }
     }
-    const walking = Math.hypot(this.input.x, this.input.y) > 0.1;
-    const frame = walking ? (Math.floor(p.walkT * 8) % 2) : (Math.floor(this.time * 2) % 2);
-    playerSpr.setTexture(`wiz${frame}`).setPosition(p.x, p.y - 8).setFlipX(p.faceX < 0).setDepth(8 + p.y / 4000)
-      .setScale(3, 3 * (1 + 0.03 * Math.sin(this.time * 6)));
-    if (p.hurtFlash > 0) playerSpr.setTintFill(0xff5a5a); else playerSpr.clearTint();
-    playerSpr.setAlpha(p.inv > 0 ? (Math.floor(this.time * 20) % 2 ? 0.45 : 1) : 1);
-    playerShadow.setPosition(p.x, p.y + 12);
+    poseWizard(playerSpr, playerShadow, { x: p.x, y: p.y, faceX: p.faceX, walking: Math.hypot(this.input.x, this.input.y) > 0.1, walkT: p.walkT, hurt: p.hurtFlash > 0, inv: p.inv > 0, down: false }, this.time);
   }
 
   destroy() {

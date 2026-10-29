@@ -33,7 +33,7 @@ export function castUltimate(run: Run, sp: ActiveSpell) {
   run.fx.shake(10);
   run.fx.ring(p.x, p.y, color, 10, 520, 0.7);
   run.fx.ring(p.x, p.y, 0xffffff, 10, 320, 0.5);
-  run.scene.cameras.main.flash(220, (color >> 16) & 255, (color >> 8) & 255, color & 255);
+  run.fx.flash(220, (color >> 16) & 255, (color >> 8) & 255, color & 255);
   audio.play('boom');
   audio.play('level');
 

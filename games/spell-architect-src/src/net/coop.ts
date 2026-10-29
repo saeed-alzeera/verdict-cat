@@ -1,20 +1,24 @@
 // Co-op sessions. The HOST runs the one authoritative simulation (every player is a "shell" Run with their own build, stats,
-// relics and rewards); GUESTS keep a normal local Run for everything between rounds (editor, shop, briefing) and, during a round,
-// only send inputs and draw the host's mirrored world.
+// relics and rewards) and replicates it (replicate.ts). A JOINER keeps a normal local Run for everything between rounds
+// (editor, shop, briefing); during a round it predicts its own wizard locally, sends its input commands to the host, and draws
+// the replicated world (replica.ts). See proto.ts for the wire format and channels.
 import Phaser from 'phaser';
 import { audio } from '../core/audio';
 import { store } from '../core/save';
 import { MUT_TRACKS } from '../data/mutations';
-import { ELEMENTS, RUNE_BY_ID } from '../data/runes';
+import { RUNE_BY_ID } from '../data/runes';
 import { planFor } from '../game/rounds';
 import { newShop } from '../game/shop';
-import type { Build, CoopLink, Pending, Run, RunSummary } from '../game/run';
-import type { Enemy } from '../game/types';
+import type { Build, Cmd, CoopLink, Pending, Run, RunSummary } from '../game/run';
+import { poseWizard } from '../game/render';
 import { ui } from '../ui/ui';
 import { showNotice } from '../ui/lobby';
-import { decodeFrame, encodeFrame, MirrorLayer, textureTable, type Cull } from './mirror';
 import type { GuestNet, HostNet } from './rtc';
-import { drawTelegraph } from '../game/draw';
+import { K } from './proto';
+import { Predictor } from './predict';
+import { Replica, type NetStats } from './replica';
+import { Replicator, type GuestView } from './replicate';
+import { Reader, Writer } from './wire';
 
 export interface MpOpts {
   role: 'host' | 'guest';
@@ -28,9 +32,6 @@ export interface MpOpts {
 }
 
 export interface LobbyPlayer { pid: number; name: string; ready: boolean; host: boolean }
-
-/** Messages worth hearing as sound cues on a guest's machine. */
-const SFX_OK = new Set(['fire', 'ice', 'lightning', 'poison', 'water', 'gravity', 'hit', 'kill', 'hurt', 'boom', 'reaction', 'freeze', 'warn', 'boss', 'win', 'lose', 'level']);
 
 /** A guest's build comes from another machine: check it is well formed and sane before the host compiles it. */
 export function validateBuild(b: unknown): string | null {
@@ -56,11 +57,14 @@ export function validateBuild(b: unknown): string | null {
   return null;
 }
 
-const SNAP_INTERVAL = 0.05; // 20 Hz
-const INPUT_INTERVAL = 0.033;
+
+/** How long a dropped player's character is kept (standing down) before the host gives up on them. */
+const GRACE_MS = 45000;
+const CMD_RESEND = 32;
 
 interface GuestRec {
-  id: string; pid: number; name: string; shell: Run; ready: boolean; build: Build | null; view: { w: number; h: number };
+  id: string; pid: number; name: string; shell: Run; ready: boolean; build: Build | null;
+  echo: number; echoAt: number; offline: boolean; offAt: number; wasDown: boolean;
 }
 
 /* =============================================================== HOST =============================================================== */
@@ -71,61 +75,91 @@ export class HostSession implements CoopLink {
   guests = new Map<string, GuestRec>();
   /** Lobby panel refresh. */
   onChange: (() => void) | null = null;
-  private acc = 0;
-  private seq = 0;
-  private sfx: string[] = [];
-  private table: Map<string, number>;
+  rep: Replicator;
   private sprites = new Map<Run, { spr: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text }>();
   private lobbyClosed = false;
+  private started = false;
   private overSent = false;
+  private hostLabel: Phaser.GameObjects.Text | null = null;
 
   constructor(public run: Run, private scene: Phaser.Scene, private net: HostNet, code: string, private name: string) {
     this.code = code;
     run.pname = name;
     run.coop = this;
-    this.table = new Map(textureTable(scene).map((k, i) => [k, i]));
     run.onRemotePending = (pr, item) => this.sendPending(pr, item);
     const orig = run.onAnnounce;
     run.onAnnounce = (t, c, s) => { orig(t, c, s); if (!t.startsWith('NEW ')) this.net.broadcastCtl({ t: 'announce', text: t, color: c, sub: s }); };
-    audio.tap = (n) => { if (SFX_OK.has(n) && this.sfx.length < 10 && !this.sfx.includes(n)) this.sfx.push(n); };
+    this.rep = new Replicator(run, {
+      st: (id, b) => this.net.sendSt(id, b),
+      fx: (id, b) => this.net.sendFx(id, b),
+      ready: (id) => this.net.ready(id),
+    });
     net.h = {
       onPeers: () => this.onChange?.(),
-      onOpen: (id) => this.onOpen(id),
-      onClose: (id) => this.onClose(id),
+      onOpen: (id, rejoin) => this.onOpen(id, rejoin),
+      onClose: (id, graceful) => this.onClose(id, graceful),
       onCtl: (id, m) => this.onCtl(id, m),
-      onSnap: (id, buf) => this.onInput(id, buf),
+      onInp: (id, buf) => this.onInput(id, buf),
       onError: (m) => ui.announce('MULTIPLAYER', '#ff9a9a', m),
     };
-    for (const id of net.ids()) this.onOpen(id); // guests that connected while the scene was starting
+    for (const id of net.ids()) this.onOpen(id, false); // guests that connected while the scene was starting
   }
 
   players(): LobbyPlayer[] {
-    return [{ pid: 0, name: this.name, ready: true, host: true }, ...[...this.guests.values()].map((g) => ({ pid: g.pid, name: g.name, ready: g.ready, host: false }))];
+    return [{ pid: 0, name: this.name, ready: true, host: true }, ...[...this.guests.values()].map((g) => ({ pid: g.pid, name: g.name + (g.offline ? ' (reconnecting)' : ''), ready: g.ready, host: false }))];
   }
-  allReady() { return [...this.guests.values()].every((g) => g.ready); }
+  allReady() { return [...this.guests.values()].every((g) => g.ready || g.offline); }
+  party() { return this.run.players.map((q) => ({ name: q.pname, hp: q.player.hp, mh: q.player.maxHp, down: q.down, me: q === this.run })); }
 
   private lobbyMsg() { return { t: 'lobby', players: this.players() }; }
 
-  private onOpen(id: string) {
-    if (this.guests.has(id)) return;
+  private onOpen(id: string, rejoin: boolean) {
+    const known = this.guests.get(id);
+    if (known) { this.reconnected(known); return; }
+    if (this.started) { this.net.sendCtl(id, { t: 'reject', reason: 'The game has already started.' }); this.net.forget(id); return; }
     const name = this.net.names[id] || 'Guest';
     const pid = Number(id);
     const shell = this.run.addRemotePlayer(pid, name);
-    this.guests.set(id, { id, pid, name, shell, ready: false, build: null, view: { w: 1400, h: 800 } });
-    this.net.sendCtl(id, { t: 'welcome', pid, seed: this.run.seed, round: this.run.round, host: this.name });
+    this.guests.set(id, { id, pid, name, shell, ready: false, build: null, echo: 0, echoAt: 0, offline: false, offAt: 0, wasDown: false });
+    this.net.sendCtl(id, { t: 'welcome', pid, seed: this.run.seed, round: this.run.round, host: this.name, rejoin });
     this.net.broadcastCtl(this.lobbyMsg());
     this.run.announce('PLAYER JOINED', '#9fd8ff', `${name} joined the game.`);
     this.onChange?.();
   }
 
-  private onClose(id: string) {
+  /** A player whose connection dropped is back: put their wizard back on its feet. */
+  private reconnected(g: GuestRec) {
+    g.offline = false;
+    const sh = g.shell;
+    sh.down = g.wasDown;
+    sh.cmdQ.length = 0; sh.cmdCredit = 0.25;
+    if (!sh.down) sh.player.inv = Math.max(sh.player.inv, 2);
+    this.net.sendCtl(g.id, { t: 'welcome', pid: g.pid, seed: this.run.seed, round: this.run.round, host: this.name, rejoin: true });
+    if (this.run.phase === 'fight' || this.run.phase === 'clearing') this.net.sendCtl(g.id, { t: 'start', round: this.run.round, rejoin: true });
+    this.net.broadcastCtl(this.lobbyMsg());
+    this.run.announce('PLAYER RECONNECTED', '#9fd8ff', `${g.name} is back.`);
+    this.onChange?.();
+  }
+
+  private onClose(id: string, graceful: boolean) {
     const g = this.guests.get(id);
     if (!g) return;
-    this.guests.delete(id);
+    if (graceful || !this.started) { this.remove(g, 'disconnected.'); return; }
+    // the connection dropped mid-game: keep their wizard (standing down) for a while so they can reconnect
+    g.offline = true; g.offAt = performance.now(); g.wasDown = g.shell.down; g.shell.down = true; g.ready = true;
+    g.shell.dropCmds();
+    this.run.announce('CONNECTION LOST', '#ffb27a', `${g.name} dropped. Waiting up to ${GRACE_MS / 1000} s for them to reconnect.`);
+    this.net.broadcastCtl(this.lobbyMsg());
+    this.onChange?.();
+  }
+
+  private remove(g: GuestRec, why: string) {
+    this.guests.delete(g.id);
     const sp = this.sprites.get(g.shell);
-    if (sp) { sp.spr.destroy(); sp.shadow.destroy(); sp.label.destroy(); this.sprites.delete(g.shell); }
+    if (sp) { this.run.freeImg(sp.spr); this.run.freeImg(sp.shadow); sp.label.destroy(); this.sprites.delete(g.shell); }
     this.run.removePlayer(g.shell);
-    this.run.announce('PLAYER LEFT', '#ff9a9a', `${g.name} disconnected.`);
+    this.net.forget(g.id);
+    this.run.announce('PLAYER LEFT', '#ff9a9a', `${g.name} ${why}`);
     this.net.broadcastCtl(this.lobbyMsg());
     this.onChange?.();
   }
@@ -141,27 +175,37 @@ export class HostSession implements CoopLink {
       }
       case 'unready': g.ready = false; this.net.broadcastCtl(this.lobbyMsg()); this.onChange?.(); break;
       case 'ult': if (this.run.phase === 'fight' && !g.shell.down) g.shell.useUltimate(); break;
-      case 'view': g.view = { w: Math.min(3000, Number(m.w) || 1400), h: Math.min(2000, Number(m.h) || 800) }; break;
-      case 'bye': this.onClose(id); break;
+      case 'bye': this.remove(g, 'left the game.'); break;
     }
   }
 
-  /** Input stream: [1, ix, iy] as signed bytes. */
+  /** Input stream from a joiner: [Cmd, client time, count, first seq, (ix, iy, dt) x count]. */
   private onInput(id: string, buf: ArrayBuffer) {
     const g = this.guests.get(id);
-    if (!g || buf.byteLength < 3) return;
-    const v = new Int8Array(buf);
-    if (v[0] !== 1) return;
-    g.shell.input.x = Math.max(-1, Math.min(1, v[1] / 127));
-    g.shell.input.y = Math.max(-1, Math.min(1, v[2] / 127));
+    if (!g || g.offline) return;
+    try {
+      const r = new Reader(buf);
+      if (r.u8() !== K.Cmd) return;
+      const ts = r.u32(), n = r.u8();
+      let seq = r.u16();
+      const cmds: Cmd[] = [];
+      for (let i = 0; i < n && i < 64; i++) {
+        const ix = r.i8(), iy = r.i8(), dt = r.u8();
+        cmds.push({ seq, ix: Math.max(-127, ix), iy: Math.max(-127, iy), dt: Math.max(1, Math.min(200, dt)) / 4000 });
+        seq = (seq + 1) & 0xffff;
+      }
+      g.echo = ts; g.echoAt = performance.now();
+      g.shell.pushCmds(cmds);
+    } catch { /* malformed packet */ }
   }
 
   /* ---- CoopLink ---- */
 
   beforeStart(): string | null {
-    const wait = [...this.guests.values()].filter((g) => !g.ready || !g.build);
+    const wait = [...this.guests.values()].filter((g) => !g.offline && (!g.ready || !g.build));
     if (wait.length) return `Waiting for ${wait.map((g) => g.name).join(', ')} to get ready.`;
     for (const g of this.guests.values()) {
+      if (g.offline) continue;
       try { g.shell.applyBuild(g.build!); } catch (e) {
         g.ready = false; g.build = null;
         this.net.sendCtl(g.id, { t: 'announce', text: 'BUILD REJECTED', color: '#ff9a9a', sub: 'Your build could not be loaded. Re-check your spells and ready up again.' });
@@ -169,14 +213,15 @@ export class HostSession implements CoopLink {
         return `${g.name}'s build could not be loaded.`;
       }
       g.shell.down = false;
+      g.shell.dropCmds(); g.shell.cmdCredit = 0.25;
     }
     this.run.rebuildOwners();
-    if (!this.lobbyClosed) { this.lobbyClosed = true; void this.net.closeLobby(); }
+    if (!this.lobbyClosed) { this.lobbyClosed = true; this.started = true; void this.net.lockLobby(); }
     return null;
   }
 
   onStart() {
-    for (const g of this.guests.values()) { g.ready = false; this.net.sendCtl(g.id, { t: 'start', round: this.run.round }); }
+    for (const g of this.guests.values()) { if (g.offline) continue; g.ready = false; this.net.sendCtl(g.id, { t: 'start', round: this.run.round }); }
     this.net.broadcastCtl(this.lobbyMsg());
     this.onChange?.();
   }
@@ -184,7 +229,7 @@ export class HostSession implements CoopLink {
   onPrep() {
     for (const g of this.guests.values()) {
       g.ready = false; g.build = null;
-      this.net.sendCtl(g.id, { t: 'result', round: this.run.round, res: g.shell.roundResult() });
+      if (!g.offline) this.net.sendCtl(g.id, { t: 'result', round: this.run.round, res: g.shell.roundResult() });
     }
     this.net.broadcastCtl(this.lobbyMsg());
     this.onChange?.();
@@ -201,8 +246,9 @@ export class HostSession implements CoopLink {
   ult() { return this.run.useUltimate(); }
 
   leave() {
-    audio.tap = null;
-    this.net.close();
+    this.rep.destroy();
+    this.net.broadcastCtl({ t: 'bye' });
+    setTimeout(() => this.net.close(), 120); // let the goodbye out first
   }
 
   private sendPending(pr: Run, item: Pending) {
@@ -215,40 +261,26 @@ export class HostSession implements CoopLink {
     if (out) this.net.sendCtl(g.id, { t: 'pending', item: out });
   }
 
-  /* ---- per-frame: remote sprites + snapshots ---- */
+  /* ---- per-frame ---- */
 
+  /** Called once per rendered host frame, after the simulation step. */
   frame(dt: number) {
     this.syncSprites();
-    this.acc += dt;
-    if (this.acc < SNAP_INTERVAL || !this.guests.size) return;
-    this.acc = 0;
-    const run = this.run;
-    const a = run.arena;
-    const tels = run.tels.filter((t) => !t.dead).map((t) => ({ shape: t.shape, x: Math.round(t.x), y: Math.round(t.y), r: Math.round(t.r), ang: Math.round(t.ang * 1000) / 1000, len: t.len, w: t.w, t: Math.round(t.t * 100) / 100, total: t.total, color: t.color }));
-    const tt: [number, number][] = [];
-    for (let i = 0; i < a.state.length; i++) if (a.state[i] === 1 || a.state[i] === 2) tt.push([i, Math.round(a.timer[i] * 100) / 100]);
-    const boss = run.boss && !run.boss.dead && run.boss.boss ? { n: run.boss.boss.name, hp: Math.round(run.boss.hp), mh: Math.round(run.boss.maxHp) } : null;
-    const teamKills = run.players.reduce((n, p) => n + p.kills, 0);
-    const base = {
-      seq: ++this.seq, ts: performance.now(), paused: run.frozen && run.phase === 'fight' && !run.over ? 1 : 0, t: run.time, round: run.round, phase: run.phase, el: run.roundElapsed, quick: run.quick, kills: teamKills,
-      pl: run.players.map((p) => ({ pid: p.pid, name: p.pname, x: Math.round(p.player.x), y: Math.round(p.player.y), hp: Math.round(p.player.hp), mh: p.player.maxHp, down: p.down })),
-      boss, ta: a.active ? 1 : 0, tiles: [...a.state].join(''), tt, tels, sfx: this.sfx, shake: Math.round(run.fx.shakeMag * 10) / 10,
-    };
-    this.sfx = [];
-    for (const g of this.guests.values()) {
-      const p = g.shell.player;
-      const me = {
-        pid: g.pid, x: p.x, y: p.y, hp: p.hp, mh: p.maxHp, xp: p.xp, xn: p.xpNeed, lv: p.level, coins: g.shell.coins, down: g.shell.down,
-        cds: g.shell.spells.map((s) => [Math.round(s.cd * 100) / 100, s.live, Math.round(s.ultCd * 10) / 10]),
-      };
-      const cull: Cull = { x: p.x - g.view.w / 2 - 80, y: p.y - g.view.h / 2 - 80, w: g.view.w + 160, h: g.view.h + 160 };
-      this.net.sendSnap(g.id, encodeFrame(this.scene, this.table, { ...base, me }, cull));
-    }
+    const now = performance.now();
+    for (const g of [...this.guests.values()]) if (g.offline && now - g.offAt > GRACE_MS) this.remove(g, 'did not reconnect.');
+    const views: GuestView[] = [];
+    for (const g of this.guests.values()) if (!g.offline) views.push({ id: g.id, shell: g.shell, echo: g.echo, echoAt: g.echoAt });
+    if (this.run.phase === 'fight' || this.run.phase === 'clearing') this.rep.frame(dt, now, views);
+  }
+
+  /** Network numbers for the debug overlay and tests. */
+  netInfo() {
+    const out: Record<string, unknown> = { snap: { ...this.rep.stats } };
+    for (const g of this.guests.values()) out[g.name] = { offline: g.offline, ...this.net.stats(g.id), cmdQueue: g.shell.cmdQ.length, credit: Math.round(g.shell.cmdCredit * 1000) / 1000 };
+    return out;
   }
 
   /** Draw the remote players (the host's own wizard is drawn by the scene). */
-  private hostLabel: Phaser.GameObjects.Text | null = null;
-
   private syncSprites() {
     const run = this.run;
     if (this.guests.size) {
@@ -260,32 +292,29 @@ export class HostSession implements CoopLink {
       let s = this.sprites.get(sh);
       if (!s) {
         s = {
-          spr: this.scene.add.image(0, 0, 'wiz0').setScale(3).setDepth(8),
-          shadow: this.scene.add.image(0, 0, 'shadow').setScale(3).setDepth(4).setAlpha(0.8),
+          spr: run.img('wiz0', 8).setScale(3),
+          shadow: run.img('shadow', 4).setScale(3).setAlpha(0.8),
           label: this.scene.add.text(0, 0, g.name, { fontFamily: '"Press Start 2P", monospace', fontSize: '8px', color: '#9fd8ff', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5).setDepth(15),
         };
         this.sprites.set(sh, s);
       }
       const p = sh.player;
-      const walking = Math.hypot(sh.input.x, sh.input.y) > 0.1;
-      const frame = walking ? Math.floor(p.walkT * 8) % 2 : Math.floor(run.time * 2) % 2;
-      s.spr.setTexture(`wiz${frame}`).setPosition(p.x, p.y - 8).setFlipX(p.faceX < 0).setDepth(8 + p.y / 4000).setScale(3, 3 * (1 + 0.03 * Math.sin(run.time * 6)));
-      if (p.hurtFlash > 0) s.spr.setTintFill(0xff5a5a); else s.spr.setTint(0x9fd8ff);
-      s.spr.setAlpha(sh.down ? 0.25 : p.inv > 0 ? (Math.floor(run.time * 20) % 2 ? 0.45 : 1) : 1);
-      s.shadow.setPosition(p.x, p.y + 12).setAlpha(sh.down ? 0.2 : 0.8);
-      s.label.setPosition(p.x, p.y - 38).setText(sh.down ? `${g.name} (down)` : g.name).setAlpha(sh.down ? 0.6 : 1);
+      poseWizard(s.spr, s.shadow, { x: p.x, y: p.y, faceX: p.faceX, walking: Math.hypot(sh.input.x, sh.input.y) > 0.1, walkT: p.walkT, hurt: p.hurtFlash > 0, inv: p.inv > 0, down: sh.down }, run.time, 0x9fd8ff);
+      s.label.setPosition(p.x, p.y - 38).setText(g.offline ? `${g.name} (offline)` : sh.down ? `${g.name} (down)` : g.name).setAlpha(sh.down ? 0.6 : 1);
     }
   }
 
   destroy() {
-    audio.tap = null;
-    for (const s of this.sprites.values()) { s.spr.destroy(); s.shadow.destroy(); s.label.destroy(); }
+    this.rep.destroy();
+    for (const s of this.sprites.values()) { this.run.freeImg(s.spr); this.run.freeImg(s.shadow); s.label.destroy(); }
     this.sprites.clear();
     this.hostLabel?.destroy(); this.hostLabel = null;
   }
 }
 
 /* =============================================================== GUEST ============================================================== */
+
+const CMD_INTERVAL = 15; // ms between input packets (<= ~66/s)
 
 export class GuestSession implements CoopLink {
   role = 'guest' as const;
@@ -296,22 +325,25 @@ export class GuestSession implements CoopLink {
   pid: number;
   onChange: (() => void) | null = null;
   inFight = false;
-  private layer: MirrorLayer;
-  private names: string[];
-  private queue: ArrayBuffer[] = [];
+  readonly pred = new Predictor();
+  readonly replica: Replica;
+  private names = new Map<number, string>();
   private pausedShown = false;
-  private lastInput = '';
-  private inputT = 0;
-  private lastView = '';
-  private tels: { v: Parameters<typeof drawTelegraph>[1]; at: number }[] = [];
   private coinBase = 0;
   private myKills = 0;
   private myDamage = 0;
-  private camX = 0; private camY = 0;
-  private bossFake: Enemy | null = null;
+  private bossFake: import('../game/types').Enemy | null = null;
   private ended = false;
-  /** Latest snapshot header, for the party panel and the camera. */
-  meta: Record<string, any> | null = null; // eslint-disable-line @typescript-eslint/no-explicit-any
+  private started = false;
+  private leaving = false;
+  private reconnecting = false;
+  private lastErr = '';
+  private lastSend = 0;
+  private lastMeAt = 0;
+  private banner: HTMLElement | null = null;
+  private fpsAcc = 0;
+  /** Frame-time and correction samples, for the net overlay and tests. */
+  perf = { frames: 0, over50: 0, maxFrame: 0, sum: 0 };
 
   constructor(public run: Run, private scene: Phaser.Scene, private net: GuestNet, private opts: MpOpts) {
     this.code = opts.code;
@@ -320,36 +352,89 @@ export class GuestSession implements CoopLink {
     run.coop = this;
     run.pname = opts.name;
     if (opts.welcome) { run.seed = opts.welcome.seed; run.round = opts.welcome.round; run.plan = planFor(run.round, run.seed); }
-    this.names = textureTable(scene);
-    this.layer = new MirrorLayer(scene, this.names);
+    this.replica = new Replica(run, scene, this.names, () => this.pid);
+    this.replica.onMe = (m) => this.onMe(m);
     net.h = {
       onCtl: (m) => this.onCtl(m),
-      onSnap: (b) => { this.queue.push(b); if (this.queue.length > 12) this.queue.shift(); },
-      onClose: (why) => this.onClosed(why),
+      onSt: (b) => this.replica.onSt(b, performance.now()),
+      onFx: (b) => this.replica.onFx(b),
+      onClose: (why, graceful) => this.onClosed(why, graceful),
     };
     for (const m of opts.early ?? []) this.onCtl(m);
   }
 
-  private onClosed(why: string) {
+  party() {
+    const m = this.replica.me;
+    return (m?.party ?? []).map((q) => ({ name: this.names.get(q.pid) ?? (q.pid === 0 ? this.hostName : `P${q.pid}`), hp: q.hp, mh: q.mh, down: q.down, me: q.pid === this.pid }));
+  }
+
+  netInfo(): { net: NetStats; pred: Predictor['stats']; perf: GuestSession['perf']; chan: GuestNet['stats']; counts: ReturnType<Replica['counts']> } {
+    return { net: { ...this.replica.stats }, pred: { ...this.pred.stats }, perf: { ...this.perf }, chan: this.net.stats, counts: this.replica.counts() };
+  }
+
+  private setBanner(text: string | null) {
+    if (!text) { this.banner?.remove(); this.banner = null; return; }
+    if (!this.banner) {
+      this.banner = document.createElement('div');
+      this.banner.style.cssText = 'position:fixed;left:50%;top:14%;transform:translateX(-50%);z-index:60;padding:10px 16px;background:rgba(20,12,36,.92);border:2px solid #ffb27a;color:#ffd9a0;font:10px "Press Start 2P",monospace;pointer-events:none;text-align:center;line-height:1.8';
+      document.body.appendChild(this.banner);
+    }
+    this.banner.textContent = text;
+  }
+
+  private onClosed(why: string, graceful: boolean) {
+    if (this.ended || this.leaving) return;
+    if (graceful || !this.started) { this.terminal(why); return; }
+    void this.reconnect();
+  }
+
+  private terminal(why: string) {
     if (this.ended) return;
     this.ended = true;
+    this.setBanner(null);
     showNotice(ui, 'Disconnected', why, () => ui.quitToMenu());
+  }
+
+  /** The connection dropped mid-game: keep trying to get back in (the host holds our wizard for a while). */
+  private async reconnect() {
+    if (this.reconnecting) return;
+    this.reconnecting = true;
+    for (let i = 0; i < 6 && !this.ended && !this.leaving; i++) {
+      this.setBanner(`Connection lost. Reconnecting... (${i + 1}/6)`);
+      await new Promise((r) => setTimeout(r, i === 0 ? 800 : 2500));
+      try {
+        await this.net.connect(this.code, this.opts.name, { peerId: this.net.peerId, peerKey: this.net.peerKey });
+        this.reconnecting = false;
+        this.setBanner(null);
+        return;
+      } catch (e) {
+        const msg = (e as Error).message;
+        this.lastErr = msg;
+        if (/closed|No such room|Bad key|version/i.test(msg)) break;
+      }
+    }
+    this.reconnecting = false;
+    this.terminal(this.lastErr && /closed|No such room/i.test(this.lastErr) ? 'The host ended the game.' : 'Could not reconnect to the host.');
   }
 
   private onCtl(m: Record<string, unknown>) {
     switch (m.t) {
       case 'welcome':
         this.pid = Number(m.pid); this.hostName = String(m.host ?? 'Host');
-        this.run.seed = Number(m.seed); this.run.round = Number(m.round); this.run.plan = planFor(this.run.round, this.run.seed);
+        if (!m.rejoin) { this.run.seed = Number(m.seed); this.run.round = Number(m.round); this.run.plan = planFor(this.run.round, this.run.seed); }
         break;
+      case 'reject': this.terminal(String(m.reason ?? 'The host refused the connection.')); break;
+      case 'bye': this.terminal('The host ended the game.'); break;
       case 'lobby': {
         this.lobby = m.players as LobbyPlayer[];
+        for (const q of this.lobby) this.names.set(q.pid, q.name.replace(/ \(reconnecting\)$/, ''));
+        this.names.set(0, this.hostName);
         const me = this.lobby.find((q) => q.pid === this.pid);
         if (me) this.ready = me.ready; // the host is the source of truth (it can reject a build)
         this.onChange?.();
         break;
       }
-      case 'start': this.beginFight(Number(m.round)); break;
+      case 'start': this.beginFight(Number(m.round), !!m.rejoin); break;
       case 'result': this.mergeResult(m as { round: number; res: RoundRes }); break;
       case 'pending': this.addPending(m.item as Record<string, unknown>); break;
       case 'announce': ui.announce(String(m.text), String(m.color), m.sub ? String(m.sub) : undefined); break;
@@ -368,24 +453,24 @@ export class GuestSession implements CoopLink {
 
   /* ---- round flow ---- */
 
-  private beginFight(round: number) {
+  private beginFight(round: number, rejoin = false) {
     const run = this.run;
     this.ready = false;
+    this.started = true;
     run.round = round; run.plan = planFor(round, run.seed);
     run.phase = 'fight'; run.frozen = false;
-    this.coinBase = run.coins;
+    if (!rejoin || !this.inFight) this.coinBase = run.coins;
     this.inFight = true;
-    this.queue = [];
-    this.layer.clear();
+    this.replica.clear(); this.pred.reset();
     ui.closePrep();
-    run.announce(isBoss(round) ? `ROUND ${round}: BOSS` : `ROUND ${round}`, isBoss(round) ? '#ff6b6b' : '#9fd8ff');
+    if (!rejoin) run.announce(isBoss(round) ? `ROUND ${round}: BOSS` : `ROUND ${round}`, isBoss(round) ? '#ff6b6b' : '#9fd8ff');
   }
 
   private mergeResult(m: { round: number; res: RoundRes }) {
     const run = this.run;
     const r = m.res;
     this.inFight = false;
-    this.layer.clear();
+    this.replica.clear(); this.pred.reset();
     if (this.pausedShown) { this.pausedShown = false; ui.hideHostPause(); }
     run.fx.reset();
     // the host's copy of this character is authoritative for what the round changed (level-ups, mutation progress, relic counters)
@@ -406,8 +491,6 @@ export class GuestSession implements CoopLink {
     run.shop = newShop(run); run.shopOpened = false;
     this.ready = false;
     run.arena.reset();
-    this.tels = [];
-    this.meta = null;
     this.onChange?.();
   }
 
@@ -447,6 +530,7 @@ export class GuestSession implements CoopLink {
     });
   }
 
+
   /* ---- CoopLink ---- */
 
   ult(): boolean {
@@ -457,99 +541,101 @@ export class GuestSession implements CoopLink {
   }
 
   leave() {
+    this.leaving = true;
     this.ended = true;
+    this.setBanner(null);
     this.net.sendCtl({ t: 'bye' });
-    this.net.close();
+    setTimeout(() => this.net.close(), 60);
   }
 
   /* ---- per-frame ---- */
 
-  /** Called by the scene each rendered frame while a round is on: send input, apply the newest snapshot, ease the images. */
-  frame(dt: number, input: { x: number; y: number }, viewW: number, viewH: number) {
+  /** Called by the scene each rendered frame while a round is on. Order matters: predict and send FIRST (nothing waits for the
+   *  network), then draw the replicated world. */
+  frame(dt: number, input: { x: number; y: number }) {
     const run = this.run;
     if (!this.inFight) return;
-    this.inputT -= dt;
-    const key = `${Math.round(input.x * 127)},${Math.round(input.y * 127)}`;
-    if (key !== this.lastInput || this.inputT <= 0) {
-      this.lastInput = key; this.inputT = INPUT_INTERVAL * 6;
-      this.net.sendSnap(new Int8Array([1, Math.round(input.x * 127), Math.round(input.y * 127)]).buffer);
-    }
-    const vk = `${Math.round(viewW)}x${Math.round(viewH)}`;
-    if (vk !== this.lastView) { this.lastView = vk; this.net.sendCtl({ t: 'view', w: Math.round(viewW), h: Math.round(viewH) }); }
-
     const now = performance.now();
-    // decode everything that arrived; the layer drops out-of-order frames, and the HUD/floor data comes from the newest one
-    let newest: Record<string, any> | null = null; // eslint-disable-line @typescript-eslint/no-explicit-any
-    for (const buf of this.queue) {
-      const f = decodeFrame(buf);
-      if (this.layer.push(f.meta, f.recs, f.meta.texts, now)) newest = f.meta;
-    }
-    this.queue = [];
-    if (newest) this.applyMeta(newest);
-    this.layer.render(now); // draws slightly in the past, interpolated
+    this.perf.frames++; this.perf.sum += dt * 1000; if (dt > 0.05) this.perf.over50++; if (dt * 1000 > this.perf.maxFrame) this.perf.maxFrame = dt * 1000;
+    // 1. own wizard: apply input now, tell the host
+    const me = this.replica.me;
+    if (this.net.connected && !(me?.down)) {
+      const c = this.pred.step(dt, input.x, input.y, run.arena);
+      if (c && now - this.lastSend >= CMD_INTERVAL) { this.lastSend = now; this.sendCmds(now); }
+    } else if (me?.down) this.pred.moving = false;
+    // 2. the world
+    this.replica.render(dt, now, this.pid, run.telGfx);
+    run.fx.update(dt);
+    run.arena.draw(run.floorGfx, this.replica.time / 1000);
     this.syncPause();
-    // keep telegraphs ticking between snapshots, then draw them and the floor
-    const g = run.telGfx;
-    g.clear();
-    for (const t of this.tels) {
-      const left = t.v.t - (now - t.at) / 1000;
-      if (left > 0) drawTelegraph(g, { ...t.v, t: left });
-    }
-    run.arena.draw(run.floorGfx, run.time);
+    // no news from the host for a while: say so instead of silently freezing
+    if (!this.reconnecting) this.setBanner(this.lastMeAt && now - this.lastMeAt > 1500 && this.net.connected ? 'Waiting for the host...' : null);
   }
 
-  /** The host paused: show the guests a pause screen (and take it away when play resumes). */
+  private sendCmds(now: number) {
+    const h = this.pred.hist;
+    if (!h.length) return;
+    const from = Math.max(0, h.length - CMD_RESEND);
+    const w = new Writer(8 + (h.length - from) * 3);
+    w.u8(K.Cmd); w.u32(now); w.u8(h.length - from); w.u16(h[from].seq);
+    for (let i = from; i < h.length; i++) { w.i8(h[i].ix); w.i8(h[i].iy); w.u8(Math.round(h[i].dt * 4000)); }
+    this.net.sendInp(w.bytes());
+  }
+
+  /** The newest authoritative word from the host: reconcile the prediction and update the HUD. */
+  private onMe(m: import('./proto').MeMsg) {
+    const run = this.run;
+    this.lastMeAt = performance.now();
+    if (!this.inFight) return;
+    this.pred.reconcile(m, run.arena);
+    const p = run.player;
+    p.hp = m.hp; p.maxHp = m.mh; p.xp = m.xp; p.xpNeed = m.xn; p.level = m.lv; p.speed = m.speed;
+    run.coins = this.coinBase + m.coins;
+    run.quick = m.quick; run.time = m.t; run.round = m.round; run.phase = m.phase === 'prep' ? 'clearing' : (m.phase as Run['phase']); run.roundElapsed = m.el; run.kills = m.kills;
+    run.down = m.down;
+    run.arena.active = m.tilesActive;
+    run.spells.forEach((sp, i) => { const c = m.spells[i]; if (c) { sp.cd = c.cd; sp.live = c.live; sp.ultCd = c.ult; } });
+    if (m.boss) {
+      this.bossFake ??= { boss: { name: '' }, hp: 1, maxHp: 1 } as unknown as import('../game/types').Enemy;
+      this.bossFake.boss!.name = BOSS_NAMES[m.boss.kind] ?? 'Boss'; this.bossFake.hp = m.boss.hp; this.bossFake.maxHp = m.boss.mh;
+      run.boss = this.bossFake;
+    } else run.boss = null;
+    p.hurtFlash = m.hurt ? 0.1 : 0; p.inv = m.inv ? 0.1 : 0;
+  }
+
+  /** Draw the joiner's own wizard from the prediction (called by the scene each frame, with the scene's sprites). */
+  drawSelf(spr: Phaser.GameObjects.Image, shadow: Phaser.GameObjects.Image) {
+    const run = this.run;
+    const show = this.inFight && this.pred.ready;
+    spr.setVisible(show); shadow.setVisible(show);
+    if (!show) return;
+    const s = this.pred.s;
+    const m = this.replica.me;
+    poseWizard(spr, shadow, { x: this.pred.x, y: this.pred.y, faceX: s.faceX, walking: this.pred.moving, walkT: s.walkT, hurt: !!m?.hurt, inv: !!m?.inv, down: !!m?.down }, performance.now() / 1000);
+    run.player.x = this.pred.x; run.player.y = this.pred.y;
+  }
+
+  /** The host paused: show the joiners a pause screen (and take it away when play resumes). */
   private syncPause() {
-    const paused = !!this.meta?.paused && this.inFight;
+    const paused = !!this.replica.me?.paused && this.inFight;
     if (paused === this.pausedShown) return;
     this.pausedShown = paused;
     if (paused) ui.showHostPause(this.hostName); else ui.hideHostPause();
   }
 
-  private applyMeta(meta: Record<string, any>) { // eslint-disable-line @typescript-eslint/no-explicit-any
-    const run = this.run;
-    this.meta = meta;
-    const me = meta.me;
-    const p = run.player;
-    p.x = me.x; p.y = me.y; p.hp = me.hp; p.maxHp = me.mh; p.xp = me.xp; p.xpNeed = me.xn; p.level = me.lv;
-    run.coins = this.coinBase + me.coins;
-    run.quick = !!meta.quick; run.time = meta.t; run.round = meta.round; run.phase = meta.phase === 'prep' ? 'clearing' : meta.phase; run.roundElapsed = meta.el; run.kills = meta.kills;
-    run.down = !!me.down;
-    run.spells.forEach((sp, i) => { const c = me.cds[i]; if (c) { sp.cd = c[0]; sp.live = c[1]; sp.ultCd = c[2]; } });
-    if (meta.boss) {
-      if (!this.bossFake) this.bossFake = { boss: { name: '' }, hp: 1, maxHp: 1 } as unknown as Enemy;
-      this.bossFake.boss!.name = meta.boss.n; this.bossFake.hp = meta.boss.hp; this.bossFake.maxHp = meta.boss.mh;
-      run.boss = this.bossFake;
-    } else run.boss = null;
-    run.fx.shakeMag = meta.shake;
-    // floor
-    const a = run.arena;
-    a.active = !!meta.ta;
-    const tiles: string = meta.tiles;
-    for (let i = 0; i < a.state.length && i < tiles.length; i++) a.state[i] = tiles.charCodeAt(i) - 48;
-    a.timer.fill(0);
-    for (const [i, t] of meta.tt as [number, number][]) a.timer[i] = t;
-    const at = performance.now();
-    this.tels = (meta.tels as Parameters<typeof drawTelegraph>[1][]).map((v) => ({ v, at }));
-    for (const n of meta.sfx as string[]) audio.play(n as never);
-  }
-
-  /** Where the camera should look: you, or a teammate while you are down. */
+  /** Where the camera should look: you (predicted, so it never lags your keys), or a teammate while you are down. */
   cameraTarget(): { x: number; y: number } {
-    const v = this.layer.view;
-    const m = this.meta;
-    if (m && m.me.down) {
-      for (const [pid, q] of v.pl) if (pid !== this.pid && !q.down) return q;
-    }
-    return v.me ?? this.run.player;
+    const m = this.replica.me;
+    if (m?.down) for (const pid of this.replica.otherPids(this.pid)) { const q = this.replica.playerPos(pid); if (q && !q.down) return q; }
+    return this.pred.ready ? { x: this.pred.x, y: this.pred.y } : this.run.player;
   }
 
-  destroy() { this.layer.destroy(); }
+  destroy() { this.setBanner(null); this.replica.destroy(); }
 }
 
 const isBoss = (r: number) => r % 5 === 0;
+import { BOSS_NAMES } from '../game/bosses';
 
 interface RoundRes { build: Build; coins: number; kills: number; damage: number; boosts: string[] }
 interface OverMsg { won: boolean; round: number; bosses: number; time: number; reactions: number; res: RoundRes }
 
-void ELEMENTS;
