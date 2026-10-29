@@ -19,11 +19,8 @@
  *                                  (a book baked into library.html) records a
  *                                  "hidden" marker instead
  *   GET    /files/*                epub / cover bytes
- *   /mp/*                   PUBLIC multiplayer signaling for Spell Architect
- *                           (room codes + WebRTC handshake only; see mp.js)
  */
 import { DurableObject } from 'cloudflare:workers';
-import { MPRoomCore, handleMp } from './mp.js';
 
 // Files are stored as 1 MiB chunks in the Durable Object's SQLite (a row is
 // limited to 2 MB), and move to/from the DO in one RPC message (32 MiB limit).
@@ -62,22 +59,6 @@ async function authorized(request, env) {
     crypto.subtle.digest('SHA-256', enc.encode(env.SYNC_KEY)),
   ]);
   return crypto.subtle.timingSafeEqual(a, b);
-}
-
-/** One Durable Object per multiplayer room code; all logic lives in MPRoomCore (mp.js). */
-export class MPRoom extends DurableObject {
-  constructor(ctx, env) {
-    super(ctx, env);
-    this.core = new MPRoomCore(ctx.storage);
-  }
-  create(hostKey, now) { return this.core.create(hostKey, now); }
-  info() { return this.core.info(); }
-  join(name) { return this.core.join(name); }
-  signal(as, key, to, kind, data) { return this.core.signal(as, key, to, kind, data); }
-  poll(as, key, after, waitMs) { return this.core.poll(as, key, after, waitMs); }
-  lock(key) { return this.core.lock(key); }
-  close(key) { return this.core.close(key); }
-  async alarm() { await this.core.expire(); }
 }
 
 export class SyncStore extends DurableObject {
@@ -227,9 +208,6 @@ export default {
     const store = env.STORE.get(env.STORE.idFromName('main'));
     const origin = url.origin;
     const isRead = request.method === 'GET' || request.method === 'HEAD';
-
-    // Multiplayer signaling is public (it never touches the sync data) and has its own per-room keys.
-    if (parts[0] === 'mp') return handleMp(request, env, parts);
 
     // Public reads: catalogue and files.
     if (isRead && parts[0] === 'files' && parts.length > 1) {

@@ -45,24 +45,3 @@ depends on a GitHub personal access token any more.
 | GET | `/files/*` | – | epub / cover bytes |
 
 Namespaces in use: `progress`, `regions`, `docs`.
-
-## Spell Architect co-op signaling (`/mp/*`, public)
-
-Online co-op in Spell Architect is peer-to-peer over WebRTC. This worker only
-hands out 5-character room codes and relays the connection handshake (SDP
-offers/answers); no game data passes through it. The routes need no sync key:
-each room has its own random host key and per-guest keys, and expires after two
-hours. They live in a small Durable Object per room (`MPRoom`, migration `v2`),
-logic in `mp.js`, tests in `mp.test.mjs` (`node --test sync-worker/mp.test.mjs`).
-
-| Method | Path | |
-| --- | --- | --- |
-| POST | `/mp/rooms` | create a room -> `{ code, hostKey }` |
-| GET | `/mp/rooms/:code` | `{ open, players, max, names }` |
-| POST | `/mp/rooms/:code/join` | `{ name }` -> `{ peerId, peerKey }` (max 4 players) |
-| POST | `/mp/rooms/:code/signal` | `{ as, key, to, kind, data }`, kind is offer / answer / ice / bye |
-| GET | `/mp/rooms/:code/signal?as=&key=&after=&wait=` | long-poll the mailbox |
-| POST | `/mp/rooms/:code/lock` | `{ key }` (host only): the game started, no new players, but players already in the room may still signal (to reconnect after a drop) |
-| POST | `/mp/rooms/:code/close` | `{ key }` (host only) |
-
-Deploying this change runs the `v2` migration that adds the `MPRoom` class.
