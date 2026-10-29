@@ -37,7 +37,7 @@ export const earlyPower = (round: number) => 1 + EARLY_POWER * Math.max(0, 1 - (
 
 export type Pending =
   | { type: 'levelup' }
-  | { type: 'cache' }
+  | { type: 'cache'; chest?: boolean }
   | { type: 'relic'; options: string[] }
   | { type: 'mutation'; sp: ActiveSpell; track: MutTrack };
 
@@ -58,6 +58,8 @@ export interface CoopLink {
   onOver?(won: boolean): void;
   /** Guest: Space pressed. Returns whether an ultimate was available. */
   ult(): boolean;
+  /** Number of players in the game (rituals scale with it). */
+  size?(): number;
   /** Leave the game (guest) or end it for everyone (host). */
   leave(): void;
 }
@@ -73,6 +75,7 @@ export interface Build {
   spells: { def: SpellDef; mutations: string[]; tiers: Record<string, number>; st: ActiveSpell['st']; damage: number; ultCd: number }[];
   player: Omit<Player, 'x' | 'y' | 'vx' | 'vy' | 'inv' | 'hurtFlash' | 'walkT' | 'pullX' | 'pullY' | 'pullT' | 'faceX'>;
   owned: string[]; equipped: string[]; relicState: Record<string, Record<string, number>>;
+  rituals?: ActiveRitual[]; ritualBonus?: RitualBonus;
 }
 
 export class Run {
@@ -86,6 +89,9 @@ export class Run {
   ownerMap = new WeakMap<object, Run>();
   /** Set by the co-op session on the host: delivers a reward to a remote player. */
   onRemotePending: (pr: Run, item: Pending) => void = () => {};
+  /** Set by the co-op host: show a banner to one remote player only. */
+  onRemoteNotice: (pr: Run, title: string, color: string, sub: string) => void = () => {};
+  coopSize(): number { return this.world.coop?.size?.() ?? 1; }
   private _boss: Enemy | null = null;
   private _sb = 36;
   get boss(): Enemy | null { return this.world._boss; }
@@ -262,7 +268,7 @@ export class Run {
       pid, pname: name, remote: true, down: false,
       player: p, spells: [] as ActiveSpell[], slots: 0, inv: {}, coins: 0, buys: {}, owned: [] as string[], equipped: [] as string[],
       relicState: {}, inRelic: false, critKill: false, kills: 0, totalDamage: 0, reactionCount: 0, hurtBy: {}, lastHurt: '', pending: [] as Pending[],
-      boosts: [] as string[], input: { x: 0, y: 0 }, ultTrack: null, capExtra: 0, cmdQ: [] as Cmd[], cmdCredit: 0.25, cmdSeq: 0, cmdAck: 0,
+      boosts: [] as string[], input: { x: 0, y: 0 }, ultTrack: null, capExtra: 0, rituals: [] as ActiveRitual[], ritualRound: { hurt: 0, react: new Set<string>() }, ritualBonus: freshBonus(), cmdQ: [] as Cmd[], cmdCredit: 0.25, cmdSeq: 0, cmdAck: 0,
       mods: { elements: 0, poisonCap: 0, coinMul: 1, priceMul: 1, rerollMul: 1, rerollMinus: 0, forgeMinus: 0 },
     });
     w.players.push(s);
@@ -292,6 +298,7 @@ export class Run {
     return {
       spells: this.spells.map((sp) => ({ def: JSON.parse(JSON.stringify(sp.def)), mutations: [...sp.mutations], tiers: { ...sp.tiers }, st: { ...sp.st }, damage: sp.damage, ultCd: sp.ultCd })),
       player: { ...stats }, owned: [...this.owned], equipped: [...this.equipped], relicState: JSON.parse(JSON.stringify(this.relicState)),
+      rituals: JSON.parse(JSON.stringify(this.rituals)), ritualBonus: { ...this.ritualBonus },
     };
   }
 
@@ -301,6 +308,8 @@ export class Run {
     Object.assign(this.player, b.player);
     this.owned = [...b.owned]; this.equipped = [...b.equipped];
     this.relicState = JSON.parse(JSON.stringify(b.relicState));
+    this.rituals = JSON.parse(JSON.stringify(b.rituals ?? []));
+    this.ritualBonus = { ...freshBonus(), ...(b.ritualBonus ?? {}) };
     recomputeMods(this); // sets this.mods and the global trigger rules for this player's relics
     this.spells = b.spells.map((bs) => {
       const def: SpellDef = JSON.parse(JSON.stringify(bs.def));
@@ -544,9 +553,10 @@ export class Run {
     const pk: Pickup = { id: nextOid(), x: x + (Math.random() - 0.5) * 14, y: y + (Math.random() - 0.5) * 14, type: 'coin', v, spr: this.img('coin', 3).setScale(1.7 + 0.3 * Math.min(2, v)), fly: false, t: Math.random() * 6, dead: false };
     this.pickups.push(pk);
   }
-  dropPickup(type: 'heal' | 'cache', x: number, y: number) {
+  /** `small`: an elite's chest (a choice of three runes) rather than the boss's big cache. */
+  dropPickup(type: 'heal' | 'cache', x: number, y: number, small = false) {
     const tex = type === 'heal' ? 'heart' : 'chest';
-    const pk: Pickup = { id: nextOid(), x, y, type, v: type === 'heal' ? 6 : 0, spr: this.img(tex, 3).setScale(type === 'cache' ? 3 : 2.4), fly: false, t: 0, dead: false };
+    const pk: Pickup = { id: nextOid(), x, y, type, v: type === 'heal' ? 6 : small ? 1 : 0, spr: this.img(tex, 3).setScale(type === 'cache' ? (small ? 2.2 : 3) : 2.4), fly: false, t: 0, dead: false };
     this.pickups.push(pk);
   }
 
@@ -897,7 +907,7 @@ export class Run {
       pr.boosts = pr.remote ? [] : pr.boosts;
     });
     this.rebuildOwners();
-    ritualRoundStart(this);
+    for (const pr of this.players) ritualRoundStart(pr);
     this.arena.start(this.round, this.seed, isBossRound(this.round) ? roundLen(false) : roundLen(this.quick), !this.sandbox);
     this.snap = { kills: this.kills, damage: this.totalDamage, taken: Object.values(this.hurtBy).reduce((a, b) => a + b, 0), spell: this.spells.map((x) => x.damage), t: this.time, coins: this.coins };
     for (const pr of this.players) { onRoundStart(pr); for (const sp of pr.spells) sp.cd = 0.3; }
@@ -926,7 +936,7 @@ export class Run {
     this.phase = 'clearing';
     this.clearT = 1.5;
     this.pushRoundRecord();
-    ritualRoundEnd(this);
+    for (const pr of this.players) ritualRoundEnd(pr);
     for (const pr of this.players) pr.addCoins(3 + this.round);
     for (const e of this.enemies) {
       if (e.dead) continue;
@@ -1104,7 +1114,7 @@ export class Run {
         if (k.type === 'coin') { const v = k.v * pr.mods.coinMul; pr.coins += v; ritualEvent(pr, { t: 'coin', v }); this.fx.text(p.x, p.y - 26, `+${Math.round(v * 10) / 10}`, '#ffd25a', 11, 0.5); if (!pr.remote) audio.play('gem'); }
         else if (k.type === 'heal') { pr.heal(k.v); if (!pr.remote) audio.play('pick'); }
         else if (k.type === 'cache') {
-          pr.pushPending({ type: 'cache' });
+          pr.pushPending({ type: 'cache', chest: k.v === 1 });
           audio.play('pick');
         }
       }

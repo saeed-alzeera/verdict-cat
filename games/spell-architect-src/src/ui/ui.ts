@@ -27,6 +27,7 @@ import type { Run, RunOpts, RunSummary } from '../game/run';
 import { objectiveMet, objectiveProgress, objectiveText } from '../game/rituals';
 import { generateRewards, type Reward } from '../game/rewards';
 import { openEditor } from './editor';
+import { ritualSection } from './rituals';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, el: ParentNode = document) => el.querySelector(sel) as T;
 export function el(html: string): HTMLElement {
@@ -318,7 +319,7 @@ class UI {
       const next = run.pending.shift()!;
       run.frozen = true;
       if (next.type === 'levelup') this.showReward(run, 'levelup');
-      else if (next.type === 'cache') this.showReward(run, 'cache');
+      else if (next.type === 'cache') this.showReward(run, next.chest ? 'chest' : 'cache');
       else if (next.type === 'relic') showRelicPick(this, run, next.options);
       else this.showMutation(run, next.sp, next.track);
     } else if (!run.shopOpened) { run.shopOpened = true; showShop(this, run); }
@@ -361,9 +362,11 @@ class UI {
       <h4>ENEMY MIX THIS ROUND</h4><div class="shares">${shares}</div>
       ${plan.tip ? `<p class="tip2">TIP: ${plan.tip}</p>` : ''}
       <h4>YOUR LOADOUT</h4><div class="pslots">${slots}</div>
+      <div data-rituals></div>
       <div class="rbtns"><button class="big" data-a="shop">Shop <small>◈ ${Math.floor(run.coins)}</small></button><button class="big ${run.forgeReady().length ? 'glow' : ''}" data-a="editor">Spell Editor${run.forgeReady().length ? ' (FORGE READY!)' : ''}</button>${co?.role === 'guest' ? '<button class="big primary" data-a="ready">Ready</button>' : `<button class="big primary" data-a="go">Start Round ${r}</button>`}</div>
     </div></div>`);
     if (co) n.querySelector('[data-lobby]')!.replaceWith(lobbyPanel(this, co as never));
+    n.querySelector('[data-rituals]')!.replaceWith(ritualSection(run, () => { const sb = n.querySelector('[data-a=shop] small'); if (sb) sb.textContent = `◈ ${Math.floor(run.coins)}`; if (co?.role === 'guest') { const g = co as unknown as { ready?: boolean; setReady?(on: boolean): void }; if (g.ready) { g.setReady!(false); const rb = n.querySelector('[data-a=ready]'); if (rb) rb.textContent = 'Ready'; } } }));
     const startRound = () => {
       const err = run.coop?.beforeStart?.();
       if (err) { this.announce('NOT READY', '#ff9a9a', err); audio.play('warn'); return; }
@@ -482,15 +485,15 @@ class UI {
 
   /* ------------------------------ rewards ------------------------------ */
 
-  showReward(run: Run, mode: 'levelup' | 'cache') {
+  showReward(run: Run, mode: 'levelup' | 'cache' | 'chest') {
     let rewards = generateRewards(run, mode);
     const n = el(`<div class="overlay lv"><div class="panel rewardp">
-      <div class="rtitle"><small>${mode === 'cache' ? 'BOSS RUNE CACHE' : 'LEVEL UP'}</small><h2>${mode === 'cache' ? 'Choose a Rune' : 'Choose a Stat Boost'}</h2></div>
+      <div class="rtitle"><small>${mode === 'cache' ? 'BOSS RUNE CACHE' : mode === 'chest' ? 'ELITE CHEST' : 'LEVEL UP'}</small><h2>${mode === 'levelup' ? 'Choose a Stat Boost' : 'Choose a Rune'}</h2></div>
       <div class="cards"></div>
       <div class="rbtns">
         ${mode === 'levelup' ? '<button class="big" data-a="reroll"></button>' : ''}
       </div>
-      <p class="tip">Press 1 / 2 / 3 to choose. ${mode === 'cache' ? 'Runes go into your pool: place them in the Spell Editor.' : 'Level-ups boost your stats. Runes and spell upgrades are in the shop.'}</p>
+      <p class="tip">Press 1 / 2 / 3 to choose. ${mode !== 'levelup' ? 'Runes go into your pool: place them in the Spell Editor.' : 'Level-ups boost your stats. Runes and spell upgrades are in the shop.'}</p>
     </div></div>`);
     const cards = $('.cards', n);
     const rerollBtn = n.querySelector('[data-a=reroll]') as HTMLElement | null;
@@ -730,7 +733,7 @@ class UI {
       <p><b>Reactions.</b> Elements from different slots interact with each other's puddles, clouds and statuses. Each reaction deals <b>both</b> damage types. The editor's Reactions tab shows which ones your loadout can trigger.</p>
       <p><b>Evolution.</b> Collect ${EVOLVE_COST} copies of the same Core and forge an evolved Core in the editor's Forge tab: +40% damage, a new passive, and an <b>Ultimate</b> on Space. The editor and briefing flash when you can forge.</p>
       <p><b>Co-op.</b> Choose <b>Online Co-op</b> in the main menu to host a room or join a friend's with their 5-letter code. You share the arena and the horde; everyone keeps their own build, shop and rewards, and the round starts when the host presses Start after everyone is Ready.</p>
-      <p><b>Shop.</b> Kills and cleared rounds earn coins. After every round, one shelf offers runes, a relic and permanent upgrades (capacity, spell slots, vitality, power...); upgrades never sell out but every copy costs more, and rerolling replaces the whole shelf. You can also sell runes you don't need, and accept a <b>Ritual</b>: a multi-round contract that pays a permanent upgrade if you meet every objective. <b>Level-ups</b> instantly give a random stat boost, even mid-round; boss caches give a choice of strong runes.</p>
+      <p><b>Shop.</b> Kills and cleared rounds earn coins. After every round, one shelf offers runes, a relic and permanent upgrades (capacity, spell slots, vitality, power...); upgrades never sell out but every copy costs more, and rerolling replaces the whole shelf. You can also sell runes you don't need, and The round-prep screen also offers <b>Rituals</b>: multi-round contracts that pay a permanent upgrade if you meet every objective (in co-op each player has their own, with higher targets). <b>Level-ups</b> instantly give a random stat boost, even mid-round; boss caches give a choice of strong runes.</p>
       <p><b>Capacity</b> limits runes per spell. <b>Mutations</b> evolve spells that perform well. Spend Arcane Shards in the Grimoire to unlock more runes (behaviors, triggers, modifiers). The <b>Sandbox</b> lets you test any build against any enemy.</p>
     </div>`);
     this.openModal(m, 'help');

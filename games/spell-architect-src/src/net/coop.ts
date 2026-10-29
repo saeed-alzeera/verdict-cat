@@ -11,6 +11,7 @@ import { planFor } from '../game/rounds';
 import { newShop } from '../game/shop';
 import type { Build, Cmd, CoopLink, Pending, Run, RunSummary } from '../game/run';
 import { poseWizard } from '../game/render';
+import { validateRituals } from '../game/rituals';
 import { ui } from '../ui/ui';
 import { showNotice } from '../ui/lobby';
 import type { GuestNet, HostNet } from './rtc';
@@ -54,7 +55,7 @@ export function validateBuild(b: unknown): string | null {
     if (sp.def.root) { const e = walk(sp.def.root as never, 0); if (e) return e; if (RUNE_BY_ID[sp.def.root.rune].kind !== 'form') return 'root is not a form'; }
     if (!Array.isArray(sp.mutations) || sp.mutations.length > 20) return 'bad mutations';
   }
-  return null;
+  return validateRituals(x.rituals ?? [], x.ritualBonus);
 }
 
 
@@ -78,6 +79,7 @@ export class HostSession implements CoopLink {
   rep: Replicator;
   private sprites = new Map<Run, { spr: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text }>();
   private lobbyClosed = false;
+  private ritT = 0;
   private started = false;
   private overSent = false;
   private hostLabel: Phaser.GameObjects.Text | null = null;
@@ -87,6 +89,7 @@ export class HostSession implements CoopLink {
     run.pname = name;
     run.coop = this;
     run.onRemotePending = (pr, item) => this.sendPending(pr, item);
+    run.onRemoteNotice = (pr, t, c, s) => { const g = [...this.guests.values()].find((x) => x.shell === pr); if (g) this.net.sendCtl(g.id, { t: 'announce', text: t, color: c, sub: s }); };
     const orig = run.onAnnounce;
     run.onAnnounce = (t, c, s) => { orig(t, c, s); if (!t.startsWith('NEW ')) this.net.broadcastCtl({ t: 'announce', text: t, color: c, sub: s }); };
     this.rep = new Replicator(run, {
@@ -108,6 +111,7 @@ export class HostSession implements CoopLink {
   players(): LobbyPlayer[] {
     return [{ pid: 0, name: this.name, ready: true, host: true }, ...[...this.guests.values()].map((g) => ({ pid: g.pid, name: g.name + (g.offline ? ' (reconnecting)' : ''), ready: g.ready, host: false }))];
   }
+  size() { return 1 + this.guests.size; }
   allReady() { return [...this.guests.values()].every((g) => g.ready || g.offline); }
   party() { return this.run.players.map((q) => ({ name: q.pname, hp: q.player.hp, mh: q.player.maxHp, down: q.down, me: q === this.run })); }
 
@@ -255,7 +259,7 @@ export class HostSession implements CoopLink {
     const g = [...this.guests.values()].find((x) => x.shell === pr);
     if (!g) return;
     let out: Record<string, unknown> | null = null;
-    if (item.type === 'cache') out = { type: 'cache' };
+    if (item.type === 'cache') out = { type: 'cache', chest: !!item.chest };
     else if (item.type === 'relic') out = { type: 'relic', options: item.options };
     else if (item.type === 'mutation') out = { type: 'mutation', si: pr.spells.indexOf(item.sp), track: item.track.id };
     if (out) this.net.sendCtl(g.id, { t: 'pending', item: out });
@@ -271,6 +275,11 @@ export class HostSession implements CoopLink {
     const views: GuestView[] = [];
     for (const g of this.guests.values()) if (!g.offline) views.push({ id: g.id, shell: g.shell, echo: g.echo, echoAt: g.echoAt });
     if (this.run.phase === 'fight' || this.run.phase === 'clearing') this.rep.frame(dt, now, views);
+    // each joiner's ritual progress, about once a second, for their HUD
+    if (this.run.phase === 'fight' && (this.ritT -= dt) <= 0) {
+      this.ritT = 1;
+      for (const g of this.guests.values()) if (!g.offline && g.shell.rituals.length) this.net.sendCtl(g.id, { t: 'rit', p: g.shell.rituals.map((r) => [r.state, r.roundsDone, ...r.prog]), hurt: Math.round(g.shell.ritualRound.hurt) });
+    }
   }
 
   /** Network numbers for the debug overlay and tests. */
@@ -363,6 +372,7 @@ export class GuestSession implements CoopLink {
     for (const m of opts.early ?? []) this.onCtl(m);
   }
 
+  size() { return Math.max(1, this.lobby.length); }
   party() {
     const m = this.replica.me;
     return (m?.party ?? []).map((q) => ({ name: this.names.get(q.pid) ?? (q.pid === 0 ? this.hostName : `P${q.pid}`), hp: q.hp, mh: q.mh, down: q.down, me: q.pid === this.pid }));
@@ -425,6 +435,12 @@ export class GuestSession implements CoopLink {
         break;
       case 'reject': this.terminal(String(m.reason ?? 'The host refused the connection.')); break;
       case 'bye': this.terminal('The host ended the game.'); break;
+      case 'rit': {
+        const run = this.run;
+        (m.p as [string, number, ...number[]][]).forEach((q, i) => { const r = run.rituals[i]; if (r) { r.state = q[0] as never; r.roundsDone = q[1]; r.prog = q.slice(2) as number[]; } });
+        run.ritualRound.hurt = Number(m.hurt) || 0;
+        break;
+      }
       case 'lobby': {
         this.lobby = m.players as LobbyPlayer[];
         for (const q of this.lobby) this.names.set(q.pid, q.name.replace(/ \(reconnecting\)$/, ''));
@@ -476,6 +492,7 @@ export class GuestSession implements CoopLink {
     // the host's copy of this character is authoritative for what the round changed (level-ups, mutation progress, relic counters)
     const keep = { x: run.player.x, y: run.player.y };
     Object.assign(run.player, r.build.player, keep);
+    while (run.spells.length < r.build.spells.length) run.addSlot(); // a ritual can grant a slot
     r.build.spells.forEach((bs, i) => {
       const sp = run.spells[i];
       if (!sp) return;
@@ -483,6 +500,9 @@ export class GuestSession implements CoopLink {
       run.recomputeMut(sp);
     });
     run.relicState = r.build.relicState;
+    if (r.build.rituals) run.rituals = r.build.rituals;
+    if (r.build.ritualBonus) run.ritualBonus = { ...run.ritualBonus, ...r.build.ritualBonus };
+    run.recomputeRelics();
     run.coins = this.coinBase + r.coins;
     this.myKills += r.kills; this.myDamage += r.damage; run.kills = this.myKills; run.totalDamage = this.myDamage;
     run.boosts.push(...r.boosts);
@@ -497,7 +517,7 @@ export class GuestSession implements CoopLink {
   private addPending(it: Record<string, unknown>) {
     const run = this.run;
     let p: Pending | null = null;
-    if (it.type === 'cache') p = { type: 'cache' };
+    if (it.type === 'cache') p = { type: 'cache', chest: !!it.chest };
     else if (it.type === 'relic') p = { type: 'relic', options: it.options as string[] };
     else if (it.type === 'mutation') {
       const sp = run.spells[Number(it.si)];

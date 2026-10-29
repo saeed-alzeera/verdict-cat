@@ -1,7 +1,8 @@
 // Rituals: optional multi-round contracts. Accept one in the shop (it costs coins and a ritual slot), meet every objective within
 // its rounds and you gain a permanent upgrade for the rest of the run; miss one and it lapses (only the coins are lost).
 // Objectives are plain counters fed by events the game already raises (kills, crits, reactions, damage taken, coins...).
-// Solo / host-local only for now: in co-op the shop is not offered rituals (see docs/rituals.md).
+// Co-op: every player has their own rituals (events reach the shell of the player they belong to); the host evaluates them,
+// and count objectives are 10% higher per extra player.
 import { ELEMENTS } from '../data/runes';
 import type { Run } from './run';
 
@@ -95,6 +96,7 @@ function rollObjectives(run: Run, tier: 1 | 2 | 3, rounds: number): Objective[] 
   const round = run.round;
   const f = tier === 1 ? 0.8 : tier === 2 ? 1 : 1.25;
   const g = tier === 1 ? 1.2 : tier === 2 ? 0.9 : 0.7; // "take less" objectives get tighter
+  const k = 1 + 0.1 * (run.coopSize() - 1); // more players: kills are shared out, so the count targets rise a little
   const rr = (n: number, step = 5) => Math.max(step, Math.round(n / step) * step);
   const els = [...new Set(run.spells.flatMap((s) => (s.c.valid ? s.c.elements : [])).filter((e) => e !== 'arcane'))];
   const slotsOk = run.spells.every((s) => !!s.def.root) && run.spells.length >= 2;
@@ -108,13 +110,13 @@ function rollObjectives(run: Run, tier: 1 | 2 | 3, rounds: number): Objective[] 
     () => (slotsOk && run.slots >= 2 ? { id: 'slotsfull', scope: 'round', target: run.slots } : null),
   ];
   const B: Mk[] = [
-    () => ({ id: 'kills', scope: 'total', target: rr(killBase(round) * rounds * f, 10) }),
-    () => (els.length ? { id: 'elemkills', scope: 'total', el: els[(Math.random() * els.length) | 0], target: rr(killBase(round) * rounds * f * 0.5, 10) } : null),
-    () => ({ id: 'elites', scope: 'total', target: Math.max(1, Math.round((tier + rounds - 1) * 0.7)) }),
-    () => ({ id: 'crits', scope: 'total', target: rr(killBase(round) * rounds * f * 0.2, 5) }),
-    () => ({ id: 'reactions', scope: 'total', target: rr(killBase(round) * rounds * f * 0.12, 5) }),
+    () => ({ id: 'kills', scope: 'total', target: rr(killBase(round) * rounds * f * k, 10) }),
+    () => (els.length ? { id: 'elemkills', scope: 'total', el: els[(Math.random() * els.length) | 0], target: rr(killBase(round) * rounds * f * 0.5 * k, 10) } : null),
+    () => ({ id: 'elites', scope: 'total', target: Math.max(1, Math.round((tier + rounds - 1) * 0.7 * k)) }),
+    () => ({ id: 'crits', scope: 'total', target: rr(killBase(round) * rounds * f * 0.2 * k, 5) }),
+    () => ({ id: 'reactions', scope: 'total', target: rr(killBase(round) * rounds * f * 0.12 * k, 5) }),
     () => ({ id: 'reactdiff', scope: 'once', target: tier === 1 ? 2 : tier === 2 ? 3 : 4 }),
-    () => ({ id: 'coins', scope: 'total', target: Math.max(4, Math.round((3 + round * 0.7) * rounds * f)) }),
+    () => ({ id: 'coins', scope: 'total', target: Math.max(4, Math.round((3 + round * 0.7) * rounds * f * k)) }),
     () => (run.coreCopies && Object.keys(ELEMENTS).some((e) => run.coreCopies(e) >= 3) ? { id: 'forge', scope: 'once', target: 1 } : null),
   ];
   const pick = (list: Mk[], used: Set<ObjId>) => {
@@ -143,9 +145,8 @@ export function makeRitual(run: Run, tier: 1 | 2 | 3): RitualDef {
   return { id: `rit${seq++}`, name: REWARD_INFO[reward].name, icon: REWARD_INFO[reward].icon, tier, rounds, cost, objectives: rollObjectives(run, tier, rounds), reward };
 }
 
-/** The rituals on offer for this shop visit (none in co-op). */
+/** The rituals on offer for this visit. */
 export function rollRituals(run: Run): RitualDef[] {
-  if (run.coop) return [];
   const top: 1 | 2 | 3 = run.round >= 8 ? 3 : run.round >= 4 ? 2 : 1;
   const second: 1 | 2 | 3 = top === 1 ? 1 : ((top - 1) as 1 | 2);
   const out = [makeRitual(run, second)];
@@ -155,7 +156,6 @@ export function rollRituals(run: Run): RitualDef[] {
 }
 
 export function acceptRitual(run: Run, def: RitualDef): string | null {
-  if (run.coop) return 'Rituals are not available in co-op yet.';
   const active = run.rituals.filter((r) => r.state === 'active');
   if (active.length >= ritualSlots(run)) return `You can run ${ritualSlots(run)} ritual${ritualSlots(run) > 1 ? 's' : ''} at a time.`;
   if (active.some((r) => r.def.tier === def.tier)) return 'You already have a ritual of that tier running.';
@@ -174,8 +174,8 @@ type Ev =
 
 /** Feed a game event to every running ritual. Cheap when there are none. */
 export function ritualEvent(run: Run, ev: Ev) {
-  const w = run.world;
-  if (!w.rituals.length || w.coop) return;
+  const w = run;
+  if (!w.rituals.length) return;
   if (ev.t === 'hurt') w.ritualRound.hurt += ev.d;
   if (ev.t === 'reaction') w.ritualRound.react.add(ev.id);
   for (const r of w.rituals) {
@@ -196,10 +196,15 @@ export function ritualEvent(run: Run, ev: Ev) {
   }
 }
 
+/** Tell the player the ritual belongs to (a remote player gets it on their own screen only). */
+function notify(run: Run, title: string, color: string, sub: string) {
+  if (run.remote) run.world.onRemoteNotice(run, title, color, sub); else run.announce(title, color, sub);
+}
+
 function fail(run: Run, r: ActiveRitual, why: string) {
   if (r.state !== 'active') return;
   r.state = 'lapsed'; r.why = why;
-  run.announce('RITUAL LAPSED', '#ff9a9a', `${r.def.name}: ${why}`);
+  notify(run, 'RITUAL LAPSED', '#ff9a9a', `${r.def.name}: ${why}`);
 }
 
 export function ritualRoundStart(run: Run) {
@@ -208,8 +213,8 @@ export function ritualRoundStart(run: Run) {
 
 /** Called when a round ends: check the per-round objectives, count the round, and resolve rituals that are finished. */
 export function ritualRoundEnd(run: Run) {
-  const w = run.world;
-  if (!w.rituals.length || w.coop) return;
+  const w = run;
+  if (!w.rituals.length) return;
   const p = w.player;
   for (const r of w.rituals) {
     if (r.state !== 'active') continue;
@@ -227,7 +232,7 @@ export function ritualRoundEnd(run: Run) {
       else {
         r.state = 'fulfilled';
         applyReward(w, r.def.reward, r.def.tier);
-        w.announce('RITUAL FULFILLED', '#ffd25a', `${r.def.name}: ${rewardText(r.def.reward, r.def.tier)}.`);
+        notify(w, 'RITUAL FULFILLED', '#ffd25a', `${r.def.name}: ${rewardText(r.def.reward, r.def.tier)}.`);
       }
     }
   }
@@ -248,4 +253,34 @@ export function objectiveProgress(r: ActiveRitual, i: number, run: Run): string 
 export function objectiveMet(r: ActiveRitual, i: number): boolean {
   const o = r.def.objectives[i];
   return (o.scope === 'total' || o.scope === 'once') && o.id !== 'novoid' && r.prog[i] >= o.target;
+}
+
+/* ------------------------------------------------------------------ co-op: trusting a build from another machine */
+
+const OBJ_IDS: ObjId[] = ['kills', 'elemkills', 'elites', 'crits', 'reactions', 'reactdiff', 'hurtmax', 'hpend', 'novoid', 'elements3', 'slotsfull', 'coins', 'forge'];
+const REWARDS = Object.keys(AMOUNT);
+/** The smallest target a count objective may have (a host will not accept a joiner's ritual that is free). */
+const FLOOR: Partial<Record<ObjId, number>> = { kills: 20, elemkills: 10, elites: 1, crits: 5, reactions: 5, reactdiff: 2, coins: 3, hpend: 30 };
+
+/** Is this ritual list, sent by a joiner, well formed and not trivially easy? Returns the problem or null. */
+export function validateRituals(list: unknown, bonus: unknown): string | null {
+  if (!Array.isArray(list) || list.length > 6) return 'bad rituals';
+  const num = (v: unknown, lo: number, hi: number) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
+  for (const r of list as ActiveRitual[]) {
+    const d = r?.def;
+    if (!d || !Array.isArray(d.objectives) || d.objectives.length < 1 || d.objectives.length > 4 || !REWARDS.includes(d.reward)) return 'bad ritual';
+    if (![1, 2, 3].includes(d.tier) || d.rounds !== d.tier + 1 || !Array.isArray(r.prog) || r.prog.length !== d.objectives.length) return 'bad ritual';
+    if (!['active', 'fulfilled', 'lapsed'].includes(r.state) || !num(r.roundsDone, 0, 4) || !num(r.startRound, 0, 100)) return 'bad ritual';
+    for (const o of d.objectives) {
+      if (!OBJ_IDS.includes(o.id) || !num(o.target, 0, 5000)) return 'bad ritual objective';
+      const lo = FLOOR[o.id];
+      if (lo !== undefined && o.target < lo) return 'ritual too easy';
+      if (o.id === 'hurtmax' && o.target > 250) return 'ritual too easy';
+      if (o.id === 'elemkills' && typeof o.el !== 'string') return 'bad ritual objective';
+    }
+    for (const v of r.prog) if (!num(v, 0, 1e6)) return 'bad ritual';
+  }
+  const b = bonus as RitualBonus | undefined;
+  if (b && (!num(b.coinMul, 1, 5) || !num(b.priceMul, 0.7, 1) || !num(b.forgeMinus, 0, 2) || !num(b.regen, 0, 0.8))) return 'bad ritual bonus';
+  return null;
 }

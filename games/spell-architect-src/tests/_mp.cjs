@@ -39,6 +39,7 @@ exports.session = async function (opt = {}) {
     return { A, B, bA, bB, errs, code, refused: await B.textContent('[data-status]'), close: async () => { await bA.close(); await bB.close(); } };
   }
   await B.waitForSelector('.lobbyp', { timeout: 40000 });
+  if (opt.beforeReady) await opt.beforeReady(A, B);
   await B.click('[data-a=ready]'); await B.waitForTimeout(500);
   await A.click('[data-a=go]'); await A.waitForTimeout(1500);
   return { A, B, bA, bB, errs, code, close: async () => { await bA.close(); await bB.close(); } };

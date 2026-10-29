@@ -107,7 +107,23 @@ export function wpick<T>(items: { v: T; w: number }[]): number {
 }
 
 /** Level-ups give stat boosts only. Boss caches give a choice of strong runes. */
-export function generateRewards(run: Run, mode: 'levelup' | 'cache', count = 3): Reward[] {
+/** An elite's chest: three runes of different kinds (a Form or Core, a Trigger or Behavior, and anything), not just the strongest ones. */
+function chestRewards(run: Run, count: number): Reward[] {
+  const forms = formsInPlay(run);
+  const unlocked = RUNES.filter((r) => store.isUnlocked(r.id) && !r.evolved);
+  const w = (r: RuneDef) => Math.max(0.01, RARITY[r.rarity].weight * relevance(run, r, forms) * dropWeight(r));
+  const groups: ((r: RuneDef) => boolean)[] = [(r) => r.kind === 'core' || r.kind === 'form', (r) => r.kind === 'trigger' || r.kind === 'behavior', () => true];
+  const out: Reward[] = [];
+  for (let i = 0; i < count; i++) {
+    const cand = unlocked.filter((r) => groups[i % groups.length](r) && !out.some((o) => o.rune === r.id)).map((r) => ({ v: r, w: w(r) }));
+    const k = wpick(cand);
+    if (k >= 0) out.push(runeReward(run, cand[k].v));
+  }
+  return out;
+}
+
+export function generateRewards(run: Run, mode: 'levelup' | 'cache' | 'chest', count = 3): Reward[] {
+  if (mode === 'chest') return chestRewards(run, count);
   const out: Reward[] = [];
   if (mode === 'levelup') {
     const used = new Set<string>();
