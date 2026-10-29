@@ -33,3 +33,7 @@ Damage taken grows about 2.4x then 1.6x per round while there is almost no recov
 - **Fix the early shop/slot funnel.** Slots 2-3 are underused; consider a cheap first extra slot or a free second Form early so builds diversify before round 4.
 - **Instrument for next time.** Log damage taken per enemy type per round, time-in-round of each hit, shop purchases/skips, coins spent, and entry/exit HP per round; record the build version on each run so analyses can separate eras; keep quick-mode runs out of balance analysis (tag already exists: `quick`).
 - **Get normal-mode data past round 4.** After the difficulty ramp, collect 15-20 normal runs before tuning bosses and late rounds.
+
+## Follow-up (what was changed in response)
+
+Baseline regen 0.15 HP/s, round-start heal 6% (was 2%), swarmer contact damage 5 to 3.4, and a fading "apprentice's focus" damage bonus (+60% round 1 to +0% by round 5). With HP carried between rounds (no resets), a kiting bot that equips its spare runes now clears rounds 1-3 in 3 of 3 trials and reached the round 5 boss once; the human runs above never got past round 4. Re-check with fresh run data.

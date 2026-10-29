@@ -2,7 +2,7 @@
 import type { Enemy } from './types';
 import type { Run } from './run';
 import { ARENA } from './run';
-import { hpMul, ramp, spawnEnemy } from './enemies';
+import { hpMul, playerScale, ramp, spawnEnemy } from './enemies';
 import { audio } from '../core/audio';
 
 import { BOSS_RES } from './rounds';
@@ -29,7 +29,7 @@ export function spawnBoss(run: Run, kind: number) {
   e.spr = run.img(d.tex, 6); e.shadow = run.img('shadow', 4).setScale(d.sc * 1.1).setAlpha(0.8);
   e.sc = d.sc; e.r = d.r; e.speed = d.speed * 1.35; e.elite = false;
   e.aff = 'neutral'; e.res = { ...BOSS_RES[kind] };
-  e.maxHp = e.hp = d.hp * Math.pow(hpMul(run.dtime), 0.75) * (run.quick ? 0.8 : 1);
+  e.maxHp = e.hp = d.hp * Math.pow(hpMul(run.dtime), 0.75) * (run.quick ? 0.8 : 1) * playerScale(run); // more players, tougher boss
   e.dmg = d.dmg * (1 + 0.25 * ramp(run.dtime)) * (1 + run.dtime / 60 * 0.05);
   e.xp = d.xp; e.armor = 2 + kind * 2; e.spawnT = 0.5;
   e.boss = {

@@ -21,6 +21,12 @@ import { updateCasting, updateEnts, processEvents } from './casting';
 import { Arena, ARENA, tileCx, tileCy } from './arena';
 export { ARENA };
 const CELL = 64;
+/** Health income (the run-long health budget was the main killer in the saved runs): a slow baseline regen and a modest heal at each round start. */
+export const BASE_REGEN = 0.15; // HP per second, about 7 HP over a 45 s round
+export const ROUND_START_HEAL = 0.06; // of max HP
+/** Apprentice's focus: spells hit harder in the first rounds (+60% in round 1, fading to nothing by round 5) so the weak starter is not dead time. */
+export const EARLY_POWER = 0.6;
+export const earlyPower = (round: number) => 1 + EARLY_POWER * Math.max(0, 1 - (round - 1) / 4);
 
 const attuneTint = (a: string): number => {
   const c = a in ELEMENTS ? ELEMENTS[a as keyof typeof ELEMENTS].color : 0xffffff;
@@ -169,7 +175,7 @@ export class Run {
     this.telGfx = scene.add.graphics().setDepth(2);
     for (let i = 0; i < this.gridN * this.gridN; i++) this.grid.push([]);
     this.player = {
-      x: ARENA / 2, y: ARENA / 2, vx: 0, vy: 0, hp: 100, maxHp: 100, speed: 330, r: 10, inv: 0, hurtFlash: 0, regen: 0,
+      x: ARENA / 2, y: ARENA / 2, vx: 0, vy: 0, hp: 100, maxHp: 100, speed: 330, r: 10, inv: 0, hurtFlash: 0, regen: BASE_REGEN,
       dmgMul: 1, cdMul: 1, crit: 0.05, critMul: 1.8, pickup: 1, level: 1, xp: 0, xpNeed: this.xpFor(1),
       faceX: 1, walkT: 0, pullX: 0, pullY: 0, pullT: 0,
     };
@@ -259,7 +265,7 @@ export class Run {
 
   freshPlayer(): Player {
     return {
-      x: ARENA / 2, y: ARENA / 2, vx: 0, vy: 0, hp: 100, maxHp: 100, speed: 330, r: 10, inv: 0, hurtFlash: 0, regen: 0,
+      x: ARENA / 2, y: ARENA / 2, vx: 0, vy: 0, hp: 100, maxHp: 100, speed: 330, r: 10, inv: 0, hurtFlash: 0, regen: BASE_REGEN,
       dmgMul: 1, cdMul: 1, crit: 0.05, critMul: 1.8, pickup: 1, level: 1, xp: 0, xpNeed: this.xpFor(1),
       faceX: 1, walkT: 0, pullX: 0, pullY: 0, pullT: 0,
     };
@@ -784,10 +790,7 @@ export class Run {
     const a = this.arena;
     if (this.phase !== 'fight' || !a.active) return;
     const r = a.update(dt);
-    if (r.warned.length) {
-      this.announce('THE FLOOR CRUMBLES', '#ff6a5a', 'Cracked red tiles are about to fall. Step off them!');
-      audio.play('warn');
-    }
+    if (r.warned.length) audio.play('warn'); // the cracked red tiles speak for themselves
     if (r.fell.length) {
       audio.play('boom');
       this.fx.shake(4);
@@ -838,7 +841,7 @@ export class Run {
       const off = this.players.length > 1 ? 36 : 0;
       p.x = ARENA / 2 + Math.cos(a) * off; p.y = ARENA / 2 + Math.sin(a) * off; p.vx = p.vy = 0; p.pullT = 0;
       if (pr.down) { pr.down = false; p.hp = Math.max(p.hp, p.maxHp * 0.35); }
-      p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.02);
+      p.hp = Math.min(p.maxHp, p.hp + p.maxHp * ROUND_START_HEAL);
       p.inv = 1;
       pr.coins = pr.remote ? 0 : pr.coins; // a remote shell reports the coins earned this round
       pr.kills = pr.remote ? 0 : pr.kills; pr.totalDamage = pr.remote ? 0 : pr.totalDamage;

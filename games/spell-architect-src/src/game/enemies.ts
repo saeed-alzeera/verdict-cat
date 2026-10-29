@@ -11,7 +11,7 @@ import { ELEMENTS } from '../data/runes';
 export interface EDef { tex: string; hp: number; speed: number; r: number; dmg: number; xp: number; armor: number; sc: number }
 export const EDEFS: Record<Exclude<EType, 'boss'>, EDef> = {
   grunt: { tex: 'grunt', hp: 14, speed: 125, r: 11, dmg: 9, xp: 1, armor: 0, sc: 2.6 },
-  swarmer: { tex: 'swarmer', hp: 6, speed: 235, r: 8, dmg: 5, xp: 0.6, armor: 0, sc: 2.2 },
+  swarmer: { tex: 'swarmer', hp: 6, speed: 235, r: 8, dmg: 3.4, xp: 0.6, armor: 0, sc: 2.2 },
   archer: { tex: 'archer', hp: 16, speed: 105, r: 10, dmg: 10, xp: 2, armor: 0, sc: 2.6 },
   charger: { tex: 'charger', hp: 36, speed: 140, r: 13, dmg: 15, xp: 2.5, armor: 0, sc: 3 },
   armored: { tex: 'armored', hp: 110, speed: 85, r: 15, dmg: 14, armor: 5, xp: 4, sc: 3.2 },
@@ -32,6 +32,9 @@ const dmgMulT = (t: number) => lerp(DMG_SCALE, t) * (1 + (t / 60) * 0.07);
 export const countScale = (t: number) => lerp(COUNT_SCALE, t);
 /** The arena is small, so the first rounds start with fewer enemies and fill in gradually (0.55x in round 1, full by round 6). */
 export const EARLY_FROM = 0.55, EARLY_T = 250;
+/** Co-op: every extra player adds this much of the base horde (2 players = 1.75x, 4 players = 3.25x). */
+export const PLAYER_SCALE = 0.75;
+export const playerScale = (run: Run) => 1 + PLAYER_SCALE * (Math.max(1, run.world.players.length) - 1);
 export const earlyDensity = (t: number) => EARLY_FROM + (1 - EARLY_FROM) * Math.min(1, Math.max(0, t / EARLY_T));
 let eid = 1;
 
@@ -122,18 +125,19 @@ export function openRound(run: Run) {
   const r = run.round;
   if (isBossRound(r)) {
     spawnBoss(run, bossKind(r));
-    for (let i = 0; i < Math.round(6 * countScale(run.dtime) * earlyDensity(run.dtime)); i++) { const [x, y] = spawnPoint(run); spawnEnemy(run, 'grunt', x, y); }
+    for (let i = 0; i < Math.round(6 * countScale(run.dtime) * earlyDensity(run.dtime) * playerScale(run)); i++) { const [x, y] = spawnPoint(run); spawnEnemy(run, 'grunt', x, y); }
     return;
   }
-  const n = Math.max(3, Math.round((3 + r) * countScale(run.dtime) * earlyDensity(run.dtime)));
+  const n = Math.max(3, Math.round((3 + r) * countScale(run.dtime) * earlyDensity(run.dtime) * playerScale(run)));
   for (let i = 0; i < n; i++) { const [x, y] = spawnPoint(run); spawnEnemy(run, i % 4 === 3 ? 'swarmer' : 'grunt', x, y); }
 }
 
 export function updateDirector(run: Run, dt: number) {
   const t = run.dtime;
   const bossOn = !!run.boss;
-  let rate = (0.95 + t * 0.0065) * countScale(t) * earlyDensity(t) * (run.quick ? 2 : 1);
-  let cap = Math.min(260, (16 + t * 0.11) * countScale(t) * earlyDensity(t)) * (run.quick ? 1.1 : 1);
+  const ps = playerScale(run);
+  let rate = (0.95 + t * 0.0065) * countScale(t) * earlyDensity(t) * ps * (run.quick ? 2 : 1);
+  let cap = Math.min(260 + 70 * (ps - 1), (16 + t * 0.11) * countScale(t) * earlyDensity(t) * ps) * (run.quick ? 1.1 : 1);
   if (bossOn) { rate *= 0.15; cap = Math.min(cap * 0.5, 28); }
   run.spawnAcc += rate * dt;
   const alive = run.enemies.length;
@@ -147,7 +151,7 @@ export function updateDirector(run: Run, dt: number) {
   const once = (id: string, at: number, fn: () => void) => { if (f >= at && !run.pieces.has(id)) { run.pieces.add(id); fn(); } };
   const r = run.round;
   if (r >= 4 && r % 2 === 0) once('swarm', 0.15, () => {
-    const n = Math.min(44, Math.round((8 + r * 2) * (1 + 0.2 * ramp(run.dtime))));
+    const n = Math.min(44 * ps, Math.round((8 + r * 2) * (1 + 0.2 * ramp(run.dtime)) * ps));
     const p = run.randomPlayer().player;
     const a0 = Math.random() * 6.28;
     for (let i = 0; i < n; i++) {
@@ -160,12 +164,12 @@ export function updateDirector(run: Run, dt: number) {
   });
   if (r % 3 === 0 && r >= 6) once('stampede', 0.35, () => {
     const [x, y] = spawnPoint(run);
-    const n = Math.round((3 + Math.floor(r / 3)) * (1 + 0.3 * ramp(run.dtime)));
+    const n = Math.round((3 + Math.floor(r / 3)) * (1 + 0.3 * ramp(run.dtime)) * ps);
     for (let i = 0; i < n; i++) spawnEnemy(run, 'charger', x + (Math.random() - 0.5) * 120, y + (Math.random() - 0.5) * 120);
     run.announce('STAMPEDE', '#ff8a4a', 'Chargers incoming. Keep moving!');
     audio.play('warn');
   });
-  if (r >= 4) once('elite', 0.55, () => { const n = 1 + Math.floor(r / (run.dtime < 250 ? 8 : 6)); for (let i = 0; i < n; i++) spawnElite(run); });
+  if (r >= 4) once('elite', 0.55, () => { const n = Math.max(1, Math.round((1 + Math.floor(r / (run.dtime < 250 ? 8 : 6))) * ps)); for (let i = 0; i < n; i++) spawnElite(run); });
 }
 
 /* ---------------------------------- AI ---------------------------------- */
