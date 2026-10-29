@@ -303,7 +303,7 @@ function aiFor(run: Run, e: Enemy, dt: number, mul: number, dist: number, nx: nu
       if (e.atk <= 0 && dist < 520 && e.st === 0) {
         e.st = 1;
         const ang = Math.atan2(ny, nx);
-        run.addTelegraph({ shape: 'line', x: e.x, y: e.y, r: 0, ang, len: 520, w: 6, dur: 0.6, color: 0xff4a4a, follow: e, onDone: () => {
+        run.addTelegraph({ shape: 'windup', x: e.x, y: e.y, r: e.r * 1.2, ang, dur: 0.6, color: 0xff9a3a, follow: e, onDone: () => {
           e.st = 0; e.atk = 2.6 + Math.random();
           const shots = e.elite ? [-0.22, 0, 0.22] : [0];
           for (const o of shots) run.fireBullet(e.x, e.y, ang + o, 230, e.dmg);
@@ -318,7 +318,7 @@ function aiFor(run: Run, e: Enemy, dt: number, mul: number, dist: number, nx: nu
         if (e.atk <= 0 && dist < 400) {
           e.st = 1;
           const ang = Math.atan2(ny, nx);
-          run.addTelegraph({ shape: 'line', x: e.x, y: e.y, r: 0, ang, len: 380, w: 34, dur: 0.75, color: 0xff4a4a, follow: e, onDone: () => {
+          run.addTelegraph({ shape: 'windup', x: e.x, y: e.y, r: e.r * 1.2, ang, dur: 0.75, color: 0xff4a4a, follow: e, onDone: () => {
             e.st = 2; e.stT = 0.55; e.dx = Math.cos(ang); e.dy = Math.sin(ang);
             audio.play('warn');
           } });
@@ -335,7 +335,7 @@ function aiFor(run: Run, e: Enemy, dt: number, mul: number, dist: number, nx: nu
         // elite chargers immediately line up a second dash
         e.st = 1;
         const ang = Math.atan2(p.y - e.y, p.x - e.x);
-        run.addTelegraph({ shape: 'line', x: e.x, y: e.y, r: 0, ang, len: 380, w: 34, dur: 0.5, color: 0xff4a4a, follow: e, onDone: () => {
+        run.addTelegraph({ shape: 'windup', x: e.x, y: e.y, r: e.r * 1.2, ang, dur: 0.5, color: 0xff4a4a, follow: e, onDone: () => {
           e.st = 2; e.stT = 0.5; e.dx = Math.cos(ang); e.dy = Math.sin(ang);
         } });
       } else if (e.st === 3) {

@@ -39,7 +39,7 @@ Editor: click a rune in the **Rune Pool**, then click a glowing card to place it
 | --- | --- |
 | **Form** (the spell's body, fills a slot) | Projectile, Beam, Orbiting Orb, Aura, Mine, Nova, Meteor |
 | **Core** (element, socketed into a Form) | Fire, Ice, Lightning, Poison, Water, Gravity (no Core = plain Arcane magic) |
-| **Behavior** | Split, Pierce, Bounce, Chain, Orbit, Homing, Pull, Expand |
+| **Behavior** | Split, Pierce, Bounce, Chain, Orbit, Homing, Pull, Push (Aura only: slows enemies inside), Expand |
 | **Trigger** | On Hit, On Kill, On Expiry, On Critical Hit |
 | **Modifier** | Duplicate, Accelerate, Grow, Increase Duration, Increase Area, Reduce Cooldown |
 
@@ -86,7 +86,7 @@ Reactions come from simple systemic rules, not scripted upgrades. Each reaction 
 
 ### Crumbling floor
 
-The arena is a small 11x11 tile map. Every round a seeded share of the tiles falls away in three waves: 10% in round 1, 20% from round 2 on. It resets every round (not cumulative). Doomed tiles crack and pulse red for a few seconds first. The remaining floor always stays connected. Enemies on a cracking tile run for solid ground, path around holes, and die if they are still there when it drops; you take 12% max HP and are put back on solid floor. Implemented in `src/game/arena.ts`.
+The arena is a small 11x11 tile map. Every round a seeded share of the tiles falls away in three waves: 10% in round 1, 20% from round 2 on. It resets every round (not cumulative). Doomed tiles crack and pulse red for a few seconds first, and the collapse favours the corners and edges (about half of the fallen tiles come from the outer ring) without being exclusive. The remaining floor always stays connected. Enemies on a cracking tile run for solid ground, path around holes, and die if they are still there when it drops; you take 12% max HP and are put back on solid floor. Implemented in `src/game/arena.ts`.
 
 ### Shop and economy
 

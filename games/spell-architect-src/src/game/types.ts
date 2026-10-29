@@ -110,7 +110,7 @@ export interface Pickup {
 }
 
 export interface Telegraph {
-  shape: 'circle' | 'line' | 'ring';
+  shape: 'circle' | 'line' | 'ring' | 'windup';
   x: number; y: number; r: number; ang: number; len: number; w: number;
   t: number; total: number; color: number;
   follow: Enemy | null; // origin tracks this enemy

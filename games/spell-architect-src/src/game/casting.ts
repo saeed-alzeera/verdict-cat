@@ -512,6 +512,21 @@ function doSplit(run: Run, en: SEnt, baseAng: number) {
   run.fx.ring(en.x, en.y, ELEMENTS[en.el].color, 6, 26, 0.2);
 }
 
+/** Push augment: everything inside the aura is slowed and eased outward (heavy enemies resist the shove, bosses are barely slowed). */
+function pushEnemies(run: Run, en: SEnt, R: number, dt: number) {
+  for (const e of run.query(en.x, en.y, R)) {
+    const dx = e.x - en.x, dy = e.y - en.y, d = Math.hypot(dx, dy) || 1;
+    e.slowT = Math.max(e.slowT, 0.3);
+    e.slowMul = Math.min(e.slowMul, e.type === 'boss' ? 0.85 : e.elite ? 0.7 : 0.6);
+    const k = 40 * (1 - 0.5 * Math.min(1, d / R)) * pullResist(e) * dt;
+    e.x += (dx / d) * k; e.y += (dy / d) * k;
+  }
+  if (Math.random() < 0.35) {
+    const a = Math.random() * 6.28, d = R * (0.3 + 0.7 * Math.random());
+    run.fx.spark(en.x + Math.cos(a) * d, en.y + Math.sin(a) * d, Math.cos(a) * 60, Math.sin(a) * 60, 0xcfe8ff, 0.5, 0.9);
+  }
+}
+
 function pullEnemies(run: Run, cx: number, cy: number, R: number, F: number, dt: number, src: Src) {
   for (const e of run.query(cx, cy, R)) {
     const dx = cx - e.x, dy = cy - e.y;
@@ -703,6 +718,7 @@ function updateZone(run: Run, en: SEnt, dt: number) {
   }
   const R = currentR(en);
   if (en.pull && !en.silent) pullEnemies(run, en.x, en.y, Math.max(R * (en.kind === 'aura' ? 1.3 : 1.5), 60), en.pullF, dt, en.src);
+  if (en.kind === 'aura' && en.f.b.push && !en.silent) pushEnemies(run, en, R, dt);
   en.tickT -= dt;
   if (en.tickT > 0) return;
   en.tickT += en.tick;

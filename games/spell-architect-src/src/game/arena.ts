@@ -12,6 +12,8 @@ const CENTER = (TN >> 1) * TN + (TN >> 1);
 const WAVES = 3;
 const WAVE_AT = [0.16, 0.44, 0.72]; // fraction of the round at which each wave is announced
 const FALL_ANIM = 0.5;
+/** How strongly the collapse favours the edges and corners (0 = uniform). A corner is ~9x as likely as a centre tile to go early; half of all falling tiles come from the outer ring. */
+const EDGE_BIAS = 8;
 
 function rng(seed: number) {
   let a = seed | 0;
@@ -59,9 +61,18 @@ export class Arena {
     this.warnLen = Math.max(2, Math.min(4, roundLen / 8));
     const r = rng(round * 4093 + seed * 131 + 7);
     const target = Math.round(fallShare(round) * TN * TN);
-    const order: number[] = [];
-    for (let i = 0; i < TN * TN; i++) if (i !== CENTER) order.push(i);
-    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    // Weighted shuffle (Efraimidis-Spirakis): tiles further from the middle are likelier to go first, corners most of all,
+    // but the weights are mild enough that inner tiles still fall regularly.
+    const keyed: { t: number; k: number }[] = [];
+    const half = (TN - 1) / 2, maxD = Math.hypot(half, half);
+    for (let i = 0; i < TN * TN; i++) {
+      if (i === CENTER) continue;
+      const d = Math.hypot((i % TN) - half, Math.floor(i / TN) - half) / maxD; // 0 centre .. 1 corner
+      const w = 1 + EDGE_BIAS * d * d;
+      keyed.push({ t: i, k: Math.pow(Math.max(1e-9, r()), 1 / w) });
+    }
+    keyed.sort((a, b) => b.k - a.k);
+    const order = keyed.map((x) => x.t);
     const gone = new Uint8Array(TN * TN);
     const removed: number[] = [];
     for (const t of order) {
