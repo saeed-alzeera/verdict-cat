@@ -152,6 +152,8 @@ export const RUNES: RuneDef[] = [
     desc: 'Steers toward the nearest enemy. Mines crawl toward their prey.' },
   { id: 'b_pull', kind: 'behavior', name: 'Pull', icon: '🧲', rarity: 'uncommon', cost: 2, key: 'pull', maxStack: 1, unlock: 40,
     desc: 'Drags nearby enemies toward the form. Gather them into puddles, clouds and flames.' },
+  { id: 'b_push', kind: 'behavior', name: 'Push', icon: '🌬️', rarity: 'uncommon', cost: 2, key: 'push', forms: ['aura'], maxStack: 1, unlock: 25,
+    desc: 'Aura only. Enemies inside the aura are slowed by 40% and shoved gently outward. Bosses and elites resist the push and are slowed less.' },
   { id: 'b_expand', kind: 'behavior', name: 'Expand', icon: '🫧', rarity: 'common', cost: 1, key: 'expand', forms: ['projectile', 'orb', 'aura', 'mine', 'nova', 'meteor'], maxStack: 1, unlock: 30,
     desc: 'The form grows steadily over its lifetime, up to 80% larger.' },
 

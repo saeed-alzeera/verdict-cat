@@ -270,7 +270,7 @@ export function estimate(root: CForm, mut: Mut): Estimate {
 
 const BEH_ADJ: [string, string][] = [
   ['split', 'Splitting'], ['chain', 'Arcing'], ['bounce', 'Ricochet'], ['pierce', 'Piercing'],
-  ['homing', 'Seeking'], ['orbit', 'Orbiting'], ['pull', 'Dragging'], ['expand', 'Swelling'],
+  ['homing', 'Seeking'], ['orbit', 'Orbiting'], ['pull', 'Dragging'], ['push', 'Repelling'], ['expand', 'Swelling'],
 ];
 const TRIG_WORD: Record<TriggerType, string> = { hit: 'Impact', kill: 'Reaping', expiry: 'Fading', crit: 'Fortune' };
 
@@ -294,6 +294,7 @@ const BEH_TEXT: Record<string, string> = {
   orbit: 'circles around you',
   homing: 'homes in on enemies',
   pull: 'drags enemies toward it',
+  push: 'slows enemies inside it and pushes them back',
   expand: 'grows over time',
 };
 const FORM_VERB: Record<FormId, string> = {
