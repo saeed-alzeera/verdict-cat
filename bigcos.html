@@ -30,6 +30,22 @@
   ul.tree > li > ul > li > ul > li:hover { color:var(--ink); }
   ul.tree > li > ul > li > ul > li > ul { padding-left:18px; }
   ul.tree > li > ul > li > ul > li > ul > li { font-weight:400; font-size:13px; color:var(--muted); opacity:.85; margin:1px 0; }
+  .row { display:flex; align-items:baseline; gap:8px; }
+  .rm { flex:none; background:none; border:1px solid transparent; color:var(--muted); font-size:13px; line-height:1;
+    padding:1px 6px; border-radius:6px; cursor:pointer; opacity:.35; font-family:inherit; }
+  li:hover > .row > .rm, .rm:focus-visible { opacity:1; border-color:var(--line); color:#e05c5c; }
+  @media (hover:none) { .rm { opacity:.6; } }
+  li.is-removed { display:none; }
+  #tools { margin-top:32px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  .btn { background:none; border:1px solid var(--line); color:var(--muted); font-size:12px; padding:6px 12px;
+    border-radius:8px; cursor:pointer; font-family:inherit; }
+  .btn:hover { border-color:var(--accent); color:var(--accent); }
+  #removed-panel { display:none; margin-top:14px; border:1px solid var(--line); border-radius:10px; background:var(--panel); padding:6px 12px; }
+  #removed-panel .item { display:flex; justify-content:space-between; gap:12px; align-items:baseline; padding:6px 0;
+    border-bottom:1px solid var(--line); font-size:13px; color:var(--muted); }
+  #removed-panel .item:last-child { border-bottom:0; }
+  #removed-panel .item b { color:var(--ink); font-weight:500; }
+  #removed-empty { font-size:13px; color:var(--muted); padding:8px 0; }
   .note { font-size:12px; color:var(--muted); margin-top:28px; }
 </style>
 </head>
@@ -519,8 +535,104 @@
   </li>
 </ul>
 
-<p class="note">Compiled Nov 2026 from the Bahrain cabinet list (as appointed Nov 2022, amended Nov 2024) and Mumtalakat's published portfolio. APM Terminals Bahrain (80% Maersk, concession for Khalifa Bin Salman Port and Mina Salman) is listed under foreign companies as majority private. State-owned companies that are listed or run commercially with outside shareholders or JV partners sit under Private Sector and are tagged (state-owned); the Semi-government group keeps wholly state-owned vehicles and intergovernmental bodies. All 39 companies found on the Bahrain Bourse (Nov 2026, via stockanalysis.com and Investing.com; the official site blocked automated access) are included somewhere on this page. Private sector is grouped by industry and compiled from memory plus Forbes/Bahrain Bourse coverage; ownership and market caps are not verified. Level-4 sub-entities marked * come from memory and were not confirmed by search; unmarked ones were seen in a source. Sub-entities that are already listed separately (e.g. Bahrain Islamic Bank under NBB) are not repeated. Re-check ministry names after any reshuffle.</p>
+<div id="tools">
+  <button class="btn" id="removed-toggle" type="button">Removed (0)</button>
+  <button class="btn" id="copy-all" type="button">Copy full list</button>
+  <span id="tools-msg" class="note" style="margin:0"></span>
+</div>
+<div id="removed-panel"></div>
+
+<p class="note">Compiled Nov 2026 from the Bahrain cabinet list (as appointed Nov 2022, amended Nov 2024) and Mumtalakat's published portfolio. APM Terminals Bahrain (80% Maersk, concession for Khalifa Bin Salman Port and Mina Salman) is listed under foreign companies as majority private. State-owned companies that are listed or run commercially with outside shareholders or JV partners sit under Private Sector and are tagged (state-owned); the Semi-government group keeps wholly state-owned vehicles and intergovernmental bodies. All 39 companies found on the Bahrain Bourse (Nov 2026, via stockanalysis.com and Investing.com; the official site blocked automated access) are included somewhere on this page. Private sector is grouped by industry and compiled from memory plus Forbes/Bahrain Bourse coverage; ownership and market caps are not verified. Level-4 sub-entities marked * come from memory and were not confirmed by search; unmarked ones were seen in a source. Sub-entities that are already listed separately (e.g. Bahrain Islamic Bank under NBB) are not repeated. The × beside any level 3 or 4 entry hides it; hidden entries stay saved under Removed and in Copy full list, and sync across devices via the hub sync key. Re-check ministry names after any reshuffle.</p>
 </main>
+<script src="gist.js?v=4"></script>
+<script>
+(function () {
+  var LS = 'bigcos_removed_v1', DOC = 'bigcos-removed';
+  var removed = [];
+  try { removed = JSON.parse(localStorage.getItem(LS) || '[]'); } catch (e) {}
+  if (!Array.isArray(removed)) removed = [];
+
+  // Stable key per entry: Country > Level1 > Level2 > ... name
+  var items = [];
+  document.querySelectorAll('ul.tree').forEach(function (tree) {
+    var h = tree.previousElementSibling, country = h && h.tagName === 'H2' ? h.textContent.trim() : '';
+    (function walk(ul, path, depth) {
+      Array.prototype.forEach.call(ul.children, function (li) {
+        var tn = li.firstChild; while (tn && !(tn.nodeType === 3 && tn.textContent.trim())) tn = tn.nextSibling;
+        if (!tn) return;
+        var name = tn.textContent.trim(), p = path.concat(name);
+        var item = { li: li, name: name, path: p, key: p.join(' > '), depth: depth };
+        items.push(item);
+        if (depth >= 3) {
+          var row = document.createElement('div'); row.className = 'row';
+          var span = document.createElement('span'); span.textContent = name;
+          var b = document.createElement('button'); b.type = 'button'; b.className = 'rm'; b.textContent = '\u00d7';
+          b.title = 'Remove from view'; b.setAttribute('aria-label', 'Remove ' + name);
+          b.addEventListener('click', function () { setRemoved(item.key, true); });
+          row.appendChild(span); row.appendChild(b);
+          li.replaceChild(row, tn);
+        }
+        var sub = li.querySelector(':scope > ul'); if (sub) walk(sub, p, depth + 1);
+      });
+    })(tree, country ? [country] : [], 1);
+  });
+  var byKey = {}; items.forEach(function (i) { byKey[i.key] = i; });
+
+  function save() {
+    try { localStorage.setItem(LS, JSON.stringify(removed)); } catch (e) {}
+    if (window.Gist && Gist.isConnected && Gist.isConnected()) {
+      try { Promise.resolve(Gist.pushDoc(DOC, removed)).catch(function () {}); } catch (e) {}
+    }
+  }
+  function setRemoved(key, on) {
+    var i = removed.indexOf(key);
+    if (on && i < 0) removed.push(key);
+    if (!on && i >= 0) removed.splice(i, 1);
+    save(); render();
+  }
+  function render() {
+    items.forEach(function (i) { i.li.classList.toggle('is-removed', i.depth >= 3 && removed.indexOf(i.key) >= 0); });
+    var n = removed.length;
+    document.getElementById('removed-toggle').textContent = 'Removed (' + n + ')';
+    var panel = document.getElementById('removed-panel');
+    panel.innerHTML = '';
+    if (!n) { var e = document.createElement('div'); e.id = 'removed-empty'; e.textContent = 'Nothing removed.'; panel.appendChild(e); return; }
+    removed.slice().sort().forEach(function (k) {
+      var row = document.createElement('div'); row.className = 'item';
+      var parts = k.split(' > '), label = document.createElement('span');
+      var b = document.createElement('b'); b.textContent = parts[parts.length - 1];
+      label.appendChild(b); label.appendChild(document.createTextNode('  \u2014 ' + parts.slice(1, -1).join(' > ')));
+      var r = document.createElement('button'); r.type = 'button'; r.className = 'btn'; r.textContent = 'Restore';
+      r.addEventListener('click', function () { setRemoved(k, false); });
+      row.appendChild(label); row.appendChild(r); panel.appendChild(row);
+    });
+  }
+  document.getElementById('removed-toggle').addEventListener('click', function () {
+    var p = document.getElementById('removed-panel'); p.style.display = p.style.display === 'block' ? 'none' : 'block';
+  });
+  document.getElementById('copy-all').addEventListener('click', function () {
+    var lines = items.map(function (i) { return new Array(i.depth).join('  ') + '- ' + i.name; });
+    var txt = lines.join('\n'), msg = document.getElementById('tools-msg');
+    function done(ok) { msg.textContent = ok ? 'Copied ' + items.length + ' entries (including removed).' : 'Copy failed.'; }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function () { done(true); }, function () { done(false); });
+    else done(false);
+  });
+  render();
+
+  // Pull removals saved on another device (sync key set on the hub).
+  try {
+    if (window.Gist && Gist.isConnected && Gist.isConnected()) {
+      Promise.resolve(Gist.pullDoc(DOC)).then(function (remote) {
+        if (Array.isArray(remote)) {
+          removed = remote.filter(function (k) { return typeof k === 'string'; });
+          try { localStorage.setItem(LS, JSON.stringify(removed)); } catch (e) {}
+          render();
+        }
+      }).catch(function () {});
+    }
+  } catch (e) {}
+})();
+</script>
 <script>
   if (localStorage.getItem('hub_auth') !== '1') location.replace('index.html');
 </script>
