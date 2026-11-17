@@ -740,7 +740,13 @@
     // Pull the latest synced position before opening — otherwise a stale
     // localStorage entry (e.g. from before progress made on another device)
     // decides where the book opens, and reading elsewhere never "sticks".
-    var openPromise = (Gist.isConnected() ? Gist.pull() : Promise.resolve([])).then(function() {
+    // The local position is the source of truth on this device, so never let a
+    // slow or unreachable sync server hold up opening the book: give the pull
+    // a few seconds, then open from localStorage regardless.
+    var pullPromise = Gist.isConnected()
+      ? Promise.race([Gist.pull(), new Promise(function(r) { setTimeout(r, 4000); })])
+      : Promise.resolve([]);
+    var openPromise = pullPromise.then(function() {
       var savedCfi = loadProgress();
       lastKnownCfi = savedCfi || null;
       return savedCfi ? rendition.display(savedCfi) : rendition.display();
