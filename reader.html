@@ -655,16 +655,22 @@
   // Push to Gist: immediately on chapter change, debounced (30s) within a chapter
   function scheduleGistPush(immediate) {
     clearTimeout(gistIdleTimer);
-    if (immediate) { Gist.push(); }
-    else { gistIdleTimer = setTimeout(function() { Gist.push(); }, 30000); }
+    if (immediate) { Gist.push(storageKey()); }
+    else { gistIdleTimer = setTimeout(function() { Gist.push(storageKey()); }, 30000); }
   }
 
-  window.addEventListener('beforeunload', function() { Gist.push(); });
+  // Flush only this book, with keepalive so the request survives the unload.
+  function flushProgress() {
+    clearTimeout(gistIdleTimer);
+    Gist.push(storageKey(), true);
+  }
+
+  window.addEventListener('beforeunload', flushProgress);
   // beforeunload doesn't fire reliably on mobile (tab backgrounding, bfcache),
   // so also flush whenever the page is hidden — the actual point a reader
   // stops reading on a phone.
   document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'hidden') Gist.push();
+    if (document.visibilityState === 'hidden') flushProgress();
   });
 
   function showError(msg) {
