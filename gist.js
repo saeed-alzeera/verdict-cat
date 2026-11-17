@@ -340,18 +340,25 @@
       return changed;
     },
 
-    _workerPush: async function() {
+    // onlyKey: push just that one progress key (what the reader does). With no
+    // key, every key that has a real timestamp is pushed. A key with no
+    // timestamp is never pushed: inventing "now" for it would let a stale
+    // position beat newer progress from another device.
+    _workerPush: async function(onlyKey, keepalive) {
       try {
         var entries = {};
-        for (var i = 0; i < localStorage.length; i++) {
-          var k = localStorage.key(i);
-          if (k && k.startsWith('epub-progress:') && !k.endsWith(TS_SUFFIX)) {
-            var ts = parseInt(localStorage.getItem(tsKey(k)) || '0', 10) || Date.now();
-            entries[k] = { value: localStorage.getItem(k), ts: ts };
-          }
+        function add(k) {
+          if (!k || !k.startsWith('epub-progress:') || k.endsWith(TS_SUFFIX)) return;
+          var ts = parseInt(localStorage.getItem(tsKey(k)) || '0', 10);
+          var val = localStorage.getItem(k);
+          if (!ts || !val) return;
+          entries[k] = { value: val, ts: ts };
         }
+        if (onlyKey) add(onlyKey);
+        else for (var i = 0; i < localStorage.length; i++) add(localStorage.key(i));
         if (!Object.keys(entries).length) return true;
-        await workerPostNs('progress', entries);
+        // keepalive lets the request finish while the page is unloading.
+        await workerPostNs('progress', entries, keepalive);
         return true;
       } catch(e) { return false; }
     },
@@ -418,7 +425,7 @@
 
     // ── Dispatch (public API used by the pages) ───────────────────────────
     pull:        function() { return mode() === 'worker' ? w.Gist._workerPull()        : w.Gist._gistPull(); },
-    push:        function() { return mode() === 'worker' ? w.Gist._workerPush()        : w.Gist._gistPush(); },
+    push:        function(key, keepalive) { return mode() === 'worker' ? w.Gist._workerPush(key, keepalive) : w.Gist._gistPush(); },
     pullRegions: function() { return mode() === 'worker' ? w.Gist._workerPullRegions() : w.Gist._gistPullRegions(); },
     pushRegions: function() { return mode() === 'worker' ? w.Gist._workerPushRegions() : w.Gist._gistPushRegions(); },
 
