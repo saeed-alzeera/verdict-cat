@@ -51,14 +51,7 @@
   .item .p { white-space: pre-wrap; word-break: break-word; font-size: 13px; max-height: 5.5em; overflow: hidden; }
   .item .m { font-size: 11px; color: var(--muted); margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap; }
   .item .m button { background: none; color: var(--accent); padding: 0; font-size: 11px; font-weight: 400; }
-</style>
-</head>
-<body>
-<div id="topbar">
-  <a href="index.html">&#8592; Hub</a>
-  <h1>Clyde</h1>
-</div>
-<main>
+  #out { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px <main>
   <label for="prompt">Prompt</label>
   <textarea id="prompt" placeholder="What should Clyde do?"></textarea>
   <div class="row">
@@ -66,21 +59,84 @@
     <span class="hint">Ctrl/&#8984;+Enter to send</span>
   </div>
   <div class="row"><div id="msg"></div></div>
+  <div id="out"></div>
   <h2>Recent</h2>
   <div id="history"></div>
 </main>
 <script>
   var KEY = 'clyde-history';
   var WORKER = 'https://verdict-cat-sync.saeed-a-alzeera.workers.dev';
+  var POLL_MS = 4000, GIVE_UP_MS = 11 * 60 * 1000;
   var $ = function (id) { return document.getElementById(id); };
+  var pollers = {}, viewing = null;
 
   function load() { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { return []; } }
   function save(list) { try { localStorage.setItem(KEY, JSON.stringify(list.slice(0, 30))); } catch (e) {} }
+  function find(list, id) { for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return null; }
+  function update(id, patch) {
+    var list = load(), it = find(list, id);
+    if (it) { for (var k in patch) it[k] = patch[k]; save(list); }
+  }
 
-  function setMsg(text, cls) {
-    var m = $('msg');
-    m.className = cls || '';
-    m.textContent = text;
+  function setMsg(text, cls) { var m = $('msg'); m.className = cls || ''; m.textContent = text; }
+
+  // ── Markdown → safe HTML. Everything is escaped first; links and images
+  // are flattened to plain text so nothing in the output is clickable.
+  function esc(t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function inline(t) {
+    var codes = [];
+    t = t.replace(/`([^`\n]+)`/g, function (_, c) { codes.push(c); return '\u0000' + (codes.length - 1) + '\u0000'; });
+    t = esc(t);
+    t = t.replace(/!\[([^\]]*)\]\(([^)\s]*)[^)]*\)/g, '$1');
+    t = t.replace(/\[([^\]]+)\]\(([^)\s]*)[^)]*\)/g, '$1 ($2)');
+    t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    t = t.replace(/(^|[^*])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>');
+    t = t.replace(/\u0000(\d+)\u0000/g, function (_, i) { return '<code>' + esc(codes[+i]) + '</code>'; });
+    return t;
+  }
+  function md(src) {
+    var lines = String(src).replace(/\r\n?/g, '\n').split('\n'), out = [], i = 0, para = [];
+    function flush() { if (para.length) { out.push('<p>' + inline(para.join(' ')) + '</p>'); para = []; } }
+    while (i < lines.length) {
+      var l = lines[i], m;
+      if (/^```/.test(l)) {
+        flush(); var code = []; i++;
+        while (i < lines.length && !/^```/.test(lines[i])) code.push(lines[i++]);
+        i++; out.push('<pre><code>' + esc(code.join('\n')) + '</code></pre>'); continue;
+      }
+      if (!l.trim()) { flush(); i++; continue; }
+      if ((m = l.match(/^(#{1,6})\s+(.*)$/))) { flush(); var n = Math.min(m[1].length, 4); out.push('<h' + n + '>' + inline(m[2]) + '</h' + n + '>'); i++; continue; }
+      if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(l)) { flush(); out.push('<hr>'); i++; continue; }
+      if (/^>\s?/.test(l)) {
+        flush(); var q = [];
+        while (i < lines.length && /^>\s?/.test(lines[i])) q.push(lines[i++].replace(/^>\s?/, ''));
+        out.push('<blockquote>' + inline(q.join(' ')) + '</blockquote>'); continue;
+      }
+      if (/^\s*([-*+]|\d+[.)])\s+/.test(l)) {
+        flush(); var ord = /^\s*\d/.test(l), items = [];
+        while (i < lines.length && /^\s*([-*+]|\d+[.)])\s+/.test(lines[i])) items.push('<li>' + inline(lines[i++].replace(/^\s*([-*+]|\d+[.)])\s+/, '')) + '</li>');
+        out.push((ord ? '<ol>' : '<ul>') + items.join('') + (ord ? '</ol>' : '</ul>')); continue;
+      }
+      para.push(l.trim()); i++;
+    }
+    flush();
+    return out.join('');
+  }
+
+  // ── UI
+  function showOutput(id) {
+    viewing = id;
+    var it = find(load(), id), box = $('out');
+    if (!it) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    if (it.status === 'done' && it.result) box.innerHTML = md(it.result);
+    else if (it.status === 'timeout') box.innerHTML = '<p class="hint">No response came back.</p>';
+    else if (it.status === 'failed') box.innerHTML = '<p class="hint">' + esc(it.error || 'Failed.') + '</p>';
+    else box.innerHTML = '<p class="hint">Working on it…</p>';
+  }
+
+  function statusLabel(it) {
+    return it.status === 'done' ? 'done' : it.status === 'timeout' ? 'no response' : it.status === 'failed' ? 'failed' : 'working…';
   }
 
   function render() {
@@ -93,19 +149,76 @@
       var p = document.createElement('div'); p.className = 'p'; p.textContent = it.prompt;
       var m = document.createElement('div'); m.className = 'm';
       var t = document.createElement('span'); t.textContent = new Date(it.at).toLocaleString();
-      m.appendChild(t);
+      var st = document.createElement('span'); st.className = 'st'; st.textContent = statusLabel(it);
+      m.appendChild(t); m.appendChild(st);
+      var v = document.createElement('button'); v.textContent = 'View';
+      v.onclick = function () { showOutput(it.id); $('out').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
       var b = document.createElement('button'); b.textContent = 'Reuse';
       b.onclick = function () { $('prompt').value = it.prompt; $('prompt').focus(); };
-      m.appendChild(b);
+      m.appendChild(v); m.appendChild(b);
       d.appendChild(p); d.appendChild(m); box.appendChild(d);
     });
+  }
+
+  function refresh(id) { render(); if (viewing === id) showOutput(id); }
+
+  function syncKey() { return localStorage.getItem('verdict-cat-sync-key') || ''; }
+
+  function poll(id) {
+    if (pollers[id]) return;
+    pollers[id] = setInterval(async function () {
+      var it = find(load(), id);
+      if (!it || it.status !== 'running') { clearInterval(pollers[id]); delete pollers[id]; return; }
+      if (Date.now() - it.at > GIVE_UP_MS) { update(id, { status: 'timeout' }); clearInterval(pollers[id]); delete pollers[id]; refresh(id); return; }
+      try {
+        var r = await fetch(WORKER + '/clyde/run/' + encodeURIComponent(id), { headers: { 'Authorization': 'Bearer ' + syncKey() } });
+        if (r.status === 404) { update(id, { status: 'failed', error: 'Run not found.' }); clearInterval(pollers[id]); delete pollers[id]; refresh(id); return; }
+        if (!r.ok) return;
+        var d = await r.json();
+        if (d.status !== 'running') {
+          update(id, { status: d.status, result: d.result || '' });
+          clearInterval(pollers[id]); delete pollers[id]; refresh(id);
+        }
+      } catch (e) {}
+    }, POLL_MS);
   }
 
   async function run() {
     var prompt = $('prompt').value.trim();
     if (!prompt) { setMsg('Write a prompt first.', 'err'); return; }
-    var key = localStorage.getItem('verdict-cat-sync-key');
-    if (!key) { setMsg('No sync key on this device. Set it from the hub (Sync Key).', 'err'); return; }
+    if (!syncKey()) { setMsg('No sync key on this device. Set it from the hub (Sync Key).', 'err'); return; }
+    $('run').disabled = true; setMsg('Sending…');
+    try {
+      var resp = await fetch(WORKER + '/clyde/run', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + syncKey(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: prompt })
+      });
+      var data = {};
+      try { data = await resp.json(); } catch (e) {}
+      if (!resp.ok || !data.id) throw new Error(data.error || ('Request failed (' + resp.status + ')'));
+      var list = load();
+      list.unshift({ id: data.id, prompt: prompt, at: Date.now(), status: 'running' });
+      save(list);
+      $('prompt').value = '';
+      setMsg('Sent.', 'ok');
+      viewing = data.id; render(); showOutput(data.id); poll(data.id);
+    } catch (e) {
+      setMsg(e.message || 'Failed to send.', 'err');
+    } finally {
+      $('run').disabled = false;
+    }
+  }
+
+  $('run').onclick = run;
+  $('prompt').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); }
+  });
+  render();
+  load().forEach(function (it) { if (it.id && it.status === 'running') poll(it.id); });
+  var first = load()[0]; if (first && first.id) showOutput(first.id);
+</script>
+key on this device. Set it from the hub (Sync Key).', 'err'); return; }
     $('run').disabled = true; setMsg('Sending…');
     try {
       var resp = await fetch(WORKER + '/clyde/run', {

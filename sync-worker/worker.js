@@ -28,6 +28,9 @@ const CHUNK_BYTES = 1024 * 1024;
 const MAX_EPUB_BYTES = 25 * 1024 * 1024;
 const MAX_COVER_BYTES = 8 * 1024 * 1024;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,150}$/;
+const CLYDE_MAX_RESULT = 100000;
+const CLYDE_TIMEOUT_MS = 10 * 60 * 1000;
+const CLYDE_KEEP_MS = 30 * 24 * 3600 * 1000;
 const NS_RE = /^[a-z0-9][a-z0-9_-]{0,40}$/;
 
 const CORS = {
@@ -46,6 +49,37 @@ function json(body, status = 200, extra = {}) {
 
 function fail(status, message) {
   return json({ error: message }, status);
+}
+
+function randomHex(bytes) {
+  const a = crypto.getRandomValues(new Uint8Array(bytes));
+  return [...a].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function sameSecret(a, b) {
+  const enc = new TextEncoder();
+  const [x, y] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc.encode(a)),
+    crypto.subtle.digest('SHA-256', enc.encode(b)),
+  ]);
+  return crypto.subtle.timingSafeEqual(x, y);
+}
+
+function wrapPrompt(prompt, resultUrl, secret) {
+  return [
+    'This request comes from the Clyde page. Carry out the task at the bottom.',
+    '',
+    'When you are finished, send your final answer back by writing it to a temporary file and running:',
+    `curl -sS -X POST '${resultUrl}' -H 'Authorization: Bearer ${secret}' -H 'Content-Type: text/markdown' --data-binary @<file>`,
+    '',
+    'Rules for the answer:',
+    '- Markdown format, plain text only.',
+    '- Never include hyperlinks. Do not write [text](url) links or clickable URLs; if a URL matters, write it inside backticks.',
+    '- Do not mention the posting step. If the task fails, post a short explanation of why instead.',
+    '',
+    'Task:',
+    prompt,
+  ].join('\n');
 }
 
 async function authorized(request, env) {
@@ -105,6 +139,28 @@ export class SyncStore extends DurableObject {
       }
     });
     return this.getNs(ns);
+  }
+
+  // ── Clyde runs (kv rows in ns 'clyde-run') ─────────────────────────────
+  getRun(id) {
+    const r = [...this.sql.exec("SELECT value FROM kv WHERE ns = 'clyde-run' AND key = ?", id)][0];
+    return r ? JSON.parse(r.value) : null;
+  }
+
+  putRun(id, rec) {
+    this.sql.exec(
+      `INSERT INTO kv (ns, key, value, ts) VALUES ('clyde-run', ?, ?, ?)
+       ON CONFLICT (ns, key) DO UPDATE SET value = excluded.value, ts = excluded.ts`,
+      id, JSON.stringify(rec), Date.now()
+    );
+  }
+
+  deleteRun(id) {
+    this.sql.exec("DELETE FROM kv WHERE ns = 'clyde-run' AND key = ?", id);
+  }
+
+  pruneRuns(olderThanMs) {
+    this.sql.exec("DELETE FROM kv WHERE ns = 'clyde-run' AND ts < ?", Date.now() - olderThanMs);
   }
 
   // ── File storage (epubs, covers) ───────────────────────────────────────
@@ -232,14 +288,35 @@ export default {
       return json({ books: rows.map((r) => bookJson(r, origin)) });
     }
 
+    // Clyde result callback: authenticated by the per-run secret, not the sync key.
+    if (parts[0] === 'clyde' && parts[1] === 'result' && parts.length === 3 && request.method === 'POST') {
+      const run = await store.getRun(parts[2]);
+      const header = request.headers.get('Authorization') || '';
+      const given = header.startsWith('Bearer ') ? header.slice(7) : '';
+      if (!run || !(await sameSecret(given, run.secret))) return fail(401, 'Invalid run or secret');
+      if (run.status !== 'running') return fail(409, 'Run already finished');
+      let text;
+      if ((request.headers.get('Content-Type') || '').includes('application/json')) {
+        try { const b = await request.json(); text = b && typeof b.result === 'string' ? b.result : ''; }
+        catch (e) { return fail(400, 'Invalid JSON'); }
+      } else {
+        text = await request.text();
+      }
+      text = text.trim();
+      if (!text) return fail(400, 'Empty result');
+      if (text.length > CLYDE_MAX_RESULT) text = text.slice(0, CLYDE_MAX_RESULT) + '\n\n(truncated)';
+      await store.putRun(parts[2], { ...run, status: 'done', result: text, finished: Date.now() });
+      return json({ ok: true });
+    }
+
     // Everything below needs the sync key.
     if (!(await authorized(request, env))) return fail(401, 'Invalid or missing sync key');
 
     if (parts[0] === 'ping' && parts.length === 1) return json({ ok: true });
 
     // Clyde: forward a prompt to a Claude Code routine, which starts a new
-    // Claude Code session that reads and executes it. The routine token lives
-    // only here as a Worker secret, never in the browser.
+    // session that reads and executes it, then posts its answer back to
+    // /clyde/result/:id. The routine token lives only here as a Worker secret.
     if (parts[0] === 'clyde' && parts[1] === 'run' && parts.length === 2 && request.method === 'POST') {
       if (!env.CLYDE_ROUTINE_ID || !env.CLYDE_ROUTINE_TOKEN) {
         return fail(503, 'Clyde is not configured yet (CLYDE_ROUTINE_ID / CLYDE_ROUTINE_TOKEN secrets missing)');
@@ -249,6 +326,13 @@ export default {
       const prompt = body && typeof body.prompt === 'string' ? body.prompt.trim() : '';
       if (!prompt) return fail(400, 'prompt required');
       if (prompt.length > 20000) return fail(413, 'Prompt too long (max 20,000 characters)');
+
+      const id = crypto.randomUUID();
+      const secret = randomHex(24);
+      await store.pruneRuns(CLYDE_KEEP_MS);
+      await store.putRun(id, { status: 'running', secret, created: Date.now(), result: null });
+
+      const text = wrapPrompt(prompt, `${origin}/clyde/result/${id}`, secret);
       let resp;
       try {
         resp = await fetch(
@@ -261,24 +345,34 @@ export default {
               'anthropic-beta': 'experimental-cc-routine-2026-04-01',
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ text: prompt }),
+            body: JSON.stringify({ text }),
           }
         );
       } catch (e) {
+        await store.deleteRun(id);
         return fail(502, 'Could not reach the runner');
       }
       let data = null;
       try { data = await resp.json(); } catch (e) {}
       if (!resp.ok) {
+        await store.deleteRun(id);
         const msg = (data && data.error && data.error.message) || `Runner returned ${resp.status}`;
         return fail(resp.status === 401 || resp.status === 403 ? 502 : resp.status, msg);
       }
-      return json({ ok: true });
+      return json({ ok: true, id });
+    }
+
+    if (parts[0] === 'clyde' && parts[1] === 'run' && parts.length === 3 && request.method === 'GET') {
+      const run = await store.getRun(parts[2]);
+      if (!run) return fail(404, 'Unknown run');
+      let status = run.status;
+      if (status === 'running' && Date.now() - run.created > CLYDE_TIMEOUT_MS) status = 'timeout';
+      return json({ status, result: run.result || null, created: run.created });
     }
 
     if (parts[0] === 'sync' && parts.length === 2) {
       const ns = parts[1];
-      if (!NS_RE.test(ns)) return fail(400, 'Bad namespace');
+      if (!NS_RE.test(ns) || ns === 'clyde-run') return fail(400, 'Bad namespace');
       if (request.method === 'GET') return json({ entries: await store.getNs(ns) });
       if (request.method === 'POST') {
         let body;

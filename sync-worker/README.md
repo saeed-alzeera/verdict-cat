@@ -49,8 +49,13 @@ Namespaces in use: `progress`, `regions`, `docs`.
 ## Clyde (send prompts to Claude Code)
 
 `POST /clyde/run` with `{ "prompt": "..." }` (sync key required) fires a
-Claude Code routine with the prompt as its `text`, starting a new session, and
-returns `{ ok, sessionId, sessionUrl }`. One-time setup:
+Claude Code routine, starting a new session, and returns `{ ok, id }`. The
+prompt is wrapped with instructions to answer in plain-text Markdown and to
+POST the final answer to `/clyde/result/:id` (authorised by a one-time per-run
+secret, not the sync key). The page polls `GET /clyde/run/:id` (sync key) for
+`{ status: running|done|timeout, result }`; runs time out after 10 minutes and
+are pruned after 30 days. The routine's environment must be allowed to reach
+`verdict-cat-sync.saeed-a-alzeera.workers.dev`. One-time setup:
 
 1. At claude.ai/code/routines create a routine for this repo (prompt e.g.
    "Carry out the request that follows.") and add an **API** trigger; copy the
