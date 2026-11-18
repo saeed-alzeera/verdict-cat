@@ -48,7 +48,7 @@ Namespaces in use: `progress`, `regions`, `docs`.
 
 ## Clyde (send prompts to Claude Code)
 
-`POST /clyde/run` with `{ "prompt": "..." }` (sync key required) fires a
+`POST /clyde/run` with `{ "prompt": "...", "parent": "<run id, optional>" }` (sync key required) fires a
 Claude Code routine, starting a new session, and returns `{ ok, id }`. The
 prompt is wrapped with instructions to answer in plain-text Markdown and to
 POST the final answer to `/clyde/result/:id` (authorised by a one-time per-run
@@ -62,3 +62,7 @@ are pruned after 30 days. The routine's environment must be allowed to reach
    routine id (`trig_...`) and the token (shown once).
 2. `cd sync-worker && npx wrangler secret put CLYDE_ROUTINE_ID` and
    `npx wrangler secret put CLYDE_ROUTINE_TOKEN`.
+
+A reply passes `parent`. Each run is still a fresh session, so the worker
+prepends the previous prompts and answers in the thread (up to 5 turns, each
+truncated) to the new task.

@@ -29,6 +29,9 @@ const MAX_EPUB_BYTES = 25 * 1024 * 1024;
 const MAX_COVER_BYTES = 8 * 1024 * 1024;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,150}$/;
 const CLYDE_MAX_RESULT = 100000;
+const CLYDE_THREAD_TURNS = 5;     // earlier turns handed to a follow-up
+const CLYDE_TURN_PROMPT_CHARS = 4000;
+const CLYDE_TURN_RESULT_CHARS = 6000;
 const CLYDE_TIMEOUT_MS = 10 * 60 * 1000;
 const CLYDE_KEEP_MS = 30 * 24 * 3600 * 1000;
 const NS_RE = /^[a-z0-9][a-z0-9_-]{0,40}$/;
@@ -330,12 +333,31 @@ export default {
       if (!prompt) return fail(400, 'prompt required');
       if (prompt.length > 20000) return fail(413, 'Prompt too long (max 20,000 characters)');
 
+      // A reply continues a thread: each run is a fresh session, so the earlier
+      // prompts and answers are handed over as context.
+      let parent = null, task = prompt;
+      if (body.parent != null) {
+        if (typeof body.parent !== 'string') return fail(400, 'Bad parent');
+        const turns = [];
+        let cur = body.parent;
+        for (let n = 0; cur && n < CLYDE_THREAD_TURNS; n++) {
+          const r = await store.getRun(cur);
+          if (!r) { if (n === 0) return fail(404, 'Unknown parent run'); break; }
+          if (n === 0) parent = body.parent;
+          turns.unshift(
+            `User: ${String(r.prompt || '').slice(0, CLYDE_TURN_PROMPT_CHARS)}\n\nAnswer: ${String(r.result || '(no answer)').slice(0, CLYDE_TURN_RESULT_CHARS)}`
+          );
+          cur = r.parent;
+        }
+        task = `Earlier in this conversation (oldest first):\n\n${turns.join('\n\n---\n\n')}\n\n=====\nNew message from the user (this is what to answer now):\n${prompt}`;
+      }
+
       const id = crypto.randomUUID();
       const secret = randomHex(24);
       await store.pruneRuns(CLYDE_KEEP_MS);
-      await store.putRun(id, { status: 'running', secret, created: Date.now(), result: null });
+      await store.putRun(id, { status: 'running', secret, created: Date.now(), result: null, prompt, parent });
 
-      const text = wrapPrompt(prompt, `${origin}/clyde/result/${id}`, secret);
+      const text = wrapPrompt(task, `${origin}/clyde/result/${id}`, secret);
       let resp;
       try {
         resp = await fetch(
