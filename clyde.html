@@ -77,6 +77,11 @@
   </div>
   <div class="row"><div id="msg"></div></div>
   <div id="out"></div>
+  <div id="reply" style="display:none">
+    <label for="replyText">Reply</label>
+    <textarea id="replyText" style="min-height:90px" placeholder="Follow up…"></textarea>
+    <div class="row"><button id="replyBtn">Send reply</button><span class="hint">Starts a new run that includes this conversation.</span></div>
+  </div>
   <h2>Recent</h2>
   <div id="history"></div>
 </main>
@@ -144,6 +149,7 @@
   function showOutput(id) {
     viewing = id;
     var it = find(load(), id), box = $('out');
+    $('reply').style.display = it && it.status === 'done' ? 'block' : 'none';
     if (!it) { box.style.display = 'none'; return; }
     box.style.display = 'block';
     if (it.status === 'done' && it.result) box.innerHTML = md(it.result);
@@ -168,6 +174,7 @@
       var t = document.createElement('span'); t.textContent = new Date(it.at).toLocaleString();
       var st = document.createElement('span'); st.className = 'st'; st.textContent = statusLabel(it);
       m.appendChild(t); m.appendChild(st);
+      if (it.parent) { var rp = document.createElement('span'); rp.textContent = 'reply'; m.appendChild(rp); }
       var v = document.createElement('button'); v.textContent = 'View';
       v.onclick = function () { showOutput(it.id); $('out').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
       var b = document.createElement('button'); b.textContent = 'Reuse';
@@ -200,36 +207,42 @@
     }, POLL_MS);
   }
 
-  async function run() {
-    var prompt = $('prompt').value.trim();
-    if (!prompt) { setMsg('Write a prompt first.', 'err'); return; }
+  async function run(parentId) {
+    var isReply = typeof parentId === 'string';
+    var field = isReply ? $('replyText') : $('prompt');
+    var prompt = field.value.trim();
+    if (!prompt) { setMsg(isReply ? 'Write your reply first.' : 'Write a prompt first.', 'err'); return; }
     if (!syncKey()) { setMsg('No sync key on this device. Set it from the hub (Sync Key).', 'err'); return; }
-    $('run').disabled = true; setMsg('Sending…');
+    $('run').disabled = true; $('replyBtn').disabled = true; setMsg('Sending…');
     try {
       var resp = await fetch(WORKER + '/clyde/run', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + syncKey(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: prompt })
+        body: JSON.stringify(isReply ? { prompt: prompt, parent: parentId } : { prompt: prompt })
       });
       var data = {};
       try { data = await resp.json(); } catch (e) {}
       if (!resp.ok || !data.id) throw new Error(data.error || ('Request failed (' + resp.status + ')'));
       var list = load();
-      list.unshift({ id: data.id, prompt: prompt, at: Date.now(), status: 'running' });
+      list.unshift({ id: data.id, prompt: prompt, at: Date.now(), status: 'running', parent: isReply ? parentId : undefined });
       save(list);
-      $('prompt').value = '';
+      field.value = '';
       setMsg('Sent.', 'ok');
       viewing = data.id; render(); showOutput(data.id); poll(data.id);
     } catch (e) {
       setMsg(e.message || 'Failed to send.', 'err');
     } finally {
-      $('run').disabled = false;
+      $('run').disabled = false; $('replyBtn').disabled = false;
     }
   }
 
-  $('run').onclick = run;
+  $('run').onclick = function () { run(); };
+  $('replyBtn').onclick = function () { if (viewing) run(viewing); };
   $('prompt').addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); }
+  });
+  $('replyText').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (viewing) run(viewing); }
   });
   render();
   load().forEach(function (it) { if (it.id && it.status === 'running') poll(it.id); });
