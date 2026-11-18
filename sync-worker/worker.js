@@ -36,7 +36,7 @@ const NS_RE = /^[a-z0-9][a-z0-9_-]{0,40}$/;
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-Clyde-Secret',
   'Access-Control-Max-Age': '86400',
 };
 
@@ -70,7 +70,7 @@ function wrapPrompt(prompt, resultUrl, secret) {
     'This request comes from the Clyde page. Carry out the task at the bottom.',
     '',
     'When you are finished, send your final answer back by writing it to a temporary file and running:',
-    `curl -sS -X POST '${resultUrl}' -H 'Authorization: Bearer ${secret}' -H 'Content-Type: text/markdown' --data-binary @<file>`,
+    `curl -sS -X POST '${resultUrl}' -H 'X-Clyde-Secret: ${secret}' -H 'Content-Type: text/markdown' --data-binary @<file>`,
     '',
     'Rules for the answer:',
     '- Markdown format, plain text only.',
@@ -291,9 +291,12 @@ export default {
     // Clyde result callback: authenticated by the per-run secret, not the sync key.
     if (parts[0] === 'clyde' && parts[1] === 'result' && parts.length === 3 && request.method === 'POST') {
       const run = await store.getRun(parts[2]);
-      const header = request.headers.get('Authorization') || '';
-      const given = header.startsWith('Bearer ') ? header.slice(7) : '';
-      if (!run || !(await sameSecret(given, run.secret))) return fail(401, 'Invalid run or secret');
+      // The secret travels in X-Clyde-Secret: some sandboxes' proxies rewrite the
+      // Authorization header with the sync key, so that header can't carry it.
+      // A valid sync key in Authorization is accepted too.
+      const given = request.headers.get('X-Clyde-Secret') || url.searchParams.get('s') || '';
+      const ok = run && ((given && (await sameSecret(given, run.secret))) || (await authorized(request, env)));
+      if (!ok) return fail(401, 'Invalid run or secret');
       if (run.status !== 'running') return fail(409, 'Run already finished');
       let text;
       if ((request.headers.get('Content-Type') || '').includes('application/json')) {
