@@ -51,7 +51,24 @@
   .item .p { white-space: pre-wrap; word-break: break-word; font-size: 13px; max-height: 5.5em; overflow: hidden; }
   .item .m { font-size: 11px; color: var(--muted); margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap; }
   .item .m button { background: none; color: var(--accent); padding: 0; font-size: 11px; font-weight: 400; }
-  #out { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px <main>
+  #out { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-top: 16px; display: none; word-break: break-word; }
+  #out h1,#out h2,#out h3,#out h4 { margin: 14px 0 6px; font-size: 1.05em; color: var(--text); text-transform: none; letter-spacing: 0; }
+  #out h1:first-child,#out h2:first-child,#out h3:first-child { margin-top: 0; }
+  #out p { margin: 8px 0; } #out ul,#out ol { margin: 8px 0 8px 22px; }
+  #out pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; overflow-x: auto; margin: 10px 0; }
+  #out code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+  #out pre code { background: none; padding: 0; }
+  #out blockquote { border-left: 3px solid var(--border); padding-left: 12px; color: var(--muted); margin: 8px 0; }
+  #out hr { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
+  .item .st { color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="topbar">
+  <a href="index.html">&#8592; Hub</a>
+  <h1>Clyde</h1>
+</div>
+<main>
   <label for="prompt">Prompt</label>
   <textarea id="prompt" placeholder="What should Clyde do?"></textarea>
   <div class="row">
@@ -217,36 +234,6 @@
   render();
   load().forEach(function (it) { if (it.id && it.status === 'running') poll(it.id); });
   var first = load()[0]; if (first && first.id) showOutput(first.id);
-</script>
-key on this device. Set it from the hub (Sync Key).', 'err'); return; }
-    $('run').disabled = true; setMsg('Sending…');
-    try {
-      var resp = await fetch(WORKER + '/clyde/run', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: prompt })
-      });
-      var data = {};
-      try { data = await resp.json(); } catch (e) {}
-      if (!resp.ok) throw new Error(data.error || ('Request failed (' + resp.status + ')'));
-      var list = load();
-      list.unshift({ prompt: prompt, at: Date.now() });
-      save(list);
-      $('prompt').value = '';
-      render();
-      setMsg('Sent.', 'ok');
-    } catch (e) {
-      setMsg(e.message || 'Failed to send.', 'err');
-    } finally {
-      $('run').disabled = false;
-    }
-  }
-
-  $('run').onclick = run;
-  $('prompt').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); }
-  });
-  render();
 </script>
 </body>
 </html>
