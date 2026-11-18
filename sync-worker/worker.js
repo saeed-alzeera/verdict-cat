@@ -237,6 +237,49 @@ export default {
 
     if (parts[0] === 'ping' && parts.length === 1) return json({ ok: true });
 
+    // Clyde: forward a prompt to a Claude Code routine, which starts a new
+    // Claude Code session that reads and executes it. The routine token lives
+    // only here as a Worker secret, never in the browser.
+    if (parts[0] === 'clyde' && parts[1] === 'run' && parts.length === 2 && request.method === 'POST') {
+      if (!env.CLYDE_ROUTINE_ID || !env.CLYDE_ROUTINE_TOKEN) {
+        return fail(503, 'Clyde is not configured yet (CLYDE_ROUTINE_ID / CLYDE_ROUTINE_TOKEN secrets missing)');
+      }
+      let body;
+      try { body = await request.json(); } catch (e) { return fail(400, 'Invalid JSON'); }
+      const prompt = body && typeof body.prompt === 'string' ? body.prompt.trim() : '';
+      if (!prompt) return fail(400, 'prompt required');
+      if (prompt.length > 20000) return fail(413, 'Prompt too long (max 20,000 characters)');
+      let resp;
+      try {
+        resp = await fetch(
+          `https://api.anthropic.com/v1/claude_code/routines/${encodeURIComponent(env.CLYDE_ROUTINE_ID)}/fire`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${env.CLYDE_ROUTINE_TOKEN}`,
+              'anthropic-version': '2023-06-01',
+              'anthropic-beta': 'experimental-cc-routine-2026-04-01',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ text: prompt }),
+          }
+        );
+      } catch (e) {
+        return fail(502, 'Could not reach Claude');
+      }
+      let data = null;
+      try { data = await resp.json(); } catch (e) {}
+      if (!resp.ok) {
+        const msg = (data && data.error && data.error.message) || `Claude returned ${resp.status}`;
+        return fail(resp.status === 401 || resp.status === 403 ? 502 : resp.status, msg);
+      }
+      return json({
+        ok: true,
+        sessionId: data && data.claude_code_session_id || null,
+        sessionUrl: data && data.claude_code_session_url || null,
+      });
+    }
+
     if (parts[0] === 'sync' && parts.length === 2) {
       const ns = parts[1];
       if (!NS_RE.test(ns)) return fail(400, 'Bad namespace');
