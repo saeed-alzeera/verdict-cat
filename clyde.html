@@ -46,12 +46,10 @@
   .hint { font-size: 12px; color: var(--muted); }
   #msg { font-size: 13px; min-height: 1.4em; }
   #msg.ok { color: var(--ok); } #msg.err { color: var(--danger); }
-  #msg a { color: inherit; }
   h2 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 32px 0 10px; text-transform: uppercase; letter-spacing: .05em; }
   .item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; }
   .item .p { white-space: pre-wrap; word-break: break-word; font-size: 13px; max-height: 5.5em; overflow: hidden; }
   .item .m { font-size: 11px; color: var(--muted); margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap; }
-  .item .m a { color: var(--accent); }
   .item .m button { background: none; color: var(--accent); padding: 0; font-size: 11px; font-weight: 400; }
 </style>
 </head>
@@ -61,10 +59,10 @@
   <h1>Clyde</h1>
 </div>
 <main>
-  <label for="prompt">Prompt for Claude Code</label>
-  <textarea id="prompt" placeholder="What should Claude Code do?"></textarea>
+  <label for="prompt">Prompt</label>
+  <textarea id="prompt" placeholder="What should Clyde do?"></textarea>
   <div class="row">
-    <button id="run">Run in Claude Code</button>
+    <button id="run">Send</button>
     <span class="hint">Ctrl/&#8984;+Enter to send</span>
   </div>
   <div class="row"><div id="msg"></div></div>
@@ -79,16 +77,10 @@
   function load() { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { return []; } }
   function save(list) { try { localStorage.setItem(KEY, JSON.stringify(list.slice(0, 30))); } catch (e) {} }
 
-  function setMsg(text, cls, link) {
+  function setMsg(text, cls) {
     var m = $('msg');
     m.className = cls || '';
     m.textContent = text;
-    if (link) {
-      m.appendChild(document.createTextNode(' '));
-      var a = document.createElement('a');
-      a.href = link; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Open session';
-      m.appendChild(a);
-    }
   }
 
   function render() {
@@ -102,10 +94,6 @@
       var m = document.createElement('div'); m.className = 'm';
       var t = document.createElement('span'); t.textContent = new Date(it.at).toLocaleString();
       m.appendChild(t);
-      if (it.url && /^https:\/\/claude\.ai\//.test(it.url)) {
-        var a = document.createElement('a'); a.href = it.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Open session';
-        m.appendChild(a);
-      }
       var b = document.createElement('button'); b.textContent = 'Reuse';
       b.onclick = function () { $('prompt').value = it.prompt; $('prompt').focus(); };
       m.appendChild(b);
@@ -129,11 +117,11 @@
       try { data = await resp.json(); } catch (e) {}
       if (!resp.ok) throw new Error(data.error || ('Request failed (' + resp.status + ')'));
       var list = load();
-      list.unshift({ prompt: prompt, at: Date.now(), url: data.sessionUrl || '' });
+      list.unshift({ prompt: prompt, at: Date.now() });
       save(list);
       $('prompt').value = '';
       render();
-      setMsg('Sent. Claude Code is working on it.', 'ok', data.sessionUrl && /^https:\/\/claude\.ai\//.test(data.sessionUrl) ? data.sessionUrl : '');
+      setMsg('Sent.', 'ok');
     } catch (e) {
       setMsg(e.message || 'Failed to send.', 'err');
     } finally {

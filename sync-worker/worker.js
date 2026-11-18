@@ -265,19 +265,15 @@ export default {
           }
         );
       } catch (e) {
-        return fail(502, 'Could not reach Claude');
+        return fail(502, 'Could not reach the runner');
       }
       let data = null;
       try { data = await resp.json(); } catch (e) {}
       if (!resp.ok) {
-        const msg = (data && data.error && data.error.message) || `Claude returned ${resp.status}`;
+        const msg = (data && data.error && data.error.message) || `Runner returned ${resp.status}`;
         return fail(resp.status === 401 || resp.status === 403 ? 502 : resp.status, msg);
       }
-      return json({
-        ok: true,
-        sessionId: data && data.claude_code_session_id || null,
-        sessionUrl: data && data.claude_code_session_url || null,
-      });
+      return json({ ok: true });
     }
 
     if (parts[0] === 'sync' && parts.length === 2) {
