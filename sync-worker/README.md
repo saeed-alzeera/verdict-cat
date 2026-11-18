@@ -45,3 +45,15 @@ depends on a GitHub personal access token any more.
 | GET | `/files/*` | – | epub / cover bytes |
 
 Namespaces in use: `progress`, `regions`, `docs`.
+
+## Clyde (send prompts to Claude Code)
+
+`POST /clyde/run` with `{ "prompt": "..." }` (sync key required) fires a
+Claude Code routine with the prompt as its `text`, starting a new session, and
+returns `{ ok, sessionId, sessionUrl }`. One-time setup:
+
+1. At claude.ai/code/routines create a routine for this repo (prompt e.g.
+   "Carry out the request that follows.") and add an **API** trigger; copy the
+   routine id (`trig_...`) and the token (shown once).
+2. `cd sync-worker && npx wrangler secret put CLYDE_ROUTINE_ID` and
+   `npx wrangler secret put CLYDE_ROUTINE_TOKEN`.
