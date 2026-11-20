@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
 <link rel="shortcut icon" href="favicon.ico" />
-<script src="gist.js?v=4"></script>
+<script src="gist.js?v=5"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="ebook-convert.js"></script>
 <style>
@@ -315,19 +315,6 @@
 </head>
 <body>
 
-<!-- Setup modal (shown on first visit) -->
-<div id="setup-modal" style="display:none;">
-  <div id="setup-box">
-    <h2>Sync reading progress</h2>
-    <p class="setup-sub">Progress is saved to your sync server — works on every device, survives browser resets. The same key lets you upload and delete books.</p>
-    <p class="setup-sub">Paste your sync key below. (An old GitHub token still works as a fallback for progress sync.)</p>
-    <input id="setup-pat" type="password" placeholder="Sync key" autocomplete="off" />
-    <div id="setup-error"></div>
-    <button id="setup-connect">Connect</button>
-    <button id="setup-skip">Skip — use this device only</button>
-  </div>
-</div>
-
 <header>
   <a class="hdr-btn" href="index.html" style="text-decoration:none;">&#8592; Hub</a>
   <h1>Library</h1>
@@ -336,7 +323,7 @@
     <div class="status-dot" id="status-dot"></div>
     <span id="status-label">Not synced</span>
   </div>
-  <button class="hdr-btn" id="disconnect-btn" style="display:none;">Disconnect</button>
+  <button class="hdr-btn" id="disconnect-btn">Sign in</button>
   <div id="search-wrap">
     <input type="text" id="search-input" placeholder="Search your library…" autocomplete="off" />
   </div>
@@ -531,7 +518,7 @@
     var label = document.getElementById('status-label');
     dot.className = 'status-dot ' + (state === 'connected' ? 'connected' : state === 'syncing' ? 'syncing' : '');
     label.textContent = state === 'connected' ? 'Synced' : state === 'syncing' ? 'Syncing…' : 'Not synced';
-    document.getElementById('disconnect-btn').style.display = state === 'connected' ? '' : 'none';
+    document.getElementById('disconnect-btn').textContent = state === 'none' ? 'Sign in' : 'Account';
   }
 
   function renderCards() {
@@ -629,45 +616,21 @@
 
   // ── Setup modal ───────────────────────────────────────────────────────────
   function showSetup() {
-    document.getElementById('setup-modal').style.display = 'flex';
-    document.getElementById('setup-pat').focus();
+    Gist.showAccountDialog({
+      onChange: function() {
+        if (Gist.isConnected()) syncFromGist(); else { setSyncStatus('none'); renderCards(); }
+      },
+      onClose: function() { sessionStorage.setItem('setup-skipped', '1'); }
+    });
   }
-
-  document.getElementById('setup-pat').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') document.getElementById('setup-connect').click();
-  });
-
-  document.getElementById('setup-connect').addEventListener('click', async function() {
-    var pat = document.getElementById('setup-pat').value.trim();
-    var errEl = document.getElementById('setup-error');
-    var btn = document.getElementById('setup-connect');
-    if (!pat) { errEl.textContent = 'Paste your sync key first.'; return; }
-    errEl.textContent = '';
-    btn.disabled = true;
-    btn.textContent = 'Connecting…';
-    try {
-      var gistId = await Gist.connect(pat);
-      Gist.save(pat, gistId);
-      document.getElementById('setup-modal').style.display = 'none';
-      await syncFromGist();
-    } catch(err) {
-      errEl.textContent = err.message || 'Connection failed. Check the token and try again.';
-      btn.disabled = false;
-      btn.textContent = 'Connect';
-    }
-  });
-
-  document.getElementById('setup-skip').addEventListener('click', function() {
-    document.getElementById('setup-modal').style.display = 'none';
-    renderCards();
-  });
 
   // ── Disconnect ────────────────────────────────────────────────────────────
   document.getElementById('disconnect-btn').addEventListener('click', function() {
-    if (!confirm('Disconnect GitHub sync? Your local progress stays on this device.')) return;
-    Gist.clear();
-    setSyncStatus('none');
-    renderCards();
+    Gist.showAccountDialog({
+      onChange: function() {
+        if (Gist.isConnected()) syncFromGist(); else { setSyncStatus('none'); renderCards(); }
+      }
+    });
   });
 
   // ── Sync on load ──────────────────────────────────────────────────────────
@@ -688,31 +651,9 @@
   if (Gist.isConnected()) {
     syncFromGist();
   } else {
-    var existingPat = localStorage.getItem('verdict-cat-pat');
-    if (existingPat) {
-      // PAT set from hub — auto-connect to Gist silently
-      renderCards();
-      (async function() {
-        try {
-          var gistId = await Gist.connect(existingPat);
-          Gist.save(existingPat, gistId);
-          await syncFromGist();
-        } catch(e) { /* silent — wrong scopes or network issue */ }
-      })();
-    } else {
-      var skippedBefore = sessionStorage.getItem('setup-skipped');
-      if (skippedBefore) {
-        renderCards();
-      } else {
-        renderCards();
-        showSetup();
-      }
-    }
+    renderCards();
+    if (!sessionStorage.getItem('setup-skipped')) showSetup();
   }
-
-  document.getElementById('setup-skip').addEventListener('click', function() {
-    sessionStorage.setItem('setup-skipped', '1');
-  }, { once: true });
 
   // -- Upload ------------------------------------------------------------------
   // Books are stored in the sync worker (R2) — no GitHub token or repo commit.

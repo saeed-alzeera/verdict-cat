@@ -5,9 +5,21 @@
  * Contents API (book uploads) so the site no longer depends on a personal
  * access token that can expire or be revoked.
  *
- *   Auth: writes (and all /sync reads) need  Authorization: Bearer <SYNC_KEY>
- *         where SYNC_KEY is a Worker secret. Book catalogue and files are
+ *   Auth: writes (and all /sync reads) need  Authorization: Bearer <key>.
+ *         <key> is either the owner key (SYNC_KEY Worker secret; full access,
+ *         data in the original unprefixed namespaces) or a per-user key
+ *         "vck_<uid>_<secret>" created at signup. A user key only ever reads and
+ *         writes that user's own sync namespaces. Book catalogue and files are
  *         public to read, matching the public repo they used to live in.
+ *
+ *   POST   /auth/signup            { username, password, invite } -> { key, username }
+ *   POST   /auth/login             { username, password }         -> { key, username }
+ *   GET    /auth/me                -> { username, owner }
+ *   POST   /auth/password          { password }  (key required)  set a new password
+ *   POST   /auth/rotate            { password }  (key required)  new key, old one dies
+ *   DELETE /auth/account           (key required) deletes the account and its sync data
+ *   GET/POST /admin/invites, DELETE /admin/invites/:code, GET /admin/users,
+ *   POST /admin/users/:name/(disable|enable)   owner key only
  *
  *   GET    /ping                   auth check
  *   GET    /sync/:ns               -> { entries: { key: { value, ts } } }
@@ -35,6 +47,13 @@ const CLYDE_TURN_RESULT_CHARS = 6000;
 const CLYDE_TIMEOUT_MS = 10 * 60 * 1000;
 const CLYDE_KEEP_MS = 30 * 24 * 3600 * 1000;
 const NS_RE = /^[a-z0-9][a-z0-9_-]{0,40}$/;
+const USERNAME_RE = /^[a-z0-9][a-z0-9_-]{2,23}$/;
+const USER_KEY_RE = /^vck_([0-9a-f]{16})_([A-Za-z0-9_-]{32})$/;
+// Cloudflare Workers caps WebCrypto PBKDF2 at 100,000 iterations.
+const PBKDF2_ITER = 100000;
+const LOGIN_FREE_FAILS = 5;            // failures allowed before lockout starts
+const LOGIN_LOCK_MAX_MS = 15 * 60 * 1000;
+const SIGNUP_PER_HOUR = 5;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -85,17 +104,98 @@ function wrapPrompt(prompt, resultUrl, secret) {
   ].join('\n');
 }
 
-async function authorized(request, env) {
-  if (!env.SYNC_KEY) return false;
+// ── Accounts ────────────────────────────────────────────────────────────
+const enc = new TextEncoder();
+
+function toHex(buf) {
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+function toB64(bytes) {
+  let s = '';
+  for (const b of new Uint8Array(bytes)) s += String.fromCharCode(b);
+  return btoa(s);
+}
+function fromB64(str) {
+  const s = atob(str);
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+function randomB64url(bytes) {
+  return toB64(crypto.getRandomValues(new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+async function sha256Hex(text) {
+  return toHex(await crypto.subtle.digest('SHA-256', enc.encode(text)));
+}
+async function sha256Bytes(...parts) {
+  const chunks = parts.map((p) => (typeof p === 'string' ? enc.encode(p) : new Uint8Array(p)));
+  const all = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+  let off = 0;
+  for (const c of chunks) { all.set(c, off); off += c.length; }
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', all));
+}
+
+// One PBKDF2 run per login yields dk. From it: a verifier (proves the
+// password) and a wrapping key (decrypts the user's sync key, which is never
+// stored in the clear, so a login on a new device can hand the same key back).
+async function derive(password, salt) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const dk = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: PBKDF2_ITER }, base, 256);
+  return {
+    verifier: toHex(await sha256Bytes('verify', dk)),
+    wrapRaw: await sha256Bytes('wrap', dk),
+  };
+}
+async function wrapKey(wrapRaw, plaintext) {
+  const k = await crypto.subtle.importKey('raw', wrapRaw, 'AES-GCM', false, ['encrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, enc.encode(plaintext)));
+  const out = new Uint8Array(12 + ct.length);
+  out.set(iv); out.set(ct, 12);
+  return toB64(out);
+}
+async function unwrapKey(wrapRaw, blob) {
+  const k = await crypto.subtle.importKey('raw', wrapRaw, 'AES-GCM', false, ['decrypt']);
+  const all = fromB64(blob);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: all.slice(0, 12) }, k, all.slice(12));
+  return new TextDecoder().decode(pt);
+}
+function newUserKey(uid) {
+  return 'vck_' + uid + '_' + randomB64url(24);
+}
+async function credentialRecord(password, key) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const { verifier, wrapRaw } = await derive(password, salt);
+  const secret = USER_KEY_RE.exec(key)[2];  // the secret may itself contain '_'
+  return {
+    salt: toB64(salt), pw_verifier: verifier,
+    key_hash: await sha256Hex(secret), key_wrapped: await wrapKey(wrapRaw, key),
+  };
+}
+
+// Resolves a request to { uid, owner, prefix } or null. The owner key is the
+// original SYNC_KEY secret; its data stays in the unprefixed namespaces.
+async function authenticate(request, env, store) {
   const header = request.headers.get('Authorization') || '';
   const given = header.startsWith('Bearer ') ? header.slice(7) : '';
-  const enc = new TextEncoder();
-  // Hash both sides so the compare is constant-time regardless of length.
-  const [a, b] = await Promise.all([
-    crypto.subtle.digest('SHA-256', enc.encode(given)),
-    crypto.subtle.digest('SHA-256', enc.encode(env.SYNC_KEY)),
-  ]);
-  return crypto.subtle.timingSafeEqual(a, b);
+  if (!given) return null;
+  if (env.SYNC_KEY && (await sameSecret(given, env.SYNC_KEY))) {
+    return { uid: 'owner', owner: true, prefix: '', username: null };
+  }
+  const m = USER_KEY_RE.exec(given);
+  if (!m) return null;
+  const user = await store.userByUid(m[1]);
+  if (!user || user.disabled) return null;
+  if (!(await sameSecret(await sha256Hex(m[2]), user.key_hash))) return null;
+  return { uid: user.uid, owner: false, prefix: 'u' + user.uid + ':', username: user.username };
+}
+
+function clientIp(request) {
+  return request.headers.get('CF-Connecting-IP') || 'unknown';
+}
+
+async function readJson(request) {
+  try { return await request.json(); } catch (e) { return null; }
 }
 
 export class SyncStore extends DurableObject {
@@ -119,7 +219,117 @@ export class SyncStore extends DurableObject {
         epub_key TEXT, cover_key TEXT, hidden INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS users (
+        uid TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE,
+        salt TEXT NOT NULL, pw_verifier TEXT NOT NULL,
+        key_hash TEXT NOT NULL, key_wrapped TEXT NOT NULL,
+        disabled INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS invites (
+        code TEXT PRIMARY KEY, label TEXT, created_at INTEGER NOT NULL,
+        used_by TEXT, used_at INTEGER
+      );
+      CREATE TABLE IF NOT EXISTS attempts (
+        k TEXT PRIMARY KEY, count INTEGER NOT NULL, first_ts INTEGER NOT NULL, until INTEGER NOT NULL DEFAULT 0
+      );
     `);
+    // Who uploaded a book (null for books that predate accounts).
+    try { this.sql.exec('ALTER TABLE books ADD COLUMN uploader TEXT'); } catch (e) { /* already there */ }
+  }
+
+  // ── Accounts ───────────────────────────────────────────────────────────
+  userByUid(uid) {
+    return [...this.sql.exec('SELECT * FROM users WHERE uid = ?', uid)][0] || null;
+  }
+  userByName(username) {
+    return [...this.sql.exec('SELECT * FROM users WHERE username = ?', username)][0] || null;
+  }
+  listUsers() {
+    return [...this.sql.exec('SELECT uid, username, disabled, created_at FROM users ORDER BY created_at')];
+  }
+  // Atomically spends an invite and creates the account. Returns an error string or null.
+  createUser(u, invite) {
+    let err = null;
+    this.ctx.storage.transactionSync(() => {
+      const inv = [...this.sql.exec('SELECT used_by FROM invites WHERE code = ?', invite)][0];
+      if (!inv || inv.used_by) { err = 'Invite code is invalid or already used'; return; }
+      if (this.userByName(u.username)) { err = 'That username is taken'; return; }
+      this.sql.exec(
+        `INSERT INTO users (uid, username, salt, pw_verifier, key_hash, key_wrapped, disabled, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
+        u.uid, u.username, u.salt, u.pw_verifier, u.key_hash, u.key_wrapped, Date.now()
+      );
+      this.sql.exec('UPDATE invites SET used_by = ?, used_at = ? WHERE code = ?', u.username, Date.now(), invite);
+    });
+    return err;
+  }
+  setCredentials(uid, c) {
+    this.sql.exec(
+      'UPDATE users SET salt = ?, pw_verifier = ?, key_hash = ?, key_wrapped = ? WHERE uid = ?',
+      c.salt, c.pw_verifier, c.key_hash, c.key_wrapped, uid
+    );
+  }
+  setDisabled(username, flag) {
+    this.sql.exec('UPDATE users SET disabled = ? WHERE username = ?', flag ? 1 : 0, username);
+    return this.sql.exec('SELECT 1 FROM users WHERE username = ?', username).toArray().length > 0;
+  }
+  deleteUser(uid) {
+    this.ctx.storage.transactionSync(() => {
+      this.sql.exec('DELETE FROM kv WHERE ns LIKE ?', 'u' + uid + ':%');
+      this.sql.exec('DELETE FROM users WHERE uid = ?', uid);
+    });
+  }
+  createInvite(code, label) {
+    this.sql.exec('INSERT INTO invites (code, label, created_at) VALUES (?, ?, ?)', code, label, Date.now());
+  }
+  listInvites() {
+    return [...this.sql.exec('SELECT code, label, created_at, used_by, used_at FROM invites ORDER BY created_at DESC')];
+  }
+  deleteInvite(code) {
+    this.sql.exec('DELETE FROM invites WHERE code = ? AND used_by IS NULL', code);
+  }
+
+  // ── Rate limits ────────────────────────────────────────────────────────
+  // Seconds a login on any of these keys must still wait (0 = allowed).
+  lockWait(keys) {
+    const now = Date.now();
+    let wait = 0;
+    for (const k of keys) {
+      const r = [...this.sql.exec('SELECT until FROM attempts WHERE k = ?', k)][0];
+      if (r && r.until > now) wait = Math.max(wait, Math.ceil((r.until - now) / 1000));
+    }
+    return wait;
+  }
+  loginFailed(keys) {
+    const now = Date.now();
+    for (const k of keys) {
+      const r = [...this.sql.exec('SELECT count FROM attempts WHERE k = ?', k)][0];
+      const count = (r ? r.count : 0) + 1;
+      const over = count - LOGIN_FREE_FAILS;
+      const until = over >= 0 ? now + Math.min(LOGIN_LOCK_MAX_MS, 30000 * Math.pow(2, over)) : 0;
+      this.sql.exec(
+        `INSERT INTO attempts (k, count, first_ts, until) VALUES (?, ?, ?, ?)
+         ON CONFLICT (k) DO UPDATE SET count = excluded.count, until = excluded.until`,
+        k, count, now, until
+      );
+    }
+  }
+  loginOk(keys) {
+    for (const k of keys) this.sql.exec('DELETE FROM attempts WHERE k = ?', k);
+  }
+  // Counts a signup attempt for this IP; false when over the hourly limit.
+  signupAllowed(ip) {
+    const k = 'signup:' + ip, now = Date.now();
+    const r = [...this.sql.exec('SELECT count, first_ts FROM attempts WHERE k = ?', k)][0];
+    if (!r || now - r.first_ts > 3600000) {
+      this.sql.exec(
+        `INSERT INTO attempts (k, count, first_ts, until) VALUES (?, 1, ?, 0)
+         ON CONFLICT (k) DO UPDATE SET count = 1, first_ts = excluded.first_ts`, k, now);
+      return true;
+    }
+    if (r.count >= SIGNUP_PER_HOUR) return false;
+    this.sql.exec('UPDATE attempts SET count = count + 1 WHERE k = ?', k);
+    return true;
   }
 
   getNs(ns) {
@@ -219,11 +429,12 @@ export class SyncStore extends DurableObject {
 
   putBook(b) {
     this.sql.exec(
-      `INSERT INTO books (slug, title, author, epub_key, cover_key, hidden, created_at)
-       VALUES (?, ?, ?, ?, ?, 0, ?)
+      `INSERT INTO books (slug, title, author, epub_key, cover_key, hidden, created_at, uploader)
+       VALUES (?, ?, ?, ?, ?, 0, ?, ?)
        ON CONFLICT (slug) DO UPDATE SET title = excluded.title, author = excluded.author,
-         epub_key = excluded.epub_key, cover_key = excluded.cover_key, hidden = 0`,
-      b.slug, b.title, b.author, b.epub_key, b.cover_key, b.created_at
+         epub_key = excluded.epub_key, cover_key = excluded.cover_key, hidden = 0,
+         uploader = excluded.uploader`,
+      b.slug, b.title, b.author, b.epub_key, b.cover_key, b.created_at, b.uploader
     );
   }
 
@@ -298,7 +509,8 @@ export default {
       // Authorization header with the sync key, so that header can't carry it.
       // A valid sync key in Authorization is accepted too.
       const given = request.headers.get('X-Clyde-Secret') || url.searchParams.get('s') || '';
-      const ok = run && ((given && (await sameSecret(given, run.secret))) || (await authorized(request, env)));
+      const who0 = given ? null : await authenticate(request, env, store);
+      const ok = run && ((given && (await sameSecret(given, run.secret))) || (who0 && who0.owner));
       if (!ok) return fail(401, 'Invalid run or secret');
       if (run.status !== 'running') return fail(409, 'Run already finished');
       let text;
@@ -315,10 +527,113 @@ export default {
       return json({ ok: true });
     }
 
-    // Everything below needs the sync key.
-    if (!(await authorized(request, env))) return fail(401, 'Invalid or missing sync key');
+    // ── Account creation / login (no key yet) ────────────────────────────
+    if (parts[0] === 'auth' && parts.length === 2 && request.method === 'POST' &&
+        (parts[1] === 'signup' || parts[1] === 'login')) {
+      const body = await readJson(request);
+      const username = body && typeof body.username === 'string' ? body.username.trim().toLowerCase() : '';
+      const password = body && typeof body.password === 'string' ? body.password : '';
+      if (!USERNAME_RE.test(username)) return fail(400, 'Username must be 3-24 characters: a-z, 0-9, - or _');
+      if (!password) return fail(400, 'Password required');
+      if (password.length > 256) return fail(400, 'Password too long');
+      const ip = clientIp(request);
+
+      if (parts[1] === 'signup') {
+        const invite = body && typeof body.invite === 'string' ? body.invite.trim().toLowerCase() : '';
+        if (!invite) return fail(400, 'Invite code required');
+        if (!(await store.signupAllowed(ip))) return fail(429, 'Too many signups from this network. Try again later.');
+        const uid = randomHex(8);
+        const key = newUserKey(uid);
+        const rec = { uid, username, ...(await credentialRecord(password, key)) };
+        const err = await store.createUser(rec, invite);
+        if (err) return fail(err.startsWith('That') ? 409 : 403, err);
+        return json({ ok: true, username, key });
+      }
+
+      // login
+      const lockKeys = ['login:u:' + username, 'login:ip:' + ip];
+      const wait = await store.lockWait(lockKeys);
+      if (wait) return json({ error: `Too many attempts. Try again in ${wait} seconds.` }, 429, { 'Retry-After': String(wait) });
+      const user = await store.userByName(username);
+      // Unknown usernames still pay for a hash, so timing doesn't reveal them.
+      const salt = user ? fromB64(user.salt) : new Uint8Array(16);
+      const { verifier, wrapRaw } = await derive(password, salt);
+      if (!user || user.disabled || !(await sameSecret(verifier, user.pw_verifier))) {
+        await store.loginFailed(lockKeys);
+        return fail(401, 'Wrong username or password');
+      }
+      await store.loginOk(lockKeys);
+      let key;
+      try { key = await unwrapKey(wrapRaw, user.key_wrapped); } catch (e) { return fail(500, 'Could not recover key'); }
+      return json({ ok: true, username, key });
+    }
+
+    // Everything below needs a key.
+    const who = await authenticate(request, env, store);
+    if (!who) return fail(401, 'Invalid or missing sync key');
 
     if (parts[0] === 'ping' && parts.length === 1) return json({ ok: true });
+
+    if (parts[0] === 'auth') {
+      if (parts[1] === 'me' && parts.length === 2 && request.method === 'GET') {
+        return json({ username: who.username, owner: who.owner });
+      }
+      if (who.owner) return fail(400, 'The owner key is not an account');
+      if (parts[1] === 'password' && parts.length === 2 && request.method === 'POST') {
+        const body = await readJson(request);
+        const password = body && typeof body.password === 'string' ? body.password : '';
+        if (!password) return fail(400, 'Password required');
+        if (password.length > 256) return fail(400, 'Password too long');
+        const key = (request.headers.get('Authorization') || '').slice(7);
+        await store.setCredentials(who.uid, await credentialRecord(password, key));
+        return json({ ok: true });
+      }
+      if (parts[1] === 'rotate' && parts.length === 2 && request.method === 'POST') {
+        const body = await readJson(request);
+        const password = body && typeof body.password === 'string' ? body.password : '';
+        const user = await store.userByUid(who.uid);
+        const { verifier } = await derive(password, fromB64(user.salt));
+        if (!password || !(await sameSecret(verifier, user.pw_verifier))) return fail(401, 'Wrong password');
+        const key = newUserKey(who.uid);
+        await store.setCredentials(who.uid, await credentialRecord(password, key));
+        return json({ ok: true, key });
+      }
+      if (parts[1] === 'account' && parts.length === 2 && request.method === 'DELETE') {
+        await store.deleteUser(who.uid);
+        return json({ ok: true });
+      }
+      return fail(404, 'Not found');
+    }
+
+    // Owner-only: invites, user management, Clyde.
+    if (parts[0] === 'admin') {
+      if (!who.owner) return fail(403, 'Owner only');
+      if (parts[1] === 'invites' && parts.length === 2 && request.method === 'GET') {
+        return json({ invites: await store.listInvites() });
+      }
+      if (parts[1] === 'invites' && parts.length === 2 && request.method === 'POST') {
+        const body = await readJson(request);
+        const label = body && typeof body.label === 'string' ? body.label.trim().slice(0, 60) : '';
+        const hex = randomHex(8);
+        const code = hex.match(/.{4}/g).join('-');
+        await store.createInvite(code, label);
+        return json({ ok: true, code });
+      }
+      if (parts[1] === 'invites' && parts.length === 3 && request.method === 'DELETE') {
+        await store.deleteInvite(parts[2]);
+        return json({ ok: true });
+      }
+      if (parts[1] === 'users' && parts.length === 2 && request.method === 'GET') {
+        return json({ users: await store.listUsers() });
+      }
+      if (parts[1] === 'users' && parts.length === 4 && request.method === 'POST' &&
+          (parts[3] === 'disable' || parts[3] === 'enable')) {
+        const found = await store.setDisabled(parts[2], parts[3] === 'disable');
+        return found ? json({ ok: true }) : fail(404, 'No such user');
+      }
+      return fail(404, 'Not found');
+    }
+    if (parts[0] === 'clyde' && !who.owner) return fail(403, 'Owner only');
 
     // Clyde: forward a prompt to a Claude Code routine, which starts a new
     // session that reads and executes it, then posts its answer back to
@@ -398,7 +713,8 @@ export default {
     if (parts[0] === 'sync' && parts.length === 2) {
       const ns = parts[1];
       if (!NS_RE.test(ns) || ns === 'clyde-run') return fail(400, 'Bad namespace');
-      if (request.method === 'GET') return json({ entries: await store.getNs(ns) });
+      const scoped = who.prefix + ns;
+      if (request.method === 'GET') return json({ entries: await store.getNs(scoped) });
       if (request.method === 'POST') {
         let body;
         try { body = await request.json(); } catch (e) { return fail(400, 'Invalid JSON'); }
@@ -407,7 +723,7 @@ export default {
         for (const e of Object.values(entries)) {
           if (!e || !Number.isFinite(e.ts)) return fail(400, 'Each entry needs a numeric ts');
         }
-        return json({ entries: await store.mergeNs(ns, entries) });
+        return json({ entries: await store.mergeNs(scoped, entries) });
       }
     }
 
@@ -428,6 +744,9 @@ export default {
         if (cover && typeof cover !== 'string' && cover.size > MAX_COVER_BYTES) return fail(413, 'cover too large');
 
         const existing = await store.getBook(slug);
+        if (!who.owner && existing && !existing.hidden && existing.uploader !== who.uid) {
+          return fail(403, 'That slug belongs to another upload');
+        }
         const epubKey = 'books/' + slug + '.epub';
         await store.putBlob(epubKey, 'application/epub+zip', await epub.arrayBuffer());
 
@@ -443,11 +762,16 @@ export default {
         await store.putBook({
           slug, title, author, epub_key: epubKey, cover_key: coverKey,
           created_at: existing && !existing.hidden ? existing.created_at : Date.now(),
+          uploader: who.uid,
         });
         return json({ book: bookJson(await store.getBook(slug), origin) });
       }
 
       if (request.method === 'DELETE') {
+        if (!who.owner) {
+          const row = await store.getBook(slug);
+          if (!row || row.hidden || row.uploader !== who.uid) return fail(403, 'You can only delete books you uploaded');
+        }
         const removed = await store.removeBook(slug);
         if (removed) {
           const keys = [removed.epub_key, removed.cover_key].filter(Boolean);

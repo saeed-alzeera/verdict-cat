@@ -183,20 +183,6 @@
   <button id="pat-btn" onclick="openPATModal()">Sync Key</button>
 </div>
 
-<!-- PAT modal -->
-<div id="pat-modal" style="display:none;">
-  <div id="pat-box">
-    <h2>Sync Key</h2>
-    <p class="pat-sub">Your sync key connects this device to your sync server. It's used for uploading books and syncing reading progress, regions and snippets across all sections. It doesn't expire.</p>
-    <input id="pat-input" type="password" placeholder="Sync key" autocomplete="off" />
-    <div id="pat-msg" class="pat-sub" style="margin:-8px 0 12px;min-height:1em;"></div>
-    <button id="pat-save" onclick="savePAT()">Save Key</button>
-    <button id="pat-import" style="display:none;" onclick="importOld()">Import from old gist</button>
-    <button id="pat-remove" style="display:none;" onclick="removePAT()">Remove Key</button>
-    <button id="pat-cancel" onclick="closePATModal()">Cancel</button>
-  </div>
-</div>
-
 <!-- Password overlay -->
 <div id="auth-overlay">
   <div id="auth-box">
@@ -257,7 +243,7 @@
   </div>
 </div>
 
-<script src="gist.js?v=4"></script>
+<script src="gist.js?v=5"></script>
 <script>
   function showHub() {
     document.getElementById('auth-overlay').style.display = 'none';
@@ -270,80 +256,17 @@
     var btn = document.getElementById('pat-btn');
     if (Gist.isConnected()) {
       btn.classList.add('active');
-      btn.textContent = Gist.mode() === 'worker' ? 'Sync: on' : 'Sync: legacy token';
+      btn.textContent = Gist.username() ? 'Sync: ' + Gist.username() : 'Sync: on';
     } else {
       btn.classList.remove('active');
-      btn.textContent = 'Sync Key';
+      btn.textContent = 'Sign in to sync';
     }
-  }
-
-  function setPatMsg(msg, isErr) {
-    var el = document.getElementById('pat-msg');
-    el.textContent = msg || '';
-    el.style.color = isErr ? '#e05c5c' : '';
   }
 
   function openPATModal() {
-    var connected = Gist.isConnected();
-    document.getElementById('pat-input').value = '';
-    document.getElementById('pat-input').placeholder = connected ? 'Paste new key to replace' : 'Sync key';
-    document.getElementById('pat-remove').style.display = connected ? '' : 'none';
-    // Offer the one-time import while a sync key is set and an old GitHub token may exist.
-    document.getElementById('pat-import').style.display = Gist.mode() === 'worker' ? '' : 'none';
-    setPatMsg(Gist.mode() === 'gist' ? 'This device still uses an old GitHub token. Paste your sync key to switch.' : '');
-    document.getElementById('pat-modal').style.display = 'flex';
-    document.getElementById('pat-input').focus();
+    Gist.showAccountDialog({ onChange: updatePATBtn });
   }
 
-  function closePATModal() {
-    document.getElementById('pat-modal').style.display = 'none';
-  }
-
-  async function savePAT() {
-    var val = document.getElementById('pat-input').value.trim();
-    if (!val) { closePATModal(); return; }
-    setPatMsg('Checking…');
-    try {
-      var id = await Gist.connect(val);
-      Gist.save(val, id);
-      closePATModal();
-      updatePATBtn();
-    } catch (e) {
-      setPatMsg(e.message || 'Could not connect.', true);
-    }
-  }
-
-  // Copies progress/regions/snippets from the old GitHub gist into the sync
-  // server. Uses a token pasted above, or the one already saved on this device.
-  async function importOld() {
-    var typed = document.getElementById('pat-input').value.trim();
-    var pat = Gist.isGithubToken(typed) ? typed : (localStorage.getItem('verdict-cat-pat') || '');
-    if (!pat) { setPatMsg('Paste your old GitHub token above, then press Import.', true); return; }
-    setPatMsg('Importing…');
-    try {
-      var c = await Gist.importLegacy(pat);
-      document.getElementById('pat-input').value = '';
-      setPatMsg('Imported ' + c.progress + ' reading position(s), ' + c.regions + ' region entr' + (c.regions === 1 ? 'y' : 'ies') + ', ' + c.docs + ' snippet list(s).');
-    } catch (e) {
-      setPatMsg(e.message || 'Import failed.', true);
-    }
-  }
-
-  function removePAT() {
-    if (!confirm('Remove sync key? Uploads and sync will stop working on this device.')) return;
-    Gist.clear();
-    closePATModal();
-    updatePATBtn();
-  }
-
-  document.getElementById('pat-input').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') savePAT();
-    if (e.key === 'Escape') closePATModal();
-  });
-
-  document.getElementById('pat-modal').addEventListener('click', function(e) {
-    if (e.target === this) closePATModal();
-  });
 
   function checkAuth() {
     var val = document.getElementById('auth-input').value;

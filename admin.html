@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
 <link rel="shortcut icon" href="favicon.ico" />
-<script src="gist.js?v=4"></script>
+<script src="gist.js?v=5"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -171,6 +171,21 @@
 
   <!-- Upload -->
   <section>
+    <h2>Invites &amp; Accounts</h2>
+    <div class="card">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Owner key only. People create their own account on the Library or hub page; each signup needs one single-use invite code. Send the code to them privately.</p>
+      <div class="pat-row">
+        <input type="text" id="invite-label" placeholder="Who is it for? (optional)" autocomplete="off" />
+        <button onclick="makeInvite()">New invite</button>
+      </div>
+      <div class="pat-status" id="invite-status"></div>
+      <div class="book-list" id="invite-list" style="margin-top:12px;"></div>
+      <h2 style="margin-top:20px;">Accounts</h2>
+      <div class="book-list" id="user-list" style="margin-top:8px;"></div>
+    </div>
+  </section>
+
+  <section>
     <h2>Upload New Book</h2>
     <div class="card">
       <label>EPUB File</label>
@@ -228,6 +243,7 @@
       setPatStatus('ok', 'Key saved.');
       checkUploadReady();
       loadBookList();
+      loadAccounts();
     } catch (e) {
       setPatStatus('err', e.message || 'Could not connect.');
     }
@@ -239,6 +255,7 @@
     setPatStatus('', 'Key cleared.');
     checkUploadReady();
     loadBookList();
+    loadAccounts();
   }
 
   function setPatStatus(cls, msg) {
@@ -382,9 +399,61 @@
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+
+  // ── Invites & accounts (owner key only) ──────────────────────────────────
+  function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; }
+  function setInviteStatus(cls, msg) {
+    var el = document.getElementById('invite-status');
+    el.className = 'pat-status' + (cls ? ' ' + cls : '');
+    el.textContent = msg;
+  }
+  async function loadAccounts() {
+    var il = document.getElementById('invite-list'), ul = document.getElementById('user-list');
+    if (!hasKey()) { il.innerHTML = ''; ul.innerHTML = ''; return; }
+    try {
+      var invites = await Gist.account.invites.list();
+      il.innerHTML = invites.length ? '' : '<div style="font-size:13px;color:var(--muted);">No invites yet.</div>';
+      invites.forEach(function(i) {
+        var row = document.createElement('div'); row.className = 'book-item';
+        row.innerHTML = '<span class="book-title" style="font-family:ui-monospace,monospace;">' + esc(i.code) + '</span>' +
+          '<span class="book-author">' + (i.used_by ? 'used by ' + esc(i.used_by) : (esc(i.label) || 'unused')) + '</span>';
+        if (!i.used_by) {
+          var b = document.createElement('button'); b.className = 'danger'; b.style.width = 'auto'; b.style.padding = '4px 10px'; b.textContent = 'Revoke';
+          b.onclick = async function() { await Gist.account.invites.remove(i.code); loadAccounts(); };
+          row.appendChild(b);
+        }
+        il.appendChild(row);
+      });
+      var users = await Gist.account.users.list();
+      ul.innerHTML = users.length ? '' : '<div style="font-size:13px;color:var(--muted);">No accounts yet.</div>';
+      users.forEach(function(u) {
+        var row = document.createElement('div'); row.className = 'book-item';
+        row.innerHTML = '<span class="book-title">' + esc(u.username) + '</span><span class="book-author">' + (u.disabled ? 'disabled' : 'active') + '</span>';
+        var b = document.createElement('button'); b.className = 'secondary'; b.style.width = 'auto'; b.style.padding = '4px 10px';
+        b.textContent = u.disabled ? 'Enable' : 'Disable';
+        b.onclick = async function() { await Gist.account.users.setDisabled(u.username, !u.disabled); loadAccounts(); };
+        row.appendChild(b);
+        ul.appendChild(row);
+      });
+    } catch (e) {
+      il.innerHTML = ''; ul.innerHTML = '';
+      setInviteStatus('err', /Owner only|rejected/.test(e.message) ? 'Sign in with the owner key to manage invites.' : e.message);
+    }
+  }
+  async function makeInvite() {
+    setInviteStatus('', 'Creating…');
+    try {
+      var d = await Gist.account.invites.create(document.getElementById('invite-label').value.trim());
+      document.getElementById('invite-label').value = '';
+      setInviteStatus('ok', 'New invite: ' + d.code);
+      loadAccounts();
+    } catch (e) { setInviteStatus('err', e.message); }
+  }
+
   // ── Init ──────────────────────────────────────────────────────────────────
   if (hasKey()) setPatStatus('ok', 'Key loaded from storage.');
   loadBookList();
+  loadAccounts();
   checkUploadReady();
 </script>
 </body>
