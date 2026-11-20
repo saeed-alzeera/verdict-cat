@@ -11,8 +11,15 @@ depends on a GitHub personal access token any more.
   Durable Object (so everything runs on Cloudflare's free plan; no R2 and no
   card needed). Uploads are capped at 25 MB. Reads are public (as the repo
   files were); writes need the sync key.
-- **Auth** — a random secret, `SYNC_KEY`, sent as `Authorization: Bearer …`.
-  It never expires; rotate it by setting a new secret.
+- **Auth** — `Authorization: Bearer <key>`. Two kinds of key:
+  - the **owner key**, the `SYNC_KEY` Worker secret. Full access, and its data
+    stays in the original namespaces; only this key can use Clyde, create
+    invites and manage accounts.
+  - a **per-user key** `vck_<uid>_<secret>`, generated at signup. It only reads
+    and writes that user's own sync namespaces (stored as `u<uid>:<ns>`).
+    Only `SHA-256(secret)` is stored for checking requests; the key itself is
+    stored AES-GCM-encrypted under a key derived from the user's password, so
+    logging in on a new device returns the same key.
 
 ## One-time setup
 
@@ -28,15 +35,36 @@ depends on a GitHub personal access token any more.
    (The secret can be set before or after the first deploy; run the workflow
    once from the Actions tab, or merge to `main`.)
 3. On each device, open the hub → **Sync Key**, paste the key, save.
-4. To carry over existing data from the old gist, open **Sync Key** again and
-   press **Import from old gist** (paste the old GitHub token first if the
-   device no longer has it). Safe to repeat; it never overwrites newer data.
+4. The old GitHub-gist fallback and "Import from old gist" were removed.
+
+## Accounts
+
+Signup is invite-only. Create an invite in `admin.html` (owner key), send the
+code privately, and the person picks a username and password on the Library or
+hub page. There is no email and no password reset: someone still signed in on a
+device can change the password; otherwise a lost password means the account
+cannot be signed into on a new device. Passwords are PBKDF2-SHA256 (100,000
+iterations, the Workers maximum) with a per-user salt. Login is rate limited
+(5 free failures per username and per IP, then exponential lockout up to
+15 minutes) and signup is limited to 5 per hour per IP. Books are one shared
+catalogue; users can delete only what they uploaded, the owner can delete any.
+No storage quota. Existing data stays with the owner key; accounts start empty.
 
 ## API
 
 | Method | Path | Auth | |
 | --- | --- | --- | --- |
 | GET | `/ping` | key | check a key |
+| POST | `/auth/signup` | invite | `{username, password, invite}` -> `{key}` |
+| POST | `/auth/login` | – | `{username, password}` -> `{key}` |
+| GET | `/auth/me` | key | `{username, owner}` |
+| POST | `/auth/password` | key | `{password}` set a new password |
+| POST | `/auth/rotate` | key | `{password}` new key; old key stops working |
+| DELETE | `/auth/account` | key | delete account and its sync data |
+| GET/POST | `/admin/invites` | owner | list / create invite codes |
+| DELETE | `/admin/invites/:code` | owner | revoke an unused invite |
+| GET | `/admin/users` | owner | list accounts |
+| POST | `/admin/users/:name/(disable\|enable)` | owner | block / unblock an account |
 | GET | `/sync/:ns` | key | all entries `{ key: { value, ts } }` |
 | POST | `/sync/:ns` | key | `{ entries }` merged LWW; returns merged namespace |
 | GET | `/books` | – | catalogue (includes `hidden` markers) |
@@ -48,7 +76,7 @@ Namespaces in use: `progress`, `regions`, `docs`.
 
 ## Clyde (send prompts to Claude Code)
 
-`POST /clyde/run` with `{ "prompt": "...", "parent": "<run id, optional>" }` (sync key required) fires a
+`POST /clyde/run` with `{ "prompt": "...", "parent": "<run id, optional>" }` (owner key required) fires a
 Claude Code routine, starting a new session, and returns `{ ok, id }`. The
 prompt is wrapped with instructions to answer in plain-text Markdown and to
 POST the final answer to `/clyde/result/:id` (authorised by a one-time per-run
