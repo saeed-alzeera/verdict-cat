@@ -1,0 +1,43 @@
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HAS_CF: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' && secrets.CLOUDFLARE_API_TOKEN != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Copy only what the site serves. Worker sources, repo tooling and
+      # the epub files stay out of the public upload.
+      - name: Stage site files
+        if: env.HAS_CF == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/site"
+          rsync -a ./ "$RUNNER_TEMP/site/" \
+            --exclude '.git' --exclude '.github' --exclude '.claude' \
+            --exclude '.claude-plugin' --exclude '.mcp.json' \
+            --exclude 'sync-worker' --exclude 'sec-proxy' \
+            --exclude 'steam-proxy' --exclude 'wordgrid-worker' \
+            --exclude 'books/*.epub'
+
+      # Needs repo secrets CLOUDFLARE_API_TOKEN (with "Cloudflare Pages: Edit")
+      # and CLOUDFLARE_ACCOUNT_ID. The Pages project "verdict-cat" is created
+      # once with:  npx wrangler pages project create verdict-cat --production-branch main
+      - name: Deploy
+        if: env.HAS_CF == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy ${{ runner.temp }}/site --project-name=verdict-cat --branch=main --commit-dirty=true
