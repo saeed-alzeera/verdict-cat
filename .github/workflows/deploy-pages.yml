@@ -1,8 +1,9 @@
 name: Deploy to GitHub Pages
 
+# Disabled: the site is served from Cloudflare Pages behind a server-side login
+# (functions/_middleware.js). GitHub Pages cannot run that login, so it no longer
+# deploys on push. Run manually only if you want a public static copy.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 # Grant the workflow's GITHUB_TOKEN the scopes deploy-pages needs.
