@@ -4,7 +4,10 @@
 // disabling a user or rotating a key locks them out here too.
 const WORKER = 'https://verdict-cat-sync.saeed-a-alzeera.workers.dev';
 const COOKIE = 'vc_session';
-const MAX_AGE = 60 * 60 * 24 * 30;
+// Sliding session: every page load while signed in renews it, so a device that
+// is used at least every few months stays signed in until sign-out, a password
+// reset or the account being disabled.
+const MAX_AGE = 60 * 60 * 24 * 180;
 const cache = new Map(); // key -> expiry ms (per isolate, short-lived)
 
 async function keyValid(key) {
@@ -44,6 +47,9 @@ button:disabled{opacity:.5}a{display:block;margin-top:12px;font-size:12px;color:
 <input id="i" placeholder="Invite code" autocomplete="off" style="display:none">
 <div id="e"></div><button id="b">Sign in</button><a id="t">Have an invite? Create an account</a></form>
 <script>
+(function(){try{var k=localStorage.getItem('verdict-cat-sync-key');if(!k)return;
+fetch('/__session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:k})}).then(function(r){
+if(r.ok)location.reload();else if(r.status===401)localStorage.removeItem('verdict-cat-sync-key')}).catch(function(){})}catch(x){}})();
 var up=false,W=${JSON.stringify(WORKER)};
 document.getElementById('t').onclick=function(){up=!up;i.style.display=up?'':'none';b.textContent=up?'Create account':'Sign in';this.textContent=up?'Back to sign in':'Have an invite? Create an account'};
 f.onsubmit=async function(ev){ev.preventDefault();b.disabled=true;e.textContent='';
@@ -69,6 +75,9 @@ export async function onRequest(context) {
     if (!(await keyValid(key))) return new Response('{"error":"Sign in failed."}', { status: 401, headers: { 'Content-Type': 'application/json' } });
     return new Response('{"ok":true}', { headers: { 'Content-Type': 'application/json', 'Set-Cookie': cookie(key, MAX_AGE), 'Cache-Control': 'no-store' } });
   }
+  if (url.pathname === '/__logout' && request.method === 'POST') {
+    return new Response(null, { status: 204, headers: { 'Set-Cookie': cookie('', 0), 'Cache-Control': 'no-store' } });
+  }
   if (url.pathname === '/__logout') {
     return new Response(null, { status: 302, headers: { Location: '/', 'Set-Cookie': cookie('', 0), 'Cache-Control': 'no-store' } });
   }
@@ -86,7 +95,13 @@ export async function onRequest(context) {
       out.set('Cache-Control', 'private, max-age=3600');
       return new Response(r.body, { status: r.status, headers: out });
     }
-    return next();
+    const res = await next();
+    if (request.method === 'GET' && (request.headers.get('Accept') || '').includes('text/html')) {
+      const out = new Response(res.body, res);
+      out.headers.append('Set-Cookie', cookie(key, MAX_AGE));
+      return out;
+    }
+    return res;
   }
 
   const wantsPage = request.method === 'GET' && (request.headers.get('Accept') || '').includes('text/html');

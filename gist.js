@@ -98,6 +98,8 @@
     clear: function() {
       localStorage.removeItem(LS_KEY);
       localStorage.removeItem(LS_USER);
+      // Also end the server-side session, or the cookie would keep this device signed in.
+      try { fetch('/__logout', { method: 'POST', keepalive: true, credentials: 'same-origin' }); } catch(e) {}
     },
 
     // Records that a progress key was just written locally, so pull() can
