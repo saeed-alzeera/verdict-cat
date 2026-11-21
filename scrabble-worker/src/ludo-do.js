@@ -30,7 +30,7 @@ export class LudoRoom extends DurableObject {
 
   async init(body) {
     if (await this.load()) return { ok: false, error: 'Room already exists.' };
-    const r = newRoom({ maxSeats: body.seats, name: body.name });
+    const r = newRoom({ maxSeats: body.seats, name: body.name, easyStart: body.easyStart === true });
     if (!r.ok) return r;
     this.room = r.room;
     await this.save();

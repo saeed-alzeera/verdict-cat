@@ -171,4 +171,30 @@ test('four seats mixing a joined player and bots play to the end', () => {
   assert.ok([0, 1, 2, 3].includes(Engine.restore(room.game).winner));
 });
 
+test('chat: cleaned, capped, rate limited, kept to the last 40, visible to everyone', () => {
+  const { room } = lobby();
+  const g = guest(room);
+  assert.ok(command(room, 0, { type: 'chat', text: '  hi <b>there</b>  ' }, T0).ok);
+  assert.strictEqual(room.chat[0].text, 'hi bthere/b');
+  assert.strictEqual(command(room, 0, { type: 'chat', text: 'again' }, T0 + 100).ok, false);   // too fast
+  assert.ok(command(room, 0, { type: 'chat', text: 'x'.repeat(500) }, T0 + 1000).ok);
+  assert.strictEqual(Array.from(room.chat[1].text).length, 120);
+  assert.strictEqual(command(room, g.seat, { type: 'chat', text: '   ' }, T0).ok, false);
+  for (let i = 0; i < 60; i++) command(room, g.seat, { type: 'chat', text: 'm' + i }, T0 + 5000 + i * 1000);
+  assert.strictEqual(room.chat.length, 40);
+  assert.strictEqual(view(room, g.seat).chat.length, 40);
+  assert.strictEqual(room.chat.at(-1).name, 'Guest');
+});
+
+test('easy start is a room option that reaches the engine', () => {
+  const r = newRoom({ maxSeats: 2, name: 'H', easyStart: true });
+  command(r.room, 0, { type: 'addBot' }, T0);
+  command(r.room, 0, { type: 'start' }, T0);
+  assert.strictEqual(Engine.restore(r.room.game).easyStart, true);
+  assert.strictEqual(view(r.room, 0).easyStart, true);
+  const roll = command(r.room, 0, { type: 'roll' }, T0);
+  assert.ok(roll.ok);
+  assert.strictEqual(r.room.ev.value, 6);
+});
+
 console.log(passed + ' tests passed');
