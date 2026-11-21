@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>SEC Ownership</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
+<link rel="shortcut icon" href="favicon.ico" />
+<style>
+  :root {
+    --bg: #0f1117; --panel: #1a1d23; --panel-alt: #1e2128; --row-alt: #181b21;
+    --ink: #e8eaed; --muted: #8b9099; --line: #2e3238; --accent: #5b9bd5;
+    --warn: #e8a730; --red: #e05c5c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.45; -webkit-text-size-adjust: 100%; }
+  header { padding: 16px 16px 10px; display: flex; gap: 12px; align-items: center;
+    position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--line); }
+  #back { display: inline-flex; align-items: center; font-size: 13px; color: var(--muted);
+    text-decoration: none; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px;
+    white-space: nowrap; flex-shrink: 0; }
+  #back:hover { color: var(--ink); border-color: var(--muted); }
+  h1 { font-size: 18px; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  main { padding: 16px 16px 80px; max-width: 900px; margin: 0 auto; }
+
+  #status-msg { margin: 0 0 14px; padding: 11px 14px; border-radius: 8px; font-size: 13px; display: none; }
+  #status-msg.loading { background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
+  #status-msg.error { background: rgba(224,92,92,0.1); border: 1px solid var(--red); color: var(--red); }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .field-label { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.04em; display: block; margin-bottom: 6px; }
+  .field-input { width: 100%; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; color: var(--ink); font-size: 14px; outline: none; }
+  .field-input:focus { border-color: var(--accent); }
+  .row { display: flex; gap: 8px; }
+  .row .field-input { flex: 1; }
+  .btn { font: inherit; padding: 9px 16px; border: 1px solid var(--accent); border-radius: 8px;
+    background: var(--accent); color: #fff; cursor: pointer; font-size: 13px; white-space: nowrap; }
+  .btn:hover { opacity: 0.88; }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  select.field-input { width: auto; max-width: 100%; margin-top: 8px; }
+
+  .company-name { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+  .meta { font-size: 12px; color: var(--muted); }
+  .meta a { color: var(--accent); text-decoration: none; }
+  .meta a:hover { text-decoration: underline; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; overflow: hidden; }
+  thead th { text-align: right; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--muted); background: var(--panel-alt); padding: 10px 12px;
+    border-bottom: 1px solid var(--line); font-weight: 600; white-space: nowrap; }
+  thead th:first-child { text-align: left; }
+  tbody td { padding: 11px 12px; border-bottom: 1px solid var(--line); vertical-align: middle;
+    font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  tbody td:first-child { text-align: left; white-space: normal; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:nth-child(odd) td { background: var(--row-alt); }
+  .group { display: block; font-size: 11px; color: var(--muted); }
+  .src { color: var(--accent); text-decoration: none; padding: 2px 8px; border: 1px solid var(--line);
+    border-radius: 6px; display: inline-block; min-width: 38px; text-align: center; }
+  .src:hover { border-color: var(--accent); }
+  .src.near { border-style: dashed; }
+  .small { color: var(--muted); }
+
+  .notes { font-size: 12px; color: var(--muted); margin-top: 14px; }
+  .notes p { margin: 0 0 6px; }
+  #empty-msg { text-align: center; color: var(--muted); font-size: 14px; padding: 40px 0; }
+  #result { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <a id="back" href="reso.html">&#8592; Reso</a>
+  <div>
+    <h1>SEC Ownership</h1>
+    <div class="sub">Who owns a US public company, straight from its proxy statement</div>
+  </div>
+</header>
+<main>
+  <div id="status-msg"></div>
+
+  <div class="panel">
+    <label class="field-label" for="ticker-input">Ticker</label>
+    <div class="row">
+      <input class="field-input" id="ticker-input" type="text" placeholder="AAPL" autocomplete="off" spellcheck="false" autocapitalize="characters" />
+      <button class="btn" id="lookup-btn">Look up</button>
+    </div>
+    <select class="field-input" id="filing-select" style="display:none" aria-label="Proxy statement"></select>
+  </div>
+
+  <div id="result">
+    <div class="panel" style="padding:12px 16px">
+      <div class="company-name" id="company-name"></div>
+      <div class="meta" id="filing-meta"></div>
+    </div>
+    <table>
+      <thead><tr><th>Name</th><th>Ownership %</th><th>Source</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="notes" id="notes"></div>
+  </div>
+
+  <div id="empty-msg">Enter a ticker to read the beneficial ownership table from the company's latest proxy statement.</div>
+</main>
+
+<script src="ownership-parse.js"></script>
+<script>
+(function () {
+  var PROXY = 'https://gastat-data-aggregator-sec.saeed-a-alzeera.workers.dev';
+  var LS_TICKERS = 'sec-ticker-map', LS_TICKERS_AT = 'sec-ticker-map-at';
+  var PROXY_FORMS = { 'DEF 14A': 1, 'DEFM14A': 1, 'DEF 14C': 1 };
+  var current = null; // {entry, filings}
+  var $ = function (id) { return document.getElementById(id); };
+
+  function setStatus(type, msg) {
+    var el = $('status-msg');
+    if (!type) { el.style.display = 'none'; return; }
+    el.style.display = 'block'; el.className = type; el.textContent = msg;
+  }
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  async function getTickerMap() {
+    try {
+      var cached = localStorage.getItem(LS_TICKERS);
+      var at = parseInt(localStorage.getItem(LS_TICKERS_AT) || '0', 10);
+      if (cached && Date.now() - at < 24 * 60 * 60 * 1000) return JSON.parse(cached);
+    } catch (e) {}
+    var res = await fetch(PROXY + '/www/files/company_tickers.json');
+    if (!res.ok) throw new Error('Could not load the SEC ticker list (' + res.status + ').');
+    var raw = await res.json(), map = {};
+    Object.keys(raw).forEach(function (k) {
+      map[raw[k].ticker.toUpperCase()] = { cik: String(raw[k].cik_str).padStart(10, '0'), name: raw[k].title };
+    });
+    try {
+      localStorage.setItem(LS_TICKERS, JSON.stringify(map));
+      localStorage.setItem(LS_TICKERS_AT, String(Date.now()));
+    } catch (e) {}
+    return map;
+  }
+
+  function filingUrl(cik, f) {
+    return 'https://www.sec.gov/Archives/edgar/data/' + parseInt(cik, 10) + '/' +
+      f.accession.replace(/-/g, '') + '/' + f.doc;
+  }
+
+  async function lookup() {
+    var ticker = $('ticker-input').value.trim().toUpperCase();
+    if (!ticker) return;
+    $('lookup-btn').disabled = true;
+    $('result').style.display = 'none';
+    $('empty-msg').style.display = 'none';
+    $('filing-select').style.display = 'none';
+    try {
+      setStatus('loading', 'Looking up ' + ticker + '…');
+      var map = await getTickerMap();
+      var entry = map[ticker];
+      if (!entry) throw new Error('Ticker "' + ticker + '" not found in SEC records.');
+
+      setStatus('loading', 'Finding proxy statements for ' + entry.name + '…');
+      var res = await fetch(PROXY + '/data/submissions/CIK' + entry.cik + '.json');
+      if (!res.ok) throw new Error('Could not load the filing list (' + res.status + ').');
+      var sub = await res.json(), r = sub.filings.recent, filings = [];
+      for (var i = 0; i < r.form.length && filings.length < 5; i++) {
+        if (PROXY_FORMS[r.form[i]] && /\.html?$/i.test(r.primaryDocument[i])) {
+          filings.push({ form: r.form[i], date: r.filingDate[i], accession: r.accessionNumber[i], doc: r.primaryDocument[i] });
+        }
+      }
+      if (!filings.length) throw new Error(entry.name + ' has no proxy statement (DEF 14A) in its recent filings. Foreign filers and some controlled companies do not file one.');
+
+      current = { entry: entry, ticker: ticker, filings: filings };
+      var sel = $('filing-select');
+      sel.innerHTML = filings.map(function (f, i) {
+        return '<option value="' + i + '">' + esc(f.form) + ' filed ' + esc(f.date) + '</option>';
+      }).join('');
+      sel.style.display = filings.length > 1 ? '' : 'none';
+      await show(0);
+    } catch (e) {
+      setStatus('error', e.message || String(e));
+    }
+    $('lookup-btn').disabled = false;
+  }
+
+  async function show(idx) {
+    var f = current.filings[idx], entry = current.entry;
+    $('result').style.display = 'none';
+    setStatus('loading', 'Reading the ' + f.form + ' filed ' + f.date + ' (large file, a few seconds)…');
+    var url = filingUrl(entry.cik, f);
+    var res = await fetch(PROXY + '/www/' + url.replace('https://www.sec.gov/', ''));
+    if (!res.ok) throw new Error('Could not download the filing (' + res.status + ').');
+    var html = await res.text();
+    var doc = new DOMParser().parseFromString(html, 'text/html');
+    var out = OwnershipParse.parse(doc);
+    if (!out.tableFound || !out.rows.length) {
+      throw new Error('Could not find a beneficial ownership table in this filing. Open it directly: ' + url);
+    }
+
+    $('company-name').textContent = entry.name + ' (' + current.ticker + ')';
+    $('filing-meta').innerHTML = esc(f.form) + ' filed ' + esc(f.date) + ' · <a href="' + esc(url) + '" target="_blank" rel="noopener">open full filing</a>';
+    $('rows').innerHTML = out.rows.map(function (row) {
+      var href = url + (row.fragment || '');
+      var title = !row.fragment
+        ? 'Opens the filing from the top; go to page ' + row.page + ' and look for ' + row.name + '.'
+        : row.anchor === 'near'
+        ? 'Opens the filing at the nearest row of this table; look for ' + row.name + ' on page ' + row.page + '.'
+        : 'Opens the filing at this row (page ' + row.page + ')';
+      return '<tr><td>' + esc(row.name) + (row.group ? '<span class="group">' + esc(row.group) + '</span>' : '') + '</td>' +
+        '<td' + (row.multi ? ' title="Several percentage columns in the filing; this is the first"' : '') + (row.pct == null ? ' class="small" title="The filing shows an asterisk: less than 1%"' : '') + '>' + esc(row.pctText) + (row.multi ? ' †' : '') + '</td>' +
+        '<td><a class="src' + (row.anchor === 'near' ? ' near' : '') + '" href="' + esc(href) + '" target="_blank" rel="noopener" title="' + esc(title) + '">' + row.page + '</a></td></tr>';
+    }).join('');
+
+    var multi = out.rows.some(function (r) { return r.multi; });
+    var notes = [
+      multi ? 'Warning: this filing reports more than one share class (or an extra voting-power column). Rows marked † have several percentage columns; the figure shown is the first one only, so open the source to read the others.' : '',
+      'Every figure is read from the filing\'s beneficial ownership table; nothing is estimated. "&lt;1%" is how the filing reports holders under one percent (an asterisk).',
+      'Source: the number is the page of the filing (' + (out.usedPrintedNumbers ? 'the printed page number in the footer' : 'counted from page breaks, because no printed page numbers were found') + '). The link opens sec.gov and jumps to that row. A dashed link means this row cannot be pinpointed (its name and share count also appear earlier in the filing), so it jumps to a neighbouring row on the same page, or opens the filing at the top if there is none.',
+      'Jump-to-row needs Chrome, Edge, Safari or Firefox 131+; elsewhere the filing opens at the top, so use the page number.',
+      out.headerText ? 'Percentage column as headed in the filing: "' + out.headerText.replace(/^.*?(percent|%)/i, '$1').slice(0, 140) + '". Filings with several share classes can have more than one percentage column; this table shows the first.' : '',
+      'Percentages are as of the date in the filing, not today. Pick an earlier proxy above to compare years.'
+    ].concat(out.notes).filter(Boolean);
+    $('notes').innerHTML = notes.map(function (n) { return '<p>' + (n.indexOf('&lt;') >= 0 ? n : esc(n)) + '</p>'; }).join('');
+    $('result').style.display = 'block';
+    setStatus(null);
+  }
+
+  $('lookup-btn').addEventListener('click', lookup);
+  $('ticker-input').addEventListener('keydown', function (e) { if (e.key === 'Enter') lookup(); });
+  $('filing-select').addEventListener('change', function () {
+    show(parseInt(this.value, 10)).catch(function (e) { setStatus('error', e.message || String(e)); });
+  });
+})();
+</script>
+</body>
+</html>
