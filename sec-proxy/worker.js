@@ -7,10 +7,11 @@
  *   /data/*  -> https://data.sec.gov/*
  *   /www/*   -> https://www.sec.gov/*
  *
- * Replace SEC_CONTACT below with a real contact email before deploying —
- * SEC blocks traffic from User-Agents that don't identify a requester.
+ * SEC blocks traffic from User-Agents that don't identify a requester, so set
+ * the SEC_CONTACT Worker secret (e.g. "GASTAT Data Aggregator admin@example.org").
+ * It falls back to the value below only until the secret is set.
  */
-const SEC_CONTACT = 'Saeed Alzeera saeedbankemail@gmail.com';
+const SEC_CONTACT_FALLBACK = 'Saeed Alzeera saeedbankemail@gmail.com';
 
 const UPSTREAM_HOSTS = {
   data: 'https://data.sec.gov',
@@ -18,7 +19,7 @@ const UPSTREAM_HOSTS = {
 };
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
@@ -44,7 +45,7 @@ export default {
 
     const upstream = await fetch(upstreamUrl, {
       headers: {
-        'User-Agent': SEC_CONTACT,
+        'User-Agent': (env && env.SEC_CONTACT) || SEC_CONTACT_FALLBACK,
         'Accept-Encoding': 'gzip, deflate',
       },
       cf: { cacheTtl: 3600, cacheEverything: true },
