@@ -19,7 +19,7 @@
  *   POST   /auth/rotate            { password }  (key required)  new key, old one dies
  *   DELETE /auth/account           (key required) deletes the account and its sync data
  *   GET/POST /admin/invites, DELETE /admin/invites/:code, GET /admin/users,
- *   POST /admin/users/:name/(disable|enable)   owner key only
+ *   POST /admin/users { username, password }, POST /admin/users/:name/(disable|enable)   owner key only
  *
  *   GET    /ping                   auth check
  *   GET    /sync/:ns               -> { entries: { key: { value, ts } } }
@@ -260,6 +260,19 @@ export class SyncStore extends DurableObject {
         u.uid, u.username, u.salt, u.pw_verifier, u.key_hash, u.key_wrapped, Date.now()
       );
       this.sql.exec('UPDATE invites SET used_by = ?, used_at = ? WHERE code = ?', u.username, Date.now(), invite);
+    });
+    return err;
+  }
+  // Owner-created account (no invite). Returns an error string or null.
+  createUserDirect(u) {
+    let err = null;
+    this.ctx.storage.transactionSync(() => {
+      if (this.userByName(u.username)) { err = 'That username is taken'; return; }
+      this.sql.exec(
+        `INSERT INTO users (uid, username, salt, pw_verifier, key_hash, key_wrapped, disabled, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
+        u.uid, u.username, u.salt, u.pw_verifier, u.key_hash, u.key_wrapped, Date.now()
+      );
     });
     return err;
   }
@@ -625,6 +638,18 @@ export default {
       }
       if (parts[1] === 'users' && parts.length === 2 && request.method === 'GET') {
         return json({ users: await store.listUsers() });
+      }
+      if (parts[1] === 'users' && parts.length === 2 && request.method === 'POST') {
+        const body = await readJson(request);
+        const username = body && typeof body.username === 'string' ? body.username.trim().toLowerCase() : '';
+        const password = body && typeof body.password === 'string' ? body.password : '';
+        if (!USERNAME_RE.test(username)) return fail(400, 'Username must be 3-24 characters: a-z, 0-9, - or _');
+        if (!password || password.length > 256) return fail(400, 'Password required (max 256 characters)');
+        const uid = randomHex(8);
+        const rec = { uid, username, ...(await credentialRecord(password, newUserKey(uid))) };
+        const err = await store.createUserDirect(rec);
+        if (err) return fail(409, err);
+        return json({ ok: true, username });
       }
       if (parts[1] === 'users' && parts.length === 4 && request.method === 'POST' &&
           (parts[3] === 'disable' || parts[3] === 'enable')) {

@@ -27,37 +27,6 @@
     min-height: 100vh;
   }
 
-  /* ── Password overlay ── */
-  #auth-overlay {
-    position: fixed; inset: 0; z-index: 9999;
-    background: var(--bg);
-    display: flex; align-items: center; justify-content: center;
-  }
-  #auth-box {
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 36px 40px;
-    width: 320px;
-    text-align: center;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
-  }
-  #auth-box h2 { font-size: 22px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
-  #auth-box p  { font-size: 13px; color: var(--muted); margin: 0 0 24px; }
-  #auth-input {
-    width: 100%; padding: 10px 14px;
-    border: 1px solid var(--line); border-radius: 8px;
-    font-size: 15px; outline: none; margin-bottom: 12px;
-    background: var(--bg); color: var(--ink);
-  }
-  #auth-error { color: var(--warn); font-size: 13px; min-height: 18px; margin-bottom: 10px; }
-  #auth-btn {
-    width: 100%; padding: 10px;
-    background: var(--accent); color: #fff;
-    border: none; border-radius: 8px;
-    font-size: 15px; font-weight: 500; cursor: pointer;
-  }
-  #auth-btn:hover { opacity: 0.88; }
 
   /* ── Hub ── */
   #hub {
@@ -178,21 +147,9 @@
 </head>
 <body>
 
-<!-- Hub topbar (shown after auth) -->
+<!-- Hub topbar -->
 <div id="hub-bar">
   <button id="pat-btn" onclick="openPATModal()">Sync Key</button>
-</div>
-
-<!-- Password overlay -->
-<div id="auth-overlay">
-  <div id="auth-box">
-    <h2>Access Required</h2>
-    <p>Enter password to continue</p>
-    <input id="auth-input" type="password" placeholder="Password"
-      onkeydown="if(event.key==='Enter')checkAuth()" autofocus />
-    <div id="auth-error"></div>
-    <button id="auth-btn" onclick="checkAuth()">Enter</button>
-  </div>
 </div>
 
 <!-- Hub page -->
@@ -246,8 +203,7 @@
 <script src="gist.js?v=5"></script>
 <script>
   function showHub() {
-    document.getElementById('auth-overlay').style.display = 'none';
-    document.getElementById('hub').style.display = 'flex';
+        document.getElementById('hub').style.display = 'flex';
     document.getElementById('hub-bar').style.display = 'flex';
     updatePATBtn();
   }
@@ -268,18 +224,6 @@
   }
 
 
-  function checkAuth() {
-    var val = document.getElementById('auth-input').value;
-    if (val === '6FLIF7') {
-      localStorage.setItem('hub_auth', '1');
-      showHub();
-    } else {
-      document.getElementById('auth-error').textContent = 'Incorrect password.';
-      document.getElementById('auth-input').value = '';
-      document.getElementById('auth-input').focus();
-    }
-  }
-
   function go(page) {
     window.location.replace(page);
   }
@@ -289,9 +233,7 @@
   }
 
   (function () {
-    if (localStorage.getItem('hub_auth') === '1') {
-      showHub();
-    }
+    showHub();
   })();
 </script>
 </body>
