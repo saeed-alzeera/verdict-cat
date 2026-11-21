@@ -52,7 +52,7 @@ h1,h2,h3{font-weight:400;margin:0;color:#fff}
   background:
     radial-gradient(ellipse 60% 50% at 70% 40%,#0d6a7a55,transparent 70%),
     linear-gradient(180deg,#0a1a21 0%,#0d2a35 55%,#172D35 100%)}
-#hero canvas{position:absolute;inset:0;width:100%;height:100%;opacity:.55}
+#hero canvas{position:absolute;inset:0;width:100%;height:100%;opacity:.9}
 #hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 60%,var(--subnav) 100%);pointer-events:none}
 .hero-in{position:relative;z-index:2;width:100%;display:flex;align-items:center;justify-content:space-between;padding:90px clamp(16px,6vw,90px) 60px;gap:40px}
 .hero-txt{max-width:520px}
@@ -67,8 +67,14 @@ h1,h2,h3{font-weight:400;margin:0;color:#fff}
 .hero-txt p{font-size:clamp(17px,1.6vw,22px);font-weight:300;letter-spacing:.06em;line-height:1.35;color:#fff;margin:0}
 .map-wrap{position:relative;flex:none;width:min(44vw,560px);text-align:center}
 #ksa{width:100%;height:auto;display:block}
-#ksa path{fill:#0b2d3955;stroke:#7fb7c4;stroke-width:1.2;transition:fill .2s;cursor:pointer}
-#ksa path:hover{fill:#009DAD88}
+#ksa .out{fill:#0b3a4a66;stroke:#7fb7c4;stroke-width:1.4;stroke-linejoin:round;filter:drop-shadow(0 0 14px #009DAD55)}
+#ksa .rg{cursor:pointer;outline:none}
+#ksa .dot{fill:#4aa9b7;stroke:#fff;stroke-width:1.2;transition:r .2s,fill .2s}
+#ksa .rg:hover .dot,#ksa .rg:focus .dot{r:7;fill:#fff}
+#ksa .rl{fill:#fff;font-size:11px;font-weight:600;letter-spacing:.04em;opacity:0;transition:opacity .2s;paint-order:stroke;stroke:#0a1a21;stroke-width:3px}
+#ksa .rg:hover .rl,#ksa .rg:focus .rl{opacity:1}
+@media (hover:none){#ksa .rl{opacity:.85;font-size:9px}}
+[dir=rtl] #ksa .rl{text-anchor:end}
 .map-cta{margin-top:10px;display:inline-flex;align-items:center;gap:8px;background:none;border:0;color:#fff;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
 .map-cta svg{width:16px;height:16px;color:var(--teal)}
 
@@ -144,6 +150,7 @@ h1,h2,h3{font-weight:400;margin:0;color:#fff}
 .group>h2{font-size:clamp(24px,3vw,36px);text-transform:uppercase;letter-spacing:.03em;margin-bottom:26px;color:#fff}
 .group>h3{font-size:22px;color:var(--blue2);margin:30px 0 16px;scroll-margin-top:130px}
 .card{background:var(--section);border-radius:14px;padding:28px;margin-bottom:22px;display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:30px}
+.card.notxt{grid-template-columns:1fr}
 .card h4{grid-column:1/-1;margin:0;font-weight:400;font-size:20px;color:#fff}
 .seg{display:flex;margin-bottom:12px}
 .seg button{flex:1;background:#0d0707;border:0;color:var(--muted);padding:9px 8px;font-size:13px;font-weight:600}
@@ -158,6 +165,15 @@ h1,h2,h3{font-weight:400;margin:0;color:#fff}
 .chart-t span{display:flex;gap:10px}
 .chart-t svg{width:16px;height:16px;color:var(--muted)}
 .chart svg.plot{width:100%;height:auto;flex:1}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:18px;margin:6px 0 16px}
+.st .sv{font-size:clamp(26px,3vw,36px);color:#fff;line-height:1.1}
+.st .sl{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--teal);margin-top:4px}
+.src{margin-top:12px;font-size:11px;letter-spacing:.04em;color:var(--muted);text-transform:uppercase}
+.plot.hb{max-height:260px}
+.bl{fill:#dfe3ea;font-size:12px;font-family:var(--font)}
+.bv{fill:#fff;font-size:12px;font-weight:700;font-family:var(--font)}
+.pending{margin:34px 0 10px;padding:14px 18px;border:1px dashed #fff3;border-radius:10px;font-size:13px;color:var(--muted)}
+.kpi .s{font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--muted);margin-top:2px;text-transform:uppercase}
 .nodata{margin:auto;color:#fff;font-weight:700;font-size:14px}
 
 /* footer + rail */
@@ -312,17 +328,9 @@ footer{background:var(--subnav);margin-top:60px;padding:40px clamp(16px,6vw,90px
     <a class="brand" href="/"><svg style="color:#fff"><use href="#i-logo"/></svg><span>GASTAT<small data-t="brandSub">DATA AGGREGATOR</small></span></a>
     <div class="f-links"><a href="#tools" data-t="tExp">Data Explorer</a><a href="#" data-t="ksa">Kingdom of Saudi Arabia</a><a href="#" data-t="sitemap">Sitemap</a></div>
   </div>
-  <div class="f-bot"><span data-t="rights">All rights reserved</span><span><span data-t="contact">For feedback and questions:</span> <a href="mailto:">contact</a></span></div>
+  <div class="f-bot"><span id="srcNote"></span><span data-t="rights">All rights reserved</span><span><span data-t="contact">For feedback and questions:</span> <a href="mailto:">contact</a></span></div>
 </footer>
 
-<aside id="rail">
-  <button class="fb" id="fbBtn" data-t="feedback">Share Feedback</button><hr>
-  <a href="#" aria-label="LinkedIn"><svg><use href="#i-in"/></svg></a>
-  <a href="#" aria-label="X"><svg><use href="#i-x"/></svg></a>
-  <a href="#" aria-label="Instagram"><svg><use href="#i-ig"/></svg></a>
-  <a href="#" aria-label="YouTube"><svg><use href="#i-yt"/></svg></a><hr>
-  <a href="#" aria-label="Live chat"><svg><use href="#i-head"/></svg></a>
-</aside>
 
 <script>
 /* ── content ─────────────────────────────────────────── */
@@ -333,7 +341,7 @@ var T = {
   overview:'Overview',econ:'Economic Indicators',soc:'Social Indicators',tAi:'AI Insights',tExp:'Data Explorer',tCal:'Economic Calendar',search:'Search',
   kingdom:'Kingdom',regions:'Regions',countries:'Country Data',sectors:'Sectors',region:'Region',country:'Country',sector:'Sector',tools:'Tools',beta:'Beta',
   more:'Explore more',sitemap:'Sitemap',rights:'All rights reserved',contact:'For feedback and questions:',feedback:'Share Feedback',
-  total:'Total',byAct:'By Economic Activity',noData:'No Data Available',sample:'Sample values shown. Live data loads from the aggregator API.',
+  total:'Total',byAct:'By Economic Activity',noData:'No Data Available',pending:'More indicator groups (monetary, energy, financial markets, digital economy and others) are not connected yet and will appear here when their data feeds are added.',srcLbl:'Data sources: GASTAT, IMF, WHO',
   searchPh:'Explore the Kingdom, Countries, Sectors, and Indicators'},
  ar:{brandSub:'مجمّع البيانات',login:'تسجيل الدخول',ksa:'المملكة العربية السعودية',
   splash:'منصة موحدة لعرض وتحليل أحدث البيانات الاقتصادية والاجتماعية الخاصة بالمملكة ومناطقها بطرق تصويرية وتفاعلية تسهل فهم المشهد الاقتصادي السعودي.',
@@ -341,7 +349,7 @@ var T = {
   overview:'نظرة عامة',econ:'المؤشرات الاقتصادية',soc:'المؤشرات الاجتماعية',tAi:'رؤى الذكاء الاصطناعي',tExp:'مستكشف البيانات',tCal:'التقويم الاقتصادي',search:'بحث',
   kingdom:'المملكة',regions:'المناطق',countries:'بيانات الدول',sectors:'القطاعات',region:'منطقة',country:'دولة',sector:'قطاع',tools:'الأدوات',beta:'تجريبي',
   more:'استكشف المزيد',sitemap:'خريطة الموقع',rights:'جميع الحقوق محفوظة',contact:'للملاحظات والاستفسارات:',feedback:'شاركنا رأيك',
-  total:'الإجمالي',byAct:'حسب النشاط الاقتصادي',noData:'لا توجد بيانات',sample:'القيم المعروضة عينة. تُحمّل البيانات الفعلية من واجهة المجمّع.',
+  total:'الإجمالي',byAct:'حسب النشاط الاقتصادي',noData:'لا توجد بيانات',pending:'مجموعات مؤشرات أخرى (النقدية والطاقة والأسواق المالية والاقتصاد الرقمي وغيرها) لم تُربط بعد وستظهر هنا عند إضافة مصادر بياناتها.',srcLbl:'مصادر البيانات: الهيئة العامة للإحصاء وصندوق النقد الدولي ومنظمة الصحة العالمية',
   searchPh:'استكشف المملكة والدول والقطاعات والمؤشرات'}
 };
 var D = { // bilingual lists [en, ar]
@@ -351,40 +359,52 @@ var D = { // bilingual lists [en, ar]
  countries:[['China','الصين'],['India','الهند'],['Japan','اليابان'],['Republic of Korea','كوريا'],['United States','الولايات المتحدة'],['United Arab Emirates','الإمارات'],['Egypt','مصر'],['Bahrain','البحرين'],['Singapore','سنغافورة'],['France','فرنسا'],['Taiwan','تايوان'],['Italy','إيطاليا']],
  sectors:[['Administrative and support services','الأنشطة الإدارية وخدمات الدعم'],['Professional, scientific and technical','الأنشطة المهنية والعلمية والتقنية'],['Financial and insurance','الأنشطة المالية والتأمين'],['Information and communication','المعلومات والاتصالات'],['Transportation and storage','النقل والتخزين'],['Accommodation and food service','الإقامة والطعام'],['Construction','التشييد والبناء'],['Water supply and waste management','إمدادات المياه والصرف'],['Electricity, gas and steam','الكهرباء والغاز والبخار'],['Manufacturing','الصناعات التحويلية'],['Mining and quarrying','التعدين واستغلال المحاجر'],['Agriculture, forestry and fishing','الزراعة والحراجة وصيد الأسماك']]
 };
-var KPIS=[ // sample values
- ['#i-bars','⃁ 1.1 trillion',['Q2 2026','الربع الثاني 2026'],['GDP at constant prices','الناتج المحلي الإجمالي بالأسعار الثابتة']],
- ['#i-globe','⃁ 87.2 billion',['Aug 2026','أغسطس 2026'],['Merchandise exports','صادرات السلع']],
- ['#i-box','⃁ 71.6 billion',['Aug 2026','أغسطس 2026'],['Merchandise imports','واردات السلع']],
- ['#i-bag','1.7%',['Oct 2026','أكتوبر 2026'],['Inflation','التضخم']],
- ['#i-table','6.5%',['Q2 2026','الربع الثاني 2026'],['Saudi unemployment rate','معدل بطالة السعوديين']],
- ['#i-people','35,300,280',['2024','2024'],['Total population','إجمالي السكان']]
+/* All figures below are published statistics, each with a reference period and source.
+   GASTAT = General Authority for Statistics. Verify against the GASTAT release before citing. */
+var KPIS=[ // [icon, value, period, label, source]
+ ['#i-bars','SAR 1.1 trillion',['Q2 2026','الربع الثاني 2026'],['GDP at constant prices','الناتج المحلي الإجمالي بالأسعار الثابتة'],'GASTAT'],
+ ['#i-globe','SAR 87.2 billion',['Aug 2026','أغسطس 2026'],['Merchandise exports','صادرات السلع'],'GASTAT'],
+ ['#i-box','SAR 71.6 billion',['Aug 2026','أغسطس 2026'],['Merchandise imports','واردات السلع'],'GASTAT'],
+ ['#i-bag','1.7%',['Oct 2026','أكتوبر 2026'],['Inflation (CPI, year on year)','التضخم (الرقم القياسي لأسعار المستهلك، سنوي)'],'GASTAT'],
+ ['#i-table','6.5%',['Q2 2026','الربع الثاني 2026'],['Saudi unemployment rate','معدل بطالة السعوديين'],'GASTAT'],
+ ['#i-people','35,300,280',['2024','2024'],['Total population','إجمالي السكان'],'GASTAT']
 ];
 var NARR=[
- ['The Gross Domestic Product (GDP) at constant prices is shown for the latest quarter alongside annual evolution and main activities.','يُعرض الناتج المحلي الإجمالي بالأسعار الثابتة لآخر ربع سنة مع التطور السنوي والأنشطة الرئيسية.'],
- ['Inflation measured by the consumer price index (CPI) is tracked monthly, with the commodity groups that moved the most.','يُتابع التضخم المقاس بالرقم القياسي لأسعار المستهلك شهرياً مع المجموعات السلعية الأكثر تغيراً.'],
- ['Merchandise exports, imports and the resulting trade balance are updated monthly.','تُحدَّث صادرات وواردات السلع وميزان التجارة الناتج عنها شهرياً.'],
- ['Labor-force indicators cover employment and unemployment rates by gender and nationality.','تغطي مؤشرات سوق العمل معدلات التوظيف والبطالة حسب الجنس والجنسية.'],
- ['The industrial production index and other short-term business indicators show the pace of the industrial sector.','يُظهر الرقم القياسي للإنتاج الصناعي ومؤشرات الأعمال قصيرة الأجل وتيرة القطاع الصناعي.'],
- ['Population estimates are broken down by gender, age group and nationality.','تُفصَّل تقديرات السكان حسب الجنس والفئة العمرية والجنسية.']
+ ['In the second quarter of 2026, GDP at constant prices stood at SAR 1.1 trillion.','في الربع الثاني من 2026 بلغ الناتج المحلي الإجمالي بالأسعار الثابتة 1.1 تريليون ريال.'],
+ ['Consumer prices rose 1.7% year on year in October 2026. Housing, water, electricity, gas and other fuels slowed from 4.5% in October 2025 to 3.5%.','ارتفعت أسعار المستهلك 1.7% على أساس سنوي في أكتوبر 2026، وتباطأت مجموعة السكن والمياه والكهرباء والغاز وأنواع الوقود الأخرى من 4.5% في أكتوبر 2025 إلى 3.5%.'],
+ ['Merchandise exports were SAR 87.2 billion in August 2026 (3.3% above July) and imports SAR 71.6 billion (0.6% above July), leaving a trade surplus of SAR 15.6 billion.','بلغت صادرات السلع 87.2 مليار ريال في أغسطس 2026 (أعلى 3.3% من يوليو) والواردات 71.6 مليار ريال (أعلى 0.6%)، بفائض تجاري 15.6 مليار ريال.'],
+ ['In the second quarter of 2026, 67.2% of the population was employed. Unemployment was 3.0% overall and 6.5% among Saudis.','في الربع الثاني من 2026 بلغت نسبة العاملين إلى السكان 67.2%، ومعدل البطالة 3.0% إجمالاً و6.5% بين السعوديين.'],
+ ['The industrial production index fell 10.9% year on year in September 2026.','انخفض الرقم القياسي للإنتاج الصناعي 10.9% على أساس سنوي في سبتمبر 2026.'],
+ ['The population was 35,300,280 in 2024: 62.1% male and 37.9% female.','بلغ عدد السكان 35,300,280 في 2024: 62.1% ذكور و37.9% إناث.']
 ];
+var SRC={gastat:['Source: GASTAT','المصدر: الهيئة العامة للإحصاء'],imf:['Source: IMF','المصدر: صندوق النقد الدولي'],who:['Source: WHO','المصدر: منظمة الصحة العالمية']};
 var PROFILE={ economic:[
-  ['Real Sector Indicators','مؤشرات القطاع الحقيقي',[['Gross Domestic Product (GDP)','الناتج المحلي الإجمالي','line'],['GDP by Main Activities','الناتج المحلي حسب الأنشطة الرئيسية','bars'],['GDP by Expenditure Components','الناتج المحلي حسب مكونات الإنفاق','bars'],['Consumer Price Index (CPI)','الرقم القياسي لأسعار المستهلك','line'],['Wholesale Price Index (WPI)','الرقم القياسي لأسعار الجملة','line']]],
-  ['Fiscal Indicators','المؤشرات المالية',[['Government Revenue and Expenditure','إيرادات ونفقات الحكومة','bars']]],
-  ['Monetary','النقدية',[['Money Supply','عرض النقود','line']]],
-  ['External Sector & International Trade','القطاع الخارجي والتجارة الدولية',[['Merchandise Trade','تجارة السلع','bars']]],
-  ['Energy, Electricity & Water','الطاقة والكهرباء والمياه',[['Electricity Consumption','استهلاك الكهرباء','line']]],
-  ['Structural Business','الأعمال الهيكلية',[['Establishments by Sector','المنشآت حسب القطاع','bars']]],
-  ['Financial Markets','الأسواق المالية',[['Market Index','مؤشر السوق','line']]],
-  ['Digital Economy','الاقتصاد الرقمي',[['Internet Use','استخدام الإنترنت','line']]],
-  ['Research and Development','البحث والتطوير',[['R&D Expenditure','الإنفاق على البحث والتطوير','bars']]],
-  ['Humanitarian Donations','التبرعات الإنسانية',[['Donations by Destination','التبرعات حسب الوجهة','bars']]]
+ ['Real Sector Indicators','مؤشرات القطاع الحقيقي',[
+  {t:['Gross Domestic Product (GDP), 2025','الناتج المحلي الإجمالي، 2025'],rows:[['Real GDP','الناتج المحلي الحقيقي',4.9],['Nominal GDP','الناتج المحلي الاسمي',4.8],['Seasonally adjusted real GDP','الحقيقي المعدل موسمياً',4.9]],pre:'SAR ',suf:' tn',
+   text:[['Real GDP amounted to SAR 4.9 trillion in 2025 and nominal GDP to SAR 4.8 trillion.','بلغ الناتج المحلي الحقيقي 4.9 تريليون ريال في 2025 والاسمي 4.8 تريليون ريال.']],
+   note:['Real and seasonally adjusted real GDP are calculated by GASTAT using the chain-linked methodology.','يحتسب الناتج الحقيقي والمعدل موسمياً بالمنهجية المتسلسلة.'],src:'gastat',per:['2025','2025']},
+  {t:['Output and growth, 2025','الناتج والنمو، 2025'],stats:[['4.6%','Real GDP growth','نمو الناتج الحقيقي'],['US$ 1,274 bn','Nominal GDP','الناتج الاسمي'],['US$ 35,370','GDP per capita','نصيب الفرد من الناتج'],['97.3','GDP deflator index','مؤشر انكماش الناتج']],src:'imf',per:['2025','2025']},
+  {t:['Consumer Price Index (CPI)','الرقم القياسي لأسعار المستهلك'],rows:[['All items, Oct 2026','جميع البنود، أكتوبر 2026',1.7],['Housing & utilities, Oct 2025','السكن والمرافق، أكتوبر 2025',4.5],['Housing & utilities, Oct 2026','السكن والمرافق، أكتوبر 2026',3.5]],suf:'%',
+   text:[['Year-on-year change. Housing, water, electricity, gas and other fuels was the fastest-rising group.','التغير السنوي. كانت مجموعة السكن والمياه والكهرباء والغاز وأنواع الوقود الأخرى الأسرع ارتفاعاً.']],src:'gastat',per:['Oct 2026','أكتوبر 2026']}]],
+ ['Fiscal Indicators','المؤشرات المالية',[
+  {t:['General government finances, 2025 (% of GDP)','مالية الحكومة العامة، 2025 (% من الناتج)'],rows:[['Revenue','الإيرادات',23.3],['Expenditure','النفقات',29.1],['Overall balance','الرصيد الكلي',-5.8],['Primary balance','الرصيد الأولي',-5.6],['Gross debt','الدين الإجمالي',31.8],['Net debt','صافي الدين',22.6]],suf:'%',src:'imf',per:['2025','2025']}]],
+ ['External Sector & Trade','القطاع الخارجي والتجارة',[
+  {t:['Merchandise trade, August 2026','تجارة السلع، أغسطس 2026'],rows:[['Exports','الصادرات',87.2],['Imports','الواردات',71.6],['Trade balance','الميزان التجاري',15.6]],pre:'SAR ',suf:' bn',
+   text:[['Exports were 3.3% higher and imports 0.6% higher than in July 2026.','ارتفعت الصادرات 3.3% والواردات 0.6% مقارنة بيوليو 2026.']],src:'gastat',per:['Aug 2026','أغسطس 2026']},
+  {t:['Savings, investment and current account, 2025 (% of GDP)','الادخار والاستثمار والحساب الجاري، 2025 (% من الناتج)'],rows:[['Gross national savings','إجمالي الادخار الوطني',28.7],['Gross capital formation','إجمالي تكوين رأس المال',31.3],['Current account balance','رصيد الحساب الجاري',-2.6]],suf:'%',src:'imf',per:['2025','2025']}]],
+ ['Short-Term Business','الأعمال قصيرة الأجل',[
+  {t:['Industrial production index','الرقم القياسي للإنتاج الصناعي'],stats:[['−10.9%','Change vs. Sept 2025','التغير عن سبتمبر 2025']],src:'gastat',per:['Sep 2026','سبتمبر 2026']}]]
  ], social:[
-  ['Population','السكان',[['Population by Age and Gender','السكان حسب العمر والجنس','pyr']]],
-  ['Labor','العمل',[['Unemployment Rate','معدل البطالة','line']]],
-  ['Housing','الإسكان',[['Households by Tenure','الأسر حسب الحيازة','bars']]],
-  ['Health','الصحة',[['Selected SDGs & WHO Indicators','مؤشرات مختارة لأهداف التنمية المستدامة','bars']]],
-  ['Education','التعليم',[['Enrollment by Level','الالتحاق حسب المرحلة','bars']]],
-  ['Disability','الإعاقة',[['Individuals with Disabilities by Cause','الأفراد ذوو الإعاقة حسب السبب','bars']]]
+ ['Population','السكان',[
+  {t:['Population, 2024','السكان، 2024'],stats:[['35,300,280','Total population','إجمالي السكان']],rows:[['Male','ذكور',62.1,'var(--male)'],['Female','إناث',37.9,'var(--female)']],suf:'%',src:'gastat',per:['2024','2024']}]],
+ ['Labor','العمل',[
+  {t:['Unemployment, Q2 2026','البطالة، الربع الثاني 2026'],rows:[['All residents','جميع المقيمين',3.0],['Saudis','السعوديون',6.5],['Saudi women','السعوديات',9.6],['Saudi men','السعوديون الذكور',4.8],['Non-Saudi women','غير السعوديات',3.8],['Non-Saudi men','غير السعوديين الذكور',1.1]],suf:'%',
+   text:[['67.2% of the population was employed in the quarter.','بلغت نسبة العاملين إلى السكان 67.2% في الربع.']],src:'gastat',per:['Q2 2026','الربع الثاني 2026']}]],
+ ['Health','الصحة',[
+  {t:['Health workforce density, 2024 (per 100,000 people)','كثافة القوى العاملة الصحية، 2024 (لكل 100 ألف)'],rows:[['Surgeons','الجراحون',95.9],['Psychiatrists','الأطباء النفسيون',5.1]],text:[['New HIV infections were 0.1 per 1,000 uninfected people and malaria incidence was 0.','بلغت الإصابات الجديدة بفيروس نقص المناعة 0.1 لكل 1000 غير مصاب وكان معدل الملاريا صفراً.']],src:'who',per:['2024','2024']}]],
+ ['Disability','الإعاقة',[
+  {t:['Causes of disability (age 2+), 2023 (% of people with disabilities)','أسباب الإعاقة (عمر 2+)، 2023 (% من ذوي الإعاقة)'],rows:[['Illness','المرض',39.2],['Congenital','خلقية',26.9],['Aging','التقدم في العمر',16.1]],suf:'%',src:'gastat',per:['2023','2023']},
+  {t:['Assistive devices used (age 2+), 2023 (% of people with disabilities)','الأجهزة المساعدة المستخدمة، 2023 (% من ذوي الإعاقة)'],rows:[['Glasses','النظارات',63.4],['Walking equipment or help','معدات أو مساعدة للمشي',26.3],['Hearing aids','سماعات',10.3]],suf:'%',src:'gastat',per:['2023','2023']}]]
  ]};
 
 /* ── state / helpers ─────────────────────────────────── */
@@ -406,26 +426,28 @@ function carousel(id,titleKey,icon,items,tagKey,tileIcon){
    '<div class="track">'+items.map(function(it,i){return tile(pick(it),t(tagKey),GR[(i+id.length)%GR.length],tileIcon)}).join('')+'</div>'+
    '<div class="more"><button>'+t('more')+ico('#i-dbl')+'</button></div></div>';
 }
-function chart(type){
-  var W=420,H=190,pts=[3,4,3.6,5.2,5,6.4,6.1,7.4],i,s='';
-  if(type==='bars'){
-    var v=[7,5.5,4.4,3.8,2.9,2.2];
-    s=v.map(function(x,j){var h=x/7*130;return '<rect x="'+(30+j*62)+'" y="'+(160-h)+'" width="40" height="'+h+'" rx="3" fill="var(--c'+(j%8+1)+')"/>'}).join('');
-  } else if(type==='pyr'){
-    for(i=0;i<8;i++){var a=40+i*9;s+='<rect x="'+(210-a*1.8)+'" y="'+(20+i*17)+'" width="'+(a*1.8)+'" height="13" fill="var(--female)"/><rect x="210" y="'+(20+i*17)+'" width="'+(a*1.9)+'" height="13" fill="var(--male)"/>'}
-  } else {
-    var d=pts.map(function(y,j){return (j?'L':'M')+(20+j*56)+' '+(165-y*18)}).join('');
-    s='<path d="'+d+'" fill="none" stroke="var(--teal)" stroke-width="3"/>'+pts.map(function(y,j){return '<circle cx="'+(20+j*56)+'" cy="'+(165-y*18)+'" r="3.5" fill="#fff"/>'}).join('');
-  }
-  return '<svg class="plot" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet"><path d="M10 165h400" stroke="#fff3"/>'+s+'</svg>';
+function fmt(v,c){var s=(Math.abs(v)%1===0?String(Math.abs(v)):Math.abs(v).toFixed(1));return (v<0?'−':'')+(c.pre||'')+s+(c.suf||'')}
+function hbar(c){
+  var rows=c.rows,n=rows.length,W=460,lab=170,pad=(c.pre?100:64),rh=34,H=n*rh+14;
+  var mn=Math.min(0,Math.min.apply(null,rows.map(function(r){return r[2]}))),mx=Math.max.apply(null,rows.map(function(r){return r[2]}));
+  var span=mx-mn||1,aw=W-lab-pad,x0=lab+(-mn/span)*aw;
+  var s=rows.map(function(r,i){
+    var y=i*rh+8,v=r[2],w=Math.abs(v)/span*aw,x=v<0?x0-w:x0,col=r[3]||(v<0?'var(--c2)':'var(--teal)');
+    var lx=v<0?x0+6:x+w+6,anc='start';
+    return '<text x="'+(lab-10)+'" y="'+(y+15)+'" text-anchor="end" class="bl">'+pick(r)+'</text><rect x="'+x+'" y="'+y+'" width="'+Math.max(w,2)+'" height="20" rx="3" fill="'+col+'"/><text x="'+lx+'" y="'+(y+15)+'" text-anchor="'+anc+'" class="bv">'+fmt(v,c)+'</text>';
+  }).join('');
+  return '<svg class="plot hb" viewBox="0 0 '+W+' '+H+'" role="img"><path d="M'+x0+' 2V'+(H-2)+'" stroke="#fff4"/>'+s+'</svg>';
 }
+function statsGrid(c){return '<div class="stats">'+c.stats.map(function(s){return '<div class="st"><div class="sv">'+s[0]+'</div><div class="sl">'+(lang==='ar'?s[2]:s[1])+'</div></div>'}).join('')+'</div>'}
 function block(sec,key){
   return sec.map(function(g,gi){
     return '<h3 id="'+key+'-'+gi+'">'+pick(g)+'</h3>'+g[2].map(function(c){
-      return '<article class="card"><h4>'+pick(c)+'</h4><div><div class="seg"><button class="on">'+t('total')+'</button><button>'+t('byAct')+'</button></div><div class="txt"><p>'+t('sample')+'</p></div></div>'+
-       '<div class="chart"><div class="chart-t"><span>'+pick(c)+'</span><span>'+ico('#i-table')+ico('#i-img')+ico('#i-share')+'</span></div>'+chart(c[2])+'</div></article>';
+      var txt=(c.text||[]).map(function(p){return '<p>'+pick(p)+'</p>'}).join('')+(c.note?'<p class="note">'+pick(c.note)+'</p>':'');
+      var vis=(c.stats?statsGrid(c):'')+(c.rows?hbar(c):'');
+      return '<article class="card'+(txt?'':' notxt')+'"><h4>'+pick(c.t)+'</h4><div class="txt">'+txt+'</div>'+
+       '<div class="chart"><div class="chart-t"><span>'+pick(c.per)+'</span><span>'+ico('#i-table')+ico('#i-img')+ico('#i-share')+'</span></div>'+vis+'<div class="src">'+pick(SRC[c.src])+' · '+pick(c.per)+'</div></div></article>';
     }).join('');
-  }).join('');
+  }).join('')+'<p class="pending">'+t('pending')+'</p>';
 }
 function render(){
   document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
@@ -435,11 +457,11 @@ function render(){
   $('#l-en').classList.toggle('on',lang==='en');$('#l-ar').classList.toggle('on',lang==='ar');
   $('#toolTiles').innerHTML=D.tools.map(function(x){return tile(pick(x),t('tools'),x[2],x[3],x[4],'#tools')}).join('');
   $('#cars').innerHTML=carousel('k','kingdom','#i-flag',D.kingdom,'kingdom','#i-flag')+carousel('r','regions','#i-pin',D.regions,'region','#i-pin')+carousel('c','countries','#i-globe',D.countries,'country','#i-globe')+carousel('s','sectors','#i-bars',D.sectors,'sector','#i-bars');
-  $('#kpis').innerHTML=KPIS.map(function(k){return '<div class="kpi"><div class="ic">'+ico(k[0])+'</div><div><div class="v">'+k[1]+'</div><div class="l">'+pick(k[2])+'<b>'+pick(k[3])+'</b></div></div></div>'}).join('');
+  $('#kpis').innerHTML=KPIS.map(function(k){return '<div class="kpi"><div class="ic">'+ico(k[0])+'</div><div><div class="v">'+k[1]+'</div><div class="l">'+pick(k[2])+'<b>'+pick(k[3])+'</b></div><div class="s">'+pick(SRC.gastat)+'</div></div></div>'}).join('');
   $('#narr').innerHTML=NARR.map(function(n){return '<p>'+pick(n)+'</p>'}).join('');
   $('#econBody').innerHTML=block(PROFILE.economic,'economic');
   $('#socBody').innerHTML=block(PROFILE.social,'social');
-  bindCars();spy();
+  bindCars();spy();if(window.mapLabels)mapLabels();$('#srcNote').textContent=t('srcLbl');
 }
 function bindCars(){
   $$('.car').forEach(function(c){
@@ -451,19 +473,37 @@ function bindCars(){
   });
 }
 
-/* map: stylised region cells (illustrative, not survey-accurate) */
+/* map: simplified Saudi outline (own drawing from public geographic coordinates) with region markers */
 (function(){
-  var P=['M60 90 140 60 200 80 230 130 190 170 120 160 70 130Z','M70 130 120 160 130 230 90 270 55 220Z','M190 170 260 150 330 160 360 230 300 270 220 250 190 200Z','M120 160 190 170 190 200 220 250 180 270 130 230Z','M150 270 200 300 190 340 140 320 130 290Z','M130 290 150 270 180 270 190 340 160 350 120 330Z','M230 130 300 110 330 160 260 150Z','M140 60 230 40 300 50 300 110 230 130 200 80Z','M300 270 330 220 390 250 390 310 330 330Z','M330 160 400 140 440 200 360 230Z','M190 200 220 250 300 270 330 330 270 360 190 340Z','M230 40 330 20 400 60 330 110 300 110 300 50Z','M300 50 330 20 380 25 400 60 360 90Z'];
-  $('#ksa').innerHTML=P.map(function(d,i){return '<path d="'+d+'"><title>'+pick(D.regions[i])+'</title></path>'}).join('');
-  $('#ksa').addEventListener('mouseover',function(){});
+  var OUT=[[34.95,29.35],[35.2,28.0],[36.3,26.6],[37.2,25.5],[38.2,24.3],[39.0,22.5],[39.4,21.3],[40.3,20.0],[41.2,19.0],[41.9,17.7],[42.6,16.6],[43.1,16.7],[43.2,17.4],[44.6,17.4],[46.3,17.2],[47.6,17.3],[49.0,18.2],[52.0,19.0],[55.0,20.0],[55.67,22.0],[55.2,22.7],[52.6,22.95],[51.6,24.2],[50.8,24.7],[50.8,25.6],[50.15,26.1],[49.6,27.0],[48.9,27.7],[48.4,28.5],[47.7,28.55],[47.0,29.0],[46.55,29.1],[44.7,29.2],[42.1,31.1],[40.0,31.9],[39.2,32.15],[38.8,31.9],[37.0,31.5],[37.0,30.5],[36.5,29.5],[35.5,29.2]];
+  var CITY=[[46.7,24.7],[39.8,21.4],[50.1,26.4],[39.6,24.5],[42.5,18.2],[42.55,16.9],[43.97,26.3],[36.6,28.4],[41.5,20.0],[44.1,17.5],[41.7,27.5],[40.2,29.97],[41.0,30.98]];
+  var K=24,P=function(p){return [((p[0]-34.5)*0.91*K+8).toFixed(1),((32.4-p[1])*K+8).toFixed(1)]};
+  var d='M'+OUT.map(function(p){return P(p).join(' ')}).join('L')+'Z';
+  var svg=$('#ksa');svg.setAttribute('viewBox','0 0 480 410');
+  var dots=CITY.map(function(c,i){var p=P(c);return '<g class="rg" data-i="'+i+'" tabindex="0"><circle cx="'+p[0]+'" cy="'+p[1]+'" r="12" fill="transparent"/><circle class="dot" cx="'+p[0]+'" cy="'+p[1]+'" r="4.5"/><text x="'+(+p[0]+9)+'" y="'+(+p[1]+4)+'" class="rl"></text></g>'}).join('');
+  svg.innerHTML='<path class="out" d="'+d+'"/>'+dots;
+  window.mapLabels=function(){$$('.rg',svg).forEach(function(g){$('text',g).textContent=pick(D.regions[+g.dataset.i]);g.setAttribute('aria-label',pick(D.regions[+g.dataset.i]))})};
+  svg.addEventListener('click',function(e){var g=e.target.closest('.rg');if(!g)return;var tr=$('#car-r .track');document.getElementById('car-r').scrollIntoView({behavior:'smooth',block:'center'});var tl=tr.children[+g.dataset.i];if(tl)tr.scrollTo({left:tl.offsetLeft-tr.offsetLeft,behavior:'smooth'})});
 })();
 
 /* hero backdrop: drifting data grid (own artwork, no third-party media) */
 (function(){
   var c=$('#bgc'),x=c.getContext('2d'),w,h,pts=[],raf,mq=window.matchMedia('(prefers-reduced-motion:reduce)');
-  function size(){w=c.width=c.offsetWidth;h=c.height=c.offsetHeight;pts=[];for(var i=0;i<Math.min(90,w*h/16000|0);i++)pts.push({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*.25,vy:(Math.random()-.5)*.25})}
+  var bl=[];
+  function seedSky(){bl=[];var X=0,r=function(a,b){return a+Math.random()*(b-a)};while(X<w){var bw=r(24,64),bh=r(h*.06,h*.2);bl.push({x:X,w:bw,h:bh});X+=bw+r(2,10)}
+    var T=Math.floor(w*.62);bl.push({x:T,w:62,h:h*.46,tower:1});bl.push({x:T-120,w:44,h:h*.3});bl.push({x:T+110,w:50,h:h*.26})}
+  function drawSky(){
+    var g=x.createLinearGradient(0,h*.6,0,h);g.addColorStop(0,'rgba(9,40,52,0)');g.addColorStop(1,'rgba(9,40,52,.55)');
+    bl.forEach(function(b){var y=h-b.h;x.fillStyle=b.tower?'#14566b':'#0f3f50';
+      if(b.tower){x.beginPath();x.moveTo(b.x,h);x.lineTo(b.x,y+40);x.lineTo(b.x+b.w/2,y);x.lineTo(b.x+b.w,y+40);x.lineTo(b.x+b.w,h);x.closePath();x.fill();x.fillStyle='#0a2a36';x.beginPath();x.moveTo(b.x+b.w/2-10,y+40);x.lineTo(b.x+b.w/2,y+16);x.lineTo(b.x+b.w/2+10,y+40);x.closePath();x.fill()}
+      else x.fillRect(b.x,y,b.w,b.h);
+      x.fillStyle='rgba(150,225,235,.5)';for(var yy=y+10;yy<h-6;yy+=14)for(var xx=b.x+5;xx<b.x+b.w-4;xx+=9)if(((xx*7+yy*13)|0)%5===0)x.fillRect(xx,yy,3,5)});
+    x.fillStyle=g;x.fillRect(0,h*.6,w,h*.4);
+  }
+  function size(){w=c.width=c.offsetWidth;h=c.height=c.offsetHeight;seedSky();pts=[];for(var i=0;i<Math.min(90,w*h/16000|0);i++)pts.push({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*.25,vy:(Math.random()-.5)*.25})}
   function draw(){
     x.clearRect(0,0,w,h);
+    drawSky();
     pts.forEach(function(p){p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>w)p.vx*=-1;if(p.y<0||p.y>h)p.vy*=-1;x.fillStyle='#4aa9b7';x.fillRect(p.x,p.y,2,2)});
     for(var i=0;i<pts.length;i++)for(var j=i+1;j<pts.length;j++){var dx=pts[i].x-pts[j].x,dy=pts[i].y-pts[j].y,d=dx*dx+dy*dy;if(d<14000){x.strokeStyle='rgba(74,169,183,'+(.35-d/40000)+')';x.beginPath();x.moveTo(pts[i].x,pts[i].y);x.lineTo(pts[j].x,pts[j].y);x.stroke()}}
     if(!mq.matches)raf=requestAnimationFrame(draw);
@@ -493,7 +533,6 @@ $('#l-ar').onclick=function(){lang='ar';try{localStorage.setItem('gda-lang','ar'
 $('#burger').onclick=function(){$('#links').classList.toggle('open')};
 $('#mapCta').onclick=function(){document.getElementById('car-r').scrollIntoView({behavior:'smooth',block:'center'})};
 $('#searchBtn').onclick=function(){document.getElementById('explore').scrollIntoView({behavior:'smooth'})};
-$('#fbBtn').onclick=function(){location.href='mailto:'};
 render();
 if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}
 </script>
