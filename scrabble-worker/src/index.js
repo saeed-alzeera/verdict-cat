@@ -79,6 +79,19 @@ async function keyCheck(request, env) {
   }
 }
 
+// Who is the key's owner? Asks the sync worker (/auth/me). Returns {username} or null.
+// With a local SYNC_KEY (dev/tests) there are no accounts, so everyone is 'player'.
+async function identify(request, env) {
+  if (env.SYNC_KEY || !env.SYNC) return { username: 'player' };
+  const header = request.headers.get('Authorization') || '';
+  try {
+    const r = await env.SYNC.fetch('https://sync.internal/auth/me', { headers: { Authorization: header } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return { username: j.username || 'owner' };
+  } catch { return null; }
+}
+
 // null when the key is fine, otherwise the error response to send.
 async function rejectKey(request, env) {
   const k = await keyCheck(request, env);
@@ -108,9 +121,53 @@ export default {
       const bytes = new Uint8Array(12); crypto.getRandomValues(bytes);
       const roomId = Array.from(bytes, (x) => x.toString(16).padStart(2, '0')).join('');
       const stub = env.ROOM.get(env.ROOM.idFromName(roomId));
-      const res = await stub.init(body || {});
+      const res = await stub.init({ name: body && body.name, icon: body && body.icon });   // always 2-4 seats
       if (!res.ok) return json(request, env, { error: res.error }, 400);
       return json(request, env, { roomId, seat: res.seat, token: res.token, invite: res.invite, name: res.name, icon: res.icon }, 201);
+    }
+
+    // Other signed-in accounts, for the invite list.
+    if (url.pathname === '/users' && request.method === 'GET') {
+      const denied = await rejectKey(request, env);
+      if (denied) return denied;
+      const me = await identify(request, env);
+      let names = [];
+      try {
+        const r = env.SYNC && !env.SYNC_KEY
+          ? await env.SYNC.fetch('https://sync.internal/auth/names', { headers: { Authorization: request.headers.get('Authorization') } })
+          : null;
+        if (r && r.ok) names = (await r.json()).users || [];
+      } catch { /* list stays empty */ }
+      return json(request, env, { me: me && me.username, users: names.filter((n) => !me || n !== me.username) });
+    }
+
+    // Invite an account to a room: {token (your seat token), username}.
+    const inv = url.pathname.match(/^\/r\/([a-f0-9]{24})\/invite$/);
+    if (inv && request.method === 'POST') {
+      const denied = await rejectKey(request, env);
+      if (denied) return denied;
+      let body;
+      try { body = await request.json(); } catch { return json(request, env, { error: 'Bad JSON.' }, 400); }
+      const username = String((body && body.username) || '').trim().toLowerCase();
+      if (!/^[a-z0-9_-]{1,40}$/.test(username)) return json(request, env, { error: 'Unknown player.' }, 400);
+      const info = await env.ROOM.get(env.ROOM.idFromName(inv[1])).inviteFor(body.token);
+      if (!info.ok) return json(request, env, { error: info.error }, info.status || 400);
+      await env.INBOX.get(env.INBOX.idFromName('inbox')).add(username, { roomId: inv[1], invite: info.invite, from: info.from });
+      return json(request, env, { ok: true });
+    }
+
+    // Your pending invitations.
+    if (url.pathname === '/inbox' && (request.method === 'GET' || request.method === 'POST')) {
+      const denied = await rejectKey(request, env);
+      if (denied) return denied;
+      const me = await identify(request, env);
+      if (!me) return json(request, env, { error: 'Bad key.' }, 401);
+      const box = env.INBOX.get(env.INBOX.idFromName('inbox'));
+      if (request.method === 'POST') {   // dismiss {roomId}
+        let body; try { body = await request.json(); } catch { body = {}; }
+        await box.dismiss(me.username, body && body.roomId);
+      }
+      return json(request, env, { invites: await box.list(me.username) });
     }
 
     const m = url.pathname.match(/^\/r\/([a-f0-9]{24})\/(join|ws)$/);
@@ -130,7 +187,36 @@ export default {
   }
 };
 
+// One small Durable Object holding every account's pending invitations (they expire after an hour).
+const INBOX_TTL_MS = 60 * 60 * 1000;
+export class Inbox extends DurableObject {
+  async list(username) {
+    const all = (await this.ctx.storage.get('u:' + username)) || [];
+    const live = all.filter((i) => Date.now() - i.ts < INBOX_TTL_MS);
+    if (live.length !== all.length) await this.ctx.storage.put('u:' + username, live);
+    return live;
+  }
+  async add(username, inv) {
+    const live = (await this.list(username)).filter((i) => i.roomId !== inv.roomId);
+    live.push({ ...inv, ts: Date.now() });
+    await this.ctx.storage.put('u:' + username, live.slice(-20));
+  }
+  async dismiss(username, roomId) {
+    const live = (await this.list(username)).filter((i) => i.roomId !== roomId);
+    await this.ctx.storage.put('u:' + username, live);
+  }
+}
+
 export class Room extends DurableObject {
+  async inviteFor(token) {
+    const room = await this.load();
+    if (!room) return { ok: false, status: 404, error: 'Room not found.' };
+    const seat = seatForToken(room, token);
+    if (seat < 0) return { ok: false, status: 403, error: 'Not your room.' };
+    if (room.phase !== 'lobby') return { ok: false, status: 409, error: 'The game has already started.' };
+    return { ok: true, invite: room.inviteToken, from: room.seats[seat].name };
+  }
+
   async load() {
     if (this.room === undefined) this.room = (await this.ctx.storage.get('room')) || null;
     return this.room;

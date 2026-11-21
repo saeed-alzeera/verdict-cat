@@ -44,23 +44,14 @@
   <span id="conn"></span>
 </header>
 
-<!-- create a room -->
+<!-- home: players + invites -->
 <section class="screen" id="home"><div class="card">
-  <h2>Create a room</h2>
-  <p class="sub">You get an invite link to send. Friends need no key.</p>
-  <label class="f" for="gameKey">Sync key <span style="opacity:.7">(only you need it)</span></label>
-  <input type="password" id="gameKey" autocomplete="off" placeholder="paste your sync key"/>
-  <div class="hint" id="keyHint"></div>
-  <label class="f">Seats</label>
-  <div class="seg" id="seatSeg">
-    <button data-n="2">2</button><button data-n="3">3</button><button data-n="4" class="on">4</button>
-  </div>
-  <label class="f" for="hName">Your name</label>
-  <input type="text" id="hName" maxlength="14" autocomplete="nickname"/>
-  <label class="f">Your icon</label>
-  <div class="icons" id="hIcons"></div>
-  <div class="hint" id="hPrefill"></div>
-  <button class="btn primary" id="createBtn" style="width:100%;margin-top:18px">Create room</button>
+  <h2>Play Scrabble</h2>
+  <p class="sub">Invite players, or start a room and share the link.</p>
+  <div id="incoming"></div>
+  <button class="btn primary" id="createBtn" style="width:100%">Create room</button>
+  <label class="f">Players</label>
+  <div class="seats" id="userList"></div>
   <div class="err" id="homeErr"></div>
 </div></section>
 
@@ -86,6 +77,8 @@
     <label class="f" style="margin-top:0">Invite link — send this to your friends</label>
     <div class="invite"><input type="text" id="inviteUrl" readonly/><button class="btn" id="copyBtn">Copy</button><button class="btn" id="shareBtn" style="display:none">Share</button></div>
   </div>
+  <label class="f" id="lobbyUsersLbl" style="display:none">Invite players</label>
+  <div class="seats" id="lobbyUsers"></div>
   <button class="btn primary" id="startBtn" style="width:100%;margin-top:14px;display:none">Start game</button>
   <div class="hint" id="lobbyHint"></div>
   <div class="err" id="lobbyErr"></div>
@@ -164,41 +157,93 @@
   var roomId = hash.get('room') || hash.get('r') || '', invite = hash.get('i') || '';
   var validId = /^[a-f0-9]{24}$/.test(roomId);
 
-  // ---- create ----
-  var homePicker = null, joinPicker = null, seats = 4;
+  // ---- home: create a room, invite players ----
+  var homePicker = null, joinPicker = null;
+  function myKey() { return lsGet(LS_SYNC) || lsGet(LS_KEY) || ''; }
+  function myName() { return lsGet('verdict-cat-username') || ''; }
+  function myProfile() {
+    var p = profile();
+    return { name: myName() || (p && p.name) || '', icon: (p && ICONS.indexOf(p.icon) >= 0) ? p.icon : ICONS[Math.floor(Math.random() * ICONS.length)] };
+  }
+  function api(path, body) {
+    return fetch(WORKER + path, {
+      method: body ? 'POST' : 'GET',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + myKey() },
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(r.status === 401 ? 'Please sign in again.' : (j.error || 'Something went wrong.')); return j; }); });
+  }
+  function netErr(e) { return e.message === 'Failed to fetch' ? 'Could not reach the game server.' : e.message; }
+
+  var users = null;
+  function loadUsers() {
+    if (users) return Promise.resolve(users);
+    return api('/users').then(function (j) { users = j.users || []; return users; });
+  }
+  // Fill a list with every account and an Invite button each.
+  function paintUsers(boxId, errId) {
+    var box = $(boxId);
+    return loadUsers().then(function (list) {
+      box.innerHTML = '';
+      if (!list.length) { box.innerHTML = '<div class="hint">No other players yet.</div>'; return; }
+      list.forEach(function (u) {
+        var d = document.createElement('div'); d.className = 'seatrow';
+        var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = u;
+        var b = document.createElement('button'); b.className = 'btn'; b.textContent = 'Invite';
+        b.addEventListener('click', function () { inviteUser(u, b, errId); });
+        d.appendChild(nm); d.appendChild(b); box.appendChild(d);
+      });
+    }).catch(function (e) { $(errId).textContent = netErr(e); });
+  }
+  function inviteUser(username, btn, errId) {
+    $(errId).textContent = ''; btn.disabled = true;
+    (me ? Promise.resolve() : makeRoom())
+      .then(function () { return api('/r/' + roomId + '/invite', { token: me.token, username: username }); })
+      .then(function () { btn.textContent = 'Invited'; })
+      .catch(function (e) { btn.disabled = false; $(errId).textContent = netErr(e); });
+  }
+  // Creates a room (host = you). Resolves once you're seated; the lobby takes over.
+  function makeRoom() {
+    var p = myProfile();
+    return api('/rooms', { name: p.name, icon: p.icon }).then(function (x) {
+      enterRoom(x.roomId, { token: x.token, seat: x.seat, invite: x.invite }, { name: p.name || x.name, icon: p.icon });
+    });
+  }
   function initHome() {
     show('home');
-    homePicker = makePicker('hIcons', 'hName', 'hPrefill');
-    var syncKey = lsGet(LS_SYNC), own = lsGet(LS_KEY);
-    $('gameKey').value = syncKey || own || '';
-    if (syncKey) $('keyHint').textContent = 'Using the sync key already on this device.';
-    $('seatSeg').addEventListener('click', function (e) {
-      var b = e.target.closest('button'); if (!b) return;
-      seats = +b.dataset.n;
-      Array.prototype.forEach.call($('seatSeg').children, function (x) { x.classList.toggle('on', x === b); });
+    if (!myKey()) { $('homeErr').textContent = 'Sign in first.'; return; }
+    $('createBtn').addEventListener('click', function () {
+      $('homeErr').textContent = ''; $('createBtn').disabled = true;
+      makeRoom().catch(function (e) { $('homeErr').textContent = netErr(e); }).then(function () { $('createBtn').disabled = false; });
     });
-    $('createBtn').addEventListener('click', createRoom);
+    paintUsers('userList', 'homeErr');
+    api('/inbox').then(paintInbox).catch(function () { /* invites are optional */ });
   }
-  function createRoom() {
-    var key = $('gameKey').value.trim();
-    if (!key) { $('homeErr').textContent = 'Enter your sync key.'; return; }
-    $('homeErr').textContent = ''; $('createBtn').disabled = true;
-    fetch(WORKER + '/rooms', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-      body: JSON.stringify({ seats: seats, name: homePicker.name(), icon: homePicker.icon() })
-    }).then(function (r) { return r.json().then(function (j) { return { r: r, j: j }; }); })
-      .then(function (x) {
-        if (x.r.status === 401) throw new Error('That key isn’t right.');
-        if (!x.r.ok) throw new Error(x.j.error || 'Could not create the room.');
-        if (key !== lsGet(LS_SYNC)) lsSet(LS_KEY, key);   // only keep a copy when this device has no sync key
-        enterRoom(x.j.roomId, { token: x.j.token, seat: x.j.seat, invite: x.j.invite }, { name: homePicker.name() || x.j.name, icon: homePicker.icon() });
-      })
-      .catch(function (e) { $('homeErr').textContent = e.message === 'Failed to fetch' ? 'Could not reach the game server.' : e.message; })
-      .then(function () { $('createBtn').disabled = false; });
+  function paintInbox(j) {
+    var box = $('incoming'); box.innerHTML = '';
+    (j.invites || []).forEach(function (i) {
+      var d = document.createElement('div'); d.className = 'seatrow';
+      var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = i.from + ' invited you';
+      var b = document.createElement('button'); b.className = 'btn primary'; b.textContent = 'Join';
+      b.addEventListener('click', function () { roomId = i.roomId; invite = i.invite; autoJoin(); });
+      d.appendChild(nm); d.appendChild(b); box.appendChild(d);
+    });
   }
 
   // ---- join by invite ----
+  // Signed-in accounts go straight in under their own name; anyone else gets the name/icon page.
+  function autoJoin() {
+    var saved = lsGetJson(seatKey(roomId)), p = myProfile();
+    var body = { name: p.name, icon: p.icon, invite: invite };
+    if (saved && saved.token) body.token = saved.token;
+    fetch(WORKER + '/r/' + roomId + '/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (j) { return { r: r, j: j }; }); })
+      .then(function (x) {
+        if (!x.r.ok) throw new Error(x.j.error || 'Could not join.');
+        if (myKey()) api('/inbox', { roomId: roomId }).catch(function () {});
+        enterRoom(roomId, { token: x.j.token, seat: x.j.seat, invite: '' }, { name: p.name || x.j.name, icon: p.icon });
+      })
+      .catch(function (e) { dead('Can’t join this game', netErr(e)); });
+  }
   function initJoin() {
     show('join');
     joinPicker = makePicker('jIcons', 'jName', 'jPrefill');
@@ -285,11 +330,12 @@
 
   function seatMeta(i) { return S.seats[i] || { name: '?', icon: '' }; }
 
+  var lobbyUsersShown = false;
   function renderLobby() {
     var s = S, host = s.you === 0;
-    $('lobbySub').textContent = host ? 'Send the invite link, then start when everyone is in.' : 'Waiting for the host to start the game.';
+    $('lobbySub').textContent = host ? 'Invite players or send the link, then press Start (at least 2 players, up to 4).' : 'Waiting for the host to start the game.';
     var list = $('seatList'); list.innerHTML = '';
-    for (var i = 0; i < s.maxSeats; i++) {
+    for (var i = 0; i < s.seats.length; i++) {
       var d = document.createElement('div'), p = s.seats[i];
       d.className = 'seatrow' + (p ? '' : ' empty'); d.style.setProperty('--pc', COLORS[i]);
       if (p) {
@@ -311,6 +357,7 @@
     }
     $('startBtn').style.display = host ? 'block' : 'none';
     $('startBtn').disabled = s.seats.length < 2;
+    if (host && !lobbyUsersShown && myKey()) { lobbyUsersShown = true; $('lobbyUsersLbl').style.display = ''; paintUsers('lobbyUsers', 'lobbyErr'); }
     $('lobbyHint').textContent = host ? (s.seats.length < 2 ? 'You need at least one more player.' : s.seats.length + ' players ready. You can start now or wait for more.') : '';
     $('lobbyErr').textContent = '';
   }
@@ -578,7 +625,7 @@
   if (validId && saved && saved.token && !invite) {
     me = saved; connect();                                   // resume own seat (#room=…)
   } else if (validId && invite) {
-    initJoin();                                              // invite link: ask who they are, prefilled
+    if (myName()) autoJoin(); else initJoin();               // invite link: signed-in accounts go straight to the lobby
   } else if (validId) {
     dead('No seat in this room', 'Open the invite link the host sent you.');
   } else {

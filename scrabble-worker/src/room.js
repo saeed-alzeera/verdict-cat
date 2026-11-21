@@ -47,7 +47,7 @@ function pickIcon(room, wanted, exceptSeat) {
   return ICONS.find((i) => !taken.has(i)) || ICONS[0];
 }
 
-export function newRoom({ maxSeats, name, icon }) {
+export function newRoom({ maxSeats = Engine.MAX_PLAYERS, name, icon } = {}) {
   const seats = Number(maxSeats);
   if (!Number.isInteger(seats) || seats < Engine.MIN_PLAYERS || seats > Engine.MAX_PLAYERS)
     return { ok: false, error: 'Rooms hold ' + Engine.MIN_PLAYERS + '–' + Engine.MAX_PLAYERS + ' players.' };
