@@ -1,13 +1,13 @@
-// Run: node wordgrid-worker/src/room.test.js
+// Run: node scrabble-worker/src/room.test.js
 import assert from 'node:assert';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import Engine from '../../games/wordgrid/engine.js';
+import Engine from '../../games/scrabble/engine.js';
 import { newRoom, join, command, view, seatForToken, cleanName } from './room.js';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const TEXT = '\n' + fs.readFileSync(path.join(dir, '../../games/wordgrid/enable.txt'), 'utf8').trim() + '\n';
+const TEXT = '\n' + fs.readFileSync(path.join(dir, '../../games/scrabble/enable.txt'), 'utf8').trim() + '\n';
 const isWord = (w) => TEXT.includes('\n' + w + '\n');
 
 let n = 0;

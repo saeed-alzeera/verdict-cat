@@ -15,6 +15,7 @@
  *   POST   /auth/signup            { username, password, invite } -> { key, username }
  *   POST   /auth/login             { username, password }         -> { key, username }
  *   GET    /auth/me                -> { username, owner }
+ *   GET    /auth/names             -> { users: [username, ...] }  enabled accounts (any valid key; used by Scrabble's player list)
  *   POST   /auth/password          { password }  (key required)  set a new password
  *   POST   /auth/rotate            { password }  (key required)  new key, old one dies
  *   DELETE /auth/account           (key required) deletes the account and its sync data
@@ -595,6 +596,10 @@ export default {
     if (parts[0] === 'auth') {
       if (parts[1] === 'me' && parts.length === 2 && request.method === 'GET') {
         return json({ username: who.username, owner: who.owner, admin: who.owner || !!who.admin });
+      }
+      if (parts[1] === 'names' && parts.length === 2 && request.method === 'GET') {
+        const users = (await store.listUsers()).filter((u) => !u.disabled).map((u) => u.username);
+        return json({ users });
       }
       if (who.owner) return fail(400, 'The owner key is not an account');
       if (parts[1] === 'password' && parts.length === 2 && request.method === 'POST') {

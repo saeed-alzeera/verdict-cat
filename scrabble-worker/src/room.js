@@ -1,5 +1,5 @@
 /*
- * Wordgrid room logic: lobby, seats, tokens and commands. Pure functions over a
+ * Scrabble room logic: lobby, seats, tokens and commands. Pure functions over a
  * JSON-safe `room` object — no Cloudflare APIs — so it is unit-testable in Node.
  * The Durable Object in index.js loads/saves the room and fans out views.
  *
@@ -8,8 +8,8 @@
  *   seat token   issued per seat on join; identifies that seat for the WebSocket and
  *                lets the same browser rejoin after the game starts
  */
-import Engine from '../../games/wordgrid/engine.js';
-import ICONS from '../../games/wordgrid/icons.js';
+import Engine from '../../games/scrabble/engine.js';
+import ICONS from '../../games/scrabble/icons.js';
 
 export const MAX_NAME = 14;
 
@@ -47,7 +47,7 @@ function pickIcon(room, wanted, exceptSeat) {
   return ICONS.find((i) => !taken.has(i)) || ICONS[0];
 }
 
-export function newRoom({ maxSeats, name, icon }) {
+export function newRoom({ maxSeats = Engine.MAX_PLAYERS, name, icon } = {}) {
   const seats = Number(maxSeats);
   if (!Number.isInteger(seats) || seats < Engine.MIN_PLAYERS || seats > Engine.MAX_PLAYERS)
     return { ok: false, error: 'Rooms hold ' + Engine.MIN_PLAYERS + '–' + Engine.MAX_PLAYERS + ' players.' };

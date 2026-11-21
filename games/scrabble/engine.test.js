@@ -1,4 +1,4 @@
-// Run: node games/wordgrid/engine.test.js
+// Run: node games/scrabble/engine.test.js
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');

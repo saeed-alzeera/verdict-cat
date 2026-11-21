@@ -1,19 +1,19 @@
-name: Deploy Wordgrid Worker
+name: Deploy Scrabble Worker
 
 on:
   push:
     branches: [main]
     paths:
-      - "wordgrid-worker/**"
+      - "scrabble-worker/**"
       # the Worker bundles the shared engine, icon list and word list
-      - "games/wordgrid/engine.js"
-      - "games/wordgrid/icons.js"
-      - "games/wordgrid/enable.txt"
-      - ".github/workflows/deploy-wordgrid-worker.yml"
+      - "games/scrabble/engine.js"
+      - "games/scrabble/icons.js"
+      - "games/scrabble/enable.txt"
+      - ".github/workflows/deploy-scrabble-worker.yml"
   workflow_dispatch:
 
 concurrency:
-  group: deploy-wordgrid-worker
+  group: deploy-scrabble-worker
   cancel-in-progress: true
 
 jobs:
@@ -25,8 +25,8 @@ jobs:
 
       - name: Unit tests
         run: |
-          node games/wordgrid/engine.test.js
-          node wordgrid-worker/src/room.test.js
+          node games/scrabble/engine.test.js
+          node scrabble-worker/src/room.test.js
 
       # No secret to set: room creation is authorised by asking the sync worker (service
       # binding SYNC), so the sync key is only ever stored there.
@@ -34,4 +34,4 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          workingDirectory: "wordgrid-worker"
+          workingDirectory: "scrabble-worker"
