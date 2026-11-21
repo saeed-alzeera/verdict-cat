@@ -35,7 +35,7 @@ ALLOWED_ORIGINS = "https://saeed-alzeera.github.io,https://verdict-cat.pages.dev
 # key needs no change. Friends never see the key: they join by invite link.
 [[services]]
 binding = "SYNC"
-service = "gastat-data-aggregator-sync"
+service = "verdict-cat-sync"
 
 # Optional: `wrangler secret put SYNC_KEY` makes this Worker compare the key itself instead
 # (used for local development).

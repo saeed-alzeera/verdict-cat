@@ -2,7 +2,7 @@
 // session cookie. The cookie holds the user's sync key (HttpOnly, so page
 // scripts cannot read it) and is re-checked against the sync Worker, so
 // disabling a user or rotating a key locks them out here too.
-const WORKER = 'https://gastat-data-aggregator-sync.saeed-a-alzeera.workers.dev';
+const WORKER = 'https://verdict-cat-sync.saeed-a-alzeera.workers.dev';
 const COOKIE = 'vc_session';
 const MAX_AGE = 60 * 60 * 24 * 30;
 const cache = new Map(); // key -> expiry ms (per isolate, short-lived)

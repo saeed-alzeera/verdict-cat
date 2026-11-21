@@ -1,11 +1,11 @@
 (function(w) {
   var TS_SUFFIX = ':ts';
 
-  // Sync backend: the gastat-data-aggregator-sync Cloudflare Worker. Each person has their
+  // Sync backend: the verdict-cat-sync Cloudflare Worker. Each person has their
   // own account (username + password chosen on this site, no real-world
   // identity) and an auto-generated sync key. The key is what every request
   // sends; the password is only for getting the key onto a new device.
-  var WORKER    = 'https://gastat-data-aggregator-sync.saeed-a-alzeera.workers.dev';
+  var WORKER    = 'https://verdict-cat-sync.saeed-a-alzeera.workers.dev';
   var LS_KEY    = 'verdict-cat-sync-key';
   var LS_USER   = 'verdict-cat-username';
   var WORKER_ID = 'worker';  // sentinel returned by connect()
