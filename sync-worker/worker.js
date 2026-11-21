@@ -19,7 +19,7 @@
  *   POST   /auth/rotate            { password }  (key required)  new key, old one dies
  *   DELETE /auth/account           (key required) deletes the account and its sync data
  *   GET/POST /admin/invites, DELETE /admin/invites/:code, GET /admin/users,
- *   POST /admin/users { username, password }, POST /admin/users/:name/password { password }, DELETE /admin/users/:name, POST /admin/users/:name/(disable|enable)   owner key only
+ *   POST /admin/users { username, password }, POST /admin/users/:name/password { password }, POST /admin/users/:name/(admin|unadmin) (owner key only; admin users can use the rest of /admin but not Clyde or the owner's data), DELETE /admin/users/:name, POST /admin/users/:name/(disable|enable)   owner key only
  *
  *   GET    /ping                   auth check
  *   GET    /sync/:ns               -> { entries: { key: { value, ts } } }
@@ -187,7 +187,7 @@ async function authenticate(request, env, store) {
   const user = await store.userByUid(m[1]);
   if (!user || user.disabled) return null;
   if (!(await sameSecret(await sha256Hex(m[2]), user.key_hash))) return null;
-  return { uid: user.uid, owner: false, prefix: 'u' + user.uid + ':', username: user.username };
+  return { uid: user.uid, owner: false, admin: !!user.admin, prefix: 'u' + user.uid + ':', username: user.username };
 }
 
 function clientIp(request) {
@@ -235,6 +235,7 @@ export class SyncStore extends DurableObject {
     `);
     // Who uploaded a book (null for books that predate accounts).
     try { this.sql.exec('ALTER TABLE books ADD COLUMN uploader TEXT'); } catch (e) { /* already there */ }
+    try { this.sql.exec('ALTER TABLE users ADD COLUMN admin INTEGER NOT NULL DEFAULT 0'); } catch (e) { /* already there */ }
   }
 
   // ── Accounts ───────────────────────────────────────────────────────────
@@ -245,7 +246,7 @@ export class SyncStore extends DurableObject {
     return [...this.sql.exec('SELECT * FROM users WHERE username = ?', username)][0] || null;
   }
   listUsers() {
-    return [...this.sql.exec('SELECT uid, username, disabled, created_at FROM users ORDER BY created_at')];
+    return [...this.sql.exec('SELECT uid, username, disabled, admin, created_at FROM users ORDER BY created_at')];
   }
   // Atomically spends an invite and creates the account. Returns an error string or null.
   createUser(u, invite) {
@@ -281,6 +282,10 @@ export class SyncStore extends DurableObject {
       'UPDATE users SET salt = ?, pw_verifier = ?, key_hash = ?, key_wrapped = ? WHERE uid = ?',
       c.salt, c.pw_verifier, c.key_hash, c.key_wrapped, uid
     );
+  }
+  setAdmin(username, flag) {
+    this.sql.exec('UPDATE users SET admin = ? WHERE username = ?', flag ? 1 : 0, username);
+    return this.sql.exec('SELECT 1 FROM users WHERE username = ?', username).toArray().length > 0;
   }
   setDisabled(username, flag) {
     this.sql.exec('UPDATE users SET disabled = ? WHERE username = ?', flag ? 1 : 0, username);
@@ -589,7 +594,7 @@ export default {
 
     if (parts[0] === 'auth') {
       if (parts[1] === 'me' && parts.length === 2 && request.method === 'GET') {
-        return json({ username: who.username, owner: who.owner });
+        return json({ username: who.username, owner: who.owner, admin: who.owner || !!who.admin });
       }
       if (who.owner) return fail(400, 'The owner key is not an account');
       if (parts[1] === 'password' && parts.length === 2 && request.method === 'POST') {
@@ -620,7 +625,13 @@ export default {
 
     // Owner-only: invites, user management, Clyde.
     if (parts[0] === 'admin') {
-      if (!who.owner) return fail(403, 'Owner only');
+      if (!who.owner && !who.admin) return fail(403, 'Admin only');
+      if (parts[1] === 'users' && parts.length === 4 && request.method === 'POST' &&
+          (parts[3] === 'admin' || parts[3] === 'unadmin')) {
+        if (!who.owner) return fail(403, 'Owner only');
+        const found = await store.setAdmin(parts[2], parts[3] === 'admin');
+        return found ? json({ ok: true }) : fail(404, 'No such user');
+      }
       if (parts[1] === 'invites' && parts.length === 2 && request.method === 'GET') {
         return json({ invites: await store.listInvites() });
       }

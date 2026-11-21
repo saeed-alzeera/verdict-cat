@@ -156,6 +156,9 @@
         create: function(username, password) {
           return wfetch('/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username, password: password }) });
         },
+        setAdmin: function(name, flag) {
+          return wfetch('/admin/users/' + encodeURIComponent(name) + '/' + (flag ? 'admin' : 'unadmin'), { method: 'POST' });
+        },
         setPassword: function(name, password) {
           return wfetch('/admin/users/' + encodeURIComponent(name) + '/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: password }) });
         },
