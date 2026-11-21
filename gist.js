@@ -153,6 +153,13 @@
       },
       users: {
         list: async function() { return (await wfetch('/admin/users')).users || []; },
+        create: function(username, password) {
+          return wfetch('/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username, password: password }) });
+        },
+        setPassword: function(name, password) {
+          return wfetch('/admin/users/' + encodeURIComponent(name) + '/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: password }) });
+        },
+        remove: function(name) { return wfetch('/admin/users/' + encodeURIComponent(name), { method: 'DELETE' }); },
         setDisabled: function(name, disabled) {
           return wfetch('/admin/users/' + encodeURIComponent(name) + '/' + (disabled ? 'disable' : 'enable'), { method: 'POST' });
         }

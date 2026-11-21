@@ -19,7 +19,7 @@
  *   POST   /auth/rotate            { password }  (key required)  new key, old one dies
  *   DELETE /auth/account           (key required) deletes the account and its sync data
  *   GET/POST /admin/invites, DELETE /admin/invites/:code, GET /admin/users,
- *   POST /admin/users { username, password }, POST /admin/users/:name/(disable|enable)   owner key only
+ *   POST /admin/users { username, password }, POST /admin/users/:name/password { password }, DELETE /admin/users/:name, POST /admin/users/:name/(disable|enable)   owner key only
  *
  *   GET    /ping                   auth check
  *   GET    /sync/:ns               -> { entries: { key: { value, ts } } }
@@ -650,6 +650,23 @@ export default {
         const err = await store.createUserDirect(rec);
         if (err) return fail(409, err);
         return json({ ok: true, username });
+      }
+      if (parts[1] === 'users' && parts.length === 4 && parts[3] === 'password' && request.method === 'POST') {
+        const body = await readJson(request);
+        const password = body && typeof body.password === 'string' ? body.password : '';
+        if (!password || password.length > 256) return fail(400, 'Password required (max 256 characters)');
+        const user = await store.userByName(parts[2]);
+        if (!user) return fail(404, 'No such user');
+        // The old key is wrapped under the old password, so a reset issues a new key
+        // and signs the user out everywhere else.
+        await store.setCredentials(user.uid, await credentialRecord(password, newUserKey(user.uid)));
+        return json({ ok: true });
+      }
+      if (parts[1] === 'users' && parts.length === 3 && request.method === 'DELETE') {
+        const user = await store.userByName(parts[2]);
+        if (!user) return fail(404, 'No such user');
+        await store.deleteUser(user.uid);
+        return json({ ok: true });
       }
       if (parts[1] === 'users' && parts.length === 4 && request.method === 'POST' &&
           (parts[3] === 'disable' || parts[3] === 'enable')) {
