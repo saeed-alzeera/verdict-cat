@@ -1,5 +1,5 @@
 /*
- * verdict-cat sync + book storage.
+ * gastat-data-aggregator sync + book storage.
  *
  * Replaces the GitHub gist (progress/regions/snippets sync) and the GitHub
  * Contents API (book uploads) so the site no longer depends on a personal

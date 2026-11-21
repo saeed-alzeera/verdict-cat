@@ -1,5 +1,5 @@
 {
-  "name": "verdict-cat-wordgrid",
+  "name": "gastat-data-aggregator-wordgrid",
   "private": true,
   "type": "module",
   "scripts": {

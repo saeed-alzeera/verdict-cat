@@ -1,4 +1,4 @@
-const CACHE = 'verdict-cat-v4';
+const CACHE = 'gastat-data-aggregator-v5';
 
 // HTML documents are self-modifying (the library/reader pages get patched
 // in place on GitHub whenever a book is uploaded or deleted), so they must

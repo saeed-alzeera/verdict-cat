@@ -1,5 +1,5 @@
 {
-  "name": "verdict-cat-mods",
+  "name": "gastat-data-aggregator-mods",
   "owner": { "name": "saeed-alzeera" },
   "plugins": [{ "name": "task-tracker", "source": "./mods/task-tracker" }]
 }
