@@ -345,9 +345,14 @@
     // ── Books (uploads without GitHub) ────────────────────────────────────
     books: {
       list: async function() {
-        var resp = await fetch(WORKER + '/books', { cache: 'no-store' });
+        // Books are private: the list needs the key, and file URLs are rewritten
+        // to the same-origin /files/ proxy (cookie-gated by the Pages login).
+        var resp = await fetch(WORKER + '/books', { cache: 'no-store', headers: { 'Authorization': 'Bearer ' + syncKey() } });
         if (!resp.ok) throw new Error('Book catalogue unavailable (' + resp.status + ')');
-        return (await resp.json()).books || [];
+        var local = function(u) { return u && u.indexOf(WORKER + '/files/') === 0 ? u.slice(WORKER.length) : u; };
+        return ((await resp.json()).books || []).map(function(b) {
+          b.epub = local(b.epub); b.cover = local(b.cover); return b;
+        });
       },
       // opts: { slug, title, author, epub: File|Blob, cover?: Blob }
       upload: async function(opts) {

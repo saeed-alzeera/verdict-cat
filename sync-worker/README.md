@@ -9,8 +9,9 @@ depends on a GitHub personal access token any more.
   newer data.
 - **Books** — epubs and covers are stored as 1 MiB chunks in the same
   Durable Object (so everything runs on Cloudflare's free plan; no R2 and no
-  card needed). Uploads are capped at 25 MB. Reads are public (as the repo
-  files were); writes need the sync key.
+  card needed). Uploads are capped at 25 MB. Reads and writes both need a
+  valid key: books are private. The Pages login proxies `/files/*` with the
+  session key so `<img>` and the epub reader work same-origin.
 - **Auth** — `Authorization: Bearer <key>`. Two kinds of key:
   - the **owner key**, the `SYNC_KEY` Worker secret. Full access, and its data
     stays in the original namespaces; only this key can use Clyde, create
@@ -68,10 +69,10 @@ No storage quota. Existing data stays with the owner key; accounts start empty.
 | POST | `/admin/users/:name/(disable\|enable)` | owner | block / unblock an account |
 | GET | `/sync/:ns` | key | all entries `{ key: { value, ts } }` |
 | POST | `/sync/:ns` | key | `{ entries }` merged LWW; returns merged namespace |
-| GET | `/books` | – | catalogue (includes `hidden` markers) |
+| GET | `/books` | key | catalogue (includes `hidden` markers) |
 | PUT | `/books/:slug` | key | multipart `title`, `author`, `epub`, optional `cover` |
 | DELETE | `/books/:slug` | key | removes an upload; for a book baked into `library.html` records a hidden marker |
-| GET | `/files/*` | – | epub / cover bytes |
+| GET | `/files/*` | key | epub / cover bytes |
 
 Namespaces in use: `progress`, `regions`, `docs`.
 
@@ -95,3 +96,15 @@ are pruned after 30 days. The routine's environment must be allowed to reach
 A reply passes `parent`. Each run is still a fresh session, so the worker
 prepends the previous prompts and answers in the thread (up to 5 turns, each
 truncated) to the new task.
+
+## Loading the original books
+
+`books-manifest.json` lists the 20 books that used to live in `books/` in the
+repo. To load them into the private store from a folder holding the original
+files (`<dir>/*.epub` and `<dir>/covers/*`):
+
+```sh
+OWNER_KEY=<owner sync key> node sync-worker/upload-books.mjs /path/to/books
+```
+
+It is safe to re-run; each book is a PUT to `/books/:slug`.

@@ -73,7 +73,21 @@ export async function onRequest(context) {
     return new Response(null, { status: 302, headers: { Location: '/', 'Set-Cookie': cookie('', 0), 'Cache-Control': 'no-store' } });
   }
 
-  if (await keyValid(getCookie(request))) return next();
+  const key = getCookie(request);
+  if (await keyValid(key)) {
+    // Books live in private storage on the sync Worker; serve them same-origin
+    // with the session's key so they are only reachable when signed in.
+    if (url.pathname.startsWith('/files/') && (request.method === 'GET' || request.method === 'HEAD')) {
+      const headers = { Authorization: 'Bearer ' + key };
+      const inm = request.headers.get('If-None-Match');
+      if (inm) headers['If-None-Match'] = inm;
+      const r = await fetch(WORKER + url.pathname, { method: request.method, headers });
+      const out = new Headers(r.headers);
+      out.set('Cache-Control', 'private, max-age=3600');
+      return new Response(r.body, { status: r.status, headers: out });
+    }
+    return next();
+  }
 
   const wantsPage = request.method === 'GET' && (request.headers.get('Accept') || '').includes('text/html');
   if (wantsPage) return new Response(LOGIN_HTML, { status: 401, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
