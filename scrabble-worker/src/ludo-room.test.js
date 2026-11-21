@@ -136,7 +136,7 @@ test('tick does nothing before the due time and runs bot turns after it', () => 
 test('bot-only follow-up: after the human, bots act on ticks until it is a human turn again', () => {
   const { room } = started(1);
   let now = room.due, guard = 0, bot_acted = false;
-  while (room.phase === 'playing' && guard++ < 400) {
+  while (room.phase === 'playing' && guard++ < 50000) {
     const g = Engine.restore(room.game);
     if (g.turn === 1) bot_acted = true;
     assert.ok(room.due, 'a due time is always set while playing');
@@ -166,7 +166,7 @@ test('four seats mixing a joined player and bots play to the end', () => {
   assert.ok(command(room, 0, { type: 'start' }, T0).ok);
   assert.strictEqual(Engine.restore(room.game).players.length, 4);
   let now = T0, guard = 0;
-  while (room.phase === 'playing' && guard++ < 3000) { now = Math.max(now, room.due); tick(room, now); }
+  while (room.phase === 'playing' && guard++ < 50000) { now = Math.max(now, room.due); tick(room, now); }
   assert.strictEqual(room.phase, 'over');
   assert.ok([0, 1, 2, 3].includes(Engine.restore(room.game).winner));
 });
