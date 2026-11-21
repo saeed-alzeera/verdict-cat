@@ -266,7 +266,7 @@ function saveProgress() {
   LS.set('xw_prog_' + P.id, o); pushSoon('p:' + P.id, o);
 }
 
-/* ---------- sync (verdict-cat-sync worker, same sync key as the library) ---------- */
+/* ---------- sync (gastat-data-aggregator-sync worker, same sync key as the library) ---------- */
 const XW_NS = 'crossword';
 const canSync = () => window.Gist && Gist.mode() === 'worker';
 let pending = {}, pushT = 0;

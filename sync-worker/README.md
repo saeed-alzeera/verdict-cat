@@ -1,4 +1,4 @@
-# verdict-cat-sync
+# gastat-data-aggregator-sync
 
 Cloudflare Worker that replaces the GitHub gist (progress / regions / snippets
 sync) and the GitHub Contents API (book uploads), so nothing in the site
@@ -84,7 +84,7 @@ POST the final answer to `/clyde/result/:id` (authorised by a one-time per-run
 secret in an `X-Clyde-Secret` header, or by the sync key). The page polls `GET /clyde/run/:id` (sync key) for
 `{ status: running|done|timeout, result }`; runs time out after 10 minutes and
 are pruned after 30 days. The routine's environment must be allowed to reach
-`verdict-cat-sync.saeed-a-alzeera.workers.dev`. One-time setup:
+`gastat-data-aggregator-sync.saeed-a-alzeera.workers.dev`. One-time setup:
 
 1. At claude.ai/code/routines create a routine for this repo (prompt e.g.
    "Carry out the request that follows.") and add an **API** trigger; copy the

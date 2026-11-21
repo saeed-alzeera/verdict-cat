@@ -1,4 +1,4 @@
-# verdict-cat-wordgrid
+# gastat-data-aggregator-wordgrid
 
 Cloudflare Worker for **online Scrabble rooms** (2–4 players). It runs the same
 `games/scrabble/engine.js` as the browser, but the server is the referee: it
@@ -21,9 +21,9 @@ Object and code); it only learns yes/no. A leaked invite link only gets someone 
 ## Deploy
 
 Merge to `main` (or run **Deploy Scrabble Worker** from the Actions tab). It deploys to
-`https://verdict-cat-wordgrid.<your-subdomain>.workers.dev`; if your subdomain differs from the one
+`https://gastat-data-aggregator-wordgrid.<your-subdomain>.workers.dev`; if your subdomain differs from the one
 hard-coded in `games/scrabble/index.html`, update `DEFAULT_WORKER` there. Add any custom site
-domain to `ALLOWED_ORIGINS` in `wrangler.toml`. The `verdict-cat-sync` Worker must already exist
+domain to `ALLOWED_ORIGINS` in `wrangler.toml`. The `gastat-data-aggregator-sync` Worker must already exist
 (the binding points at it by name).
 
 ## Using it

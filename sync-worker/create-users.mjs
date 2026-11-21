@@ -2,7 +2,7 @@
 // Usage: OWNER_KEY=<owner sync key> node sync-worker/create-users.mjs [count]
 import { randomBytes } from 'node:crypto';
 
-const WORKER = process.env.WORKER_URL || 'https://verdict-cat-sync.saeed-a-alzeera.workers.dev';
+const WORKER = process.env.WORKER_URL || 'https://gastat-data-aggregator-sync.saeed-a-alzeera.workers.dev';
 const key = process.env.OWNER_KEY;
 const count = parseInt(process.argv[2] || '10', 10);
 if (!key) { console.error('Set OWNER_KEY to the owner sync key.'); process.exit(1); }

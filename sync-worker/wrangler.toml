@@ -1,4 +1,4 @@
-name = "verdict-cat-sync"
+name = "gastat-data-aggregator-sync"
 main = "worker.js"
 compatibility_date = "2024-09-23"
 

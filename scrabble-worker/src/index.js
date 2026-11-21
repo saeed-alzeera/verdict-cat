@@ -1,5 +1,5 @@
 /*
- * verdict-cat-wordgrid — online rooms for the Scrabble game.
+ * gastat-data-aggregator-wordgrid — online rooms for the Scrabble game.
  *
  *   Auth model:
  *     sync key       the same key as the sync worker, checked by asking that worker (service

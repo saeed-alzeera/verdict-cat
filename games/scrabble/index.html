@@ -122,7 +122,7 @@
   function lsGetJson(k) { try { return JSON.parse(lsGet(k)); } catch (e) { return null; } }
   var LS_SYNC = 'verdict-cat-sync-key', LS_KEY = 'wordgrid_key', LS_PROFILE = 'wordgrid_profile', seatKey = function (id) { return 'wordgrid_room_' + id; };
 
-  var WORKER = lsGet('wordgrid_worker') || 'https://verdict-cat-wordgrid.saeed-a-alzeera.workers.dev';
+  var WORKER = lsGet('wordgrid_worker') || 'https://gastat-data-aggregator-wordgrid.saeed-a-alzeera.workers.dev';
   function wsUrl(path) { return WORKER.replace(/^http/, 'ws') + path; }
 
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
