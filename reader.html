@@ -501,127 +501,15 @@
 <script>
   var isMobile = window.matchMedia('(max-width: 768px)').matches;
 
-  // ── Book catalogue (slug → raw GitHub URL) ────────────────────────────────
-  var BOOKS = {
-
-
-
-
-    "east-of-eden-john-steinbeck-z-library-sk-1lib-sk-z-lib-sk": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/east-of-eden-john-steinbeck-z-library-sk-1lib-sk-z-lib-sk.epub",
-      title: "East of Eden",
-      author: "John Steinbeck"
-    },
-    "enders-game-orson-scott-card-z-library-sk-1lib-sk-z-lib-sk": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/enders-game-orson-scott-card-z-library-sk-1lib-sk-z-lib-sk.epub",
-      title: "Ender's Game (Ender Wiggins Saga)",
-      author: "Orson Scott Card"
-    },
-    "the-yacoubian-building-alaa-al-aswany": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/the-yacoubian-building-alaa-al-aswany.epub",
-      title: "The Yacoubian Building",
-      author: "Alaa Al Aswany"
-    },
-    "welcome-to-glorious-tuga-francesca-segal": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/welcome-to-glorious-tuga-francesca-segal.epub",
-      title: "Welcome to Glorious Tuga",
-      author: "Francesca Segal"
-    },
-    "the-list-of-suspicious-things-jennie-z-library-sk-1lib-sk": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/the-list-of-suspicious-things-jennie-z-library-sk-1lib-sk.epub",
-      title: "The List of Suspicious Things",
-      author: "Godfrey, Jennie"
-    },
-
-    "lakeshire-park-megan-walker-z-library-sk-1lib-sk-z-lib-sk": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/lakeshire-park-megan-walker-z-library-sk-1lib-sk-z-lib-sk.epub",
-      title: "Lakeshire Park",
-      author: "Megan Walker"
-    },
-    "the-library-at-mount-char-scott-hawk-z-library-sk-1lib-sk": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/the-library-at-mount-char-scott-hawk-z-library-sk-1lib-sk.epub",
-      title: "The Library at Mount Char",
-      author: "Scott Hawkins"
-    },
-    "summer-fridays-a-novel-suzanne-rindell-z-library-sk-1lib-sk": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/summer-fridays-a-novel-suzanne-rindell-z-library-sk-1lib-sk.epub",
-      title: "Summer Fridays",
-      author: "Suzanne Rindell"
-    },
-    "just-for-the-summer-abby-jimenez-z-library-sk-1lib-sk-z-lib": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/just-for-the-summer-abby-jimenez-z-library-sk-1lib-sk-z-lib.epub",
-      title: "Just for the Summer",
-      author: "Abby Jimenez"
-    },
-    "glorious-exploits-ferdia-lennon-z-library-sk-1lib-sk-z-lib": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/glorious-exploits-ferdia-lennon-z-library-sk-1lib-sk-z-lib.epub",
-      title: "Glorious Exploits",
-      author: "Ferdia Lennon"
-    },
-    "dungeon-crawler-carl-matt-dinniman-z-library-sk-1lib-sk-z-l": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/dungeon-crawler-carl-matt-dinniman-z-library-sk-1lib-sk-z-l.epub",
-      title: "Dungeon Crawler Carl: A LitRPG/Gamelit Adventure",
-      author: "Matt Dinniman"
-    },
-    "eleanor-oliphant-is-completely-fine-z-library-sk-1lib-sk": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/eleanor-oliphant-is-completely-fine-z-library-sk-1lib-sk.epub",
-      title: "Eleanor Oliphant Is Completely Fine",
-      author: "Gail Honeyman"
-    },
-    "at-night-all-blood-is-black-david-di-z-library-sk-1lib-sk": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/at-night-all-blood-is-black-david-di-z-library-sk-1lib-sk.epub",
-      title: "At Night All Blood Is Black",
-      author: "David Diop"
-    },
-    "how-to-age-disgracefully-clare-pooley-z-library-sk-1lib-sk": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/how-to-age-disgracefully-clare-pooley-z-library-sk-1lib-sk.epub",
-      title: "How to Age Disgracefully",
-      author: "Clare Pooley"
-    },
-    "talking-at-night-claire-daverley-z-library-sk-1lib-sk-z-lib": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/talking-at-night-claire-daverley-z-library-sk-1lib-sk-z-lib.epub",
-      title: "Talking at Night (Italian Edition)",
-      author: "Claire Daverley"
-    },
-    "a-monster-calls-patrick-ness-z-library-sk-1lib-sk-z-lib-sk": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/a-monster-calls-patrick-ness-z-library-sk-1lib-sk-z-lib-sk.epub",
-      title: "Ness, Patrick - A Monster Calls",
-      author: "Ness, Patrick"
-    },
-    "the-secret-history-donna-tartt-z-library-sk-1lib-sk-z-lib-s": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/the-secret-history-donna-tartt-z-library-sk-1lib-sk-z-lib-s.epub",
-      title: "The Secret History",
-      author: "Donna Tartt"
-    },
-    "carls-doomsday-scenario-matt-dinniman-z-library-sk-1lib-sk": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/carls-doomsday-scenario-matt-dinniman-z-library-sk-1lib-sk.epub",
-      title: "Carl's Doomsday Scenario: Dungeon Crawler Carl Book 2",
-      author: "Matt Dinniman"
-    },
-    "the-time-machine-h-g-wells-z-library-sk-1lib-sk-z-lib-sk": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/the-time-machine-h-g-wells-z-library-sk-1lib-sk-z-lib-sk.epub",
-      title: "The Time Machine",
-      author: "H. G. Wells"
-    },
-    "when-the-cranes-fly-south-tranorna-f-z-library-sk-1lib-sk": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/when-the-cranes-fly-south-tranorna-f-z-library-sk-1lib-sk.epub",
-      title: "When the Cranes Fly South",
-      author: "Lisa Ridzén"
-    },
-    "cover-story-mhairi-mcfarlane-z-library-sk-1lib-sk-z-lib-sk": {
-      url: "https://raw.githubusercontent.com/saeed-alzeera/verdict-cat/main/books/cover-story-mhairi-mcfarlane-z-library-sk-1lib-sk-z-lib-sk.epub",
-      title: "Cover Story",
-      author: "Mhairi McFarlane"
-    }
-  };
+  // Books live in private storage on the sync worker (see resolveBook below).
+  var BOOKS = {};
   // ─────────────────────────────────────────────────────────────────────────
 
   var params = new URLSearchParams(location.search);
   var slug = params.get('book');
   var bookMeta = slug && BOOKS[slug];
 
-  // Books uploaded through the sync worker aren't listed in BOOKS above; look
-  // them up in the worker's catalogue instead.
+  // Look the book up in the worker's catalogue (needs sign-in).
   function resolveBook() {
     if (!slug) return Promise.resolve(null);
     return Gist.books.list().then(function(list) {

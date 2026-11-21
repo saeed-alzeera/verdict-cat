@@ -25,12 +25,12 @@
  *   GET    /sync/:ns               -> { entries: { key: { value, ts } } }
  *   POST   /sync/:ns               { entries: { key: { value, ts } } }
  *                                  last-writer-wins per key; returns merged ns
- *   GET    /books                  -> { books: [...] }  (includes hidden markers)
+ *   GET    /books                  -> { books: [...] }  (key required; includes hidden markers)
  *   PUT    /books/:slug            multipart: title, author, epub, [cover]
  *   DELETE /books/:slug            removes files; for a slug with no upload
  *                                  (a book baked into library.html) records a
  *                                  "hidden" marker instead
- *   GET    /files/*                epub / cover bytes
+ *   GET    /files/*                epub / cover bytes (key required)
  */
 import { DurableObject } from 'cloudflare:workers';
 
@@ -497,7 +497,10 @@ export default {
     const origin = url.origin;
     const isRead = request.method === 'GET' || request.method === 'HEAD';
 
-    // Public reads: catalogue and files.
+    // Catalogue and files need a valid key: books are not public.
+    if (isRead && (parts[0] === 'files' || parts[0] === 'books')) {
+      if (!(await authenticate(request, env, store))) return fail(401, 'Sign in required');
+    }
     if (isRead && parts[0] === 'files' && parts.length > 1) {
       const key = parts.slice(1).join('/');
       const meta = await store.getBlob(key, true);
@@ -505,7 +508,7 @@ export default {
       const headers = new Headers(CORS);
       headers.set('Content-Type', meta.type);
       headers.set('ETag', meta.etag);
-      headers.set('Cache-Control', 'public, max-age=3600');
+      headers.set('Cache-Control', 'private, max-age=3600');
       // Revalidating clients skip the (comparatively expensive) chunk read.
       if (request.headers.get('If-None-Match') === meta.etag) return new Response(null, { status: 304, headers });
       if (request.method === 'HEAD') {
