@@ -79,9 +79,10 @@
     var g = {
       rng: (opts.seed === undefined ? (Math.random() * 4294967296) | 0 : opts.seed | 0),
       players: players.map(function (p, i) {
-        return { name: p.name, bot: p.bot || null, color: seats[i], pawns: [-1, -1, -1, -1], captures: 0, lost: 0 };
+        return { name: p.name, bot: p.bot || null, color: seats[i], pawns: [-1, -1, -1, -1], captures: 0, lost: 0, rolls: 0 };
       }),
-      turn: 0, roll: null, sixes: 0, winner: null, moves: 0, last: null
+      turn: 0, roll: null, sixes: 0, winner: null, moves: 0, last: null,
+      easyStart: !!opts.easyStart      // everyone's very first roll is a 6
     };
     return g;
   }
@@ -114,7 +115,9 @@
   function roll(g, forced) {
     if (g.winner !== null) throw new Error('Game is over.');
     if (g.roll !== null) throw new Error('Move first.');
-    var v = forced || (1 + Math.floor(rand(g) * 6));
+    var me = g.players[g.turn];
+    var v = forced || ((g.easyStart && !me.rolls) ? 6 : 1 + Math.floor(rand(g) * 6));
+    me.rolls = (me.rolls || 0) + 1;
     g.last = null;
     if (v === 6) {
       g.sixes++;

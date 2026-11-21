@@ -134,7 +134,7 @@ export default {
       const bytes = new Uint8Array(12); crypto.getRandomValues(bytes);
       const roomId = Array.from(bytes, (x) => x.toString(16).padStart(2, '0')).join('');
       const stub = ROOMS.get(ROOMS.idFromName(roomId));
-      const res = await stub.init({ name: body && body.name, icon: body && body.icon, seats: ludo ? (body && body.seats) : undefined });   // always 2-4 seats
+      const res = await stub.init({ name: body && body.name, icon: body && body.icon, seats: ludo ? (body && body.seats) : undefined, easyStart: ludo ? (body && body.easyStart) : undefined });   // always 2-4 seats
       if (!res.ok) return json(request, env, { error: res.error }, 400);
       return json(request, env, { roomId, seat: res.seat, token: res.token, invite: res.invite, name: res.name, icon: res.icon }, 201);
     }

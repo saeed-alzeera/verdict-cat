@@ -210,4 +210,18 @@ test('bot-only games finish for every level and player count', () => {
   }));
 });
 
+test('easy start: everyone\'s first roll is a 6, later rolls are normal', () => {
+  const g = E.newGame([{ name: 'A' }, { name: 'B' }], { seed: 5, easyStart: true });
+  for (let i = 0; i < 2; i++) {
+    assert.strictEqual(E.roll(g).value, 6);
+    E.move(g, E.legalMoves(g)[0]);          // the 6 grants a bonus roll
+    const second = E.roll(g);               // now a normal roll
+    assert.ok(second.value >= 1 && second.value <= 6);
+    if (g.roll !== null) E.move(g, E.legalMoves(g)[0]);
+    while (g.turn === i) { E.roll(g); if (g.roll !== null) E.move(g, E.legalMoves(g)[0]); }
+  }
+  const off = E.newGame([{ name: 'A' }, { name: 'B' }], { seed: 5 });
+  assert.strictEqual(off.easyStart, false);
+});
+
 console.log(passed + ' tests passed');

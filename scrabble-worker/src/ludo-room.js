@@ -58,11 +58,11 @@ function addSeat(room, name, bot) {
   return entry;
 }
 
-export function newRoom({ maxSeats = Engine.MAX_PLAYERS, name } = {}) {
+export function newRoom({ maxSeats = Engine.MAX_PLAYERS, name, easyStart = false } = {}) {
   const seats = Number(maxSeats);
   if (!Number.isInteger(seats) || seats < Engine.MIN_PLAYERS || seats > Engine.MAX_PLAYERS)
     return { ok: false, error: 'Rooms hold ' + Engine.MIN_PLAYERS + '–' + Engine.MAX_PLAYERS + ' players.' };
-  const room = { phase: 'lobby', maxSeats: seats, inviteToken: randomToken(), seats: [], game: null, seq: 0, ev: null, due: null, createdAt: Date.now() };
+  const room = { phase: 'lobby', maxSeats: seats, easyStart: easyStart === true, inviteToken: randomToken(), seats: [], game: null, seq: 0, ev: null, due: null, chat: [], createdAt: Date.now() };
   const host = addSeat(room, name, null);
   return { ok: true, room, seat: host.seat, token: host.token, inviteToken: room.inviteToken };
 }
@@ -93,7 +93,7 @@ export function seatForToken(room, token) {
 
 function startGame(room, now) {
   const seed = crypto.getRandomValues(new Uint32Array(1))[0] | 0;
-  const g = Engine.newGame(room.seats.map((s) => ({ name: s.name, bot: s.bot })), { seed });
+  const g = Engine.newGame(room.seats.map((s) => ({ name: s.name, bot: s.bot })), { seed, easyStart: room.easyStart });
   room.game = Engine.serialize(g);
   room.phase = 'playing';
   room.ev = { seq: ++room.seq, type: 'start' };
@@ -141,6 +141,16 @@ export function command(room, seat, msg, now = Date.now()) {
   if (!msg || typeof msg.type !== 'string') return { ok: false, error: 'Bad message.' };
   const host = seat === 0;
 
+  if (msg.type === 'chat') {
+    const clean = String(msg.text == null ? '' : msg.text).replace(/[\u0000-\u001f\u007f<>&"]/g, '').replace(/\s+/g, ' ').trim();
+    const t = Array.from(clean).slice(0, 120).join('');
+    if (!t) return { ok: false, error: 'Say something first.' };
+    const me = room.seats[seat];
+    if (me.lastChat && now - me.lastChat < 600) return { ok: false, error: 'Slow down a little.' };
+    me.lastChat = now;
+    room.chat = (room.chat || []).concat([{ seat, name: me.name, text: t, ts: now }]).slice(-40);
+    return { ok: true, chat: true };
+  }
   if (msg.type === 'addBot') {
     if (!host) return { ok: false, error: 'Only the host can do that.' };
     if (room.phase !== 'lobby') return { ok: false, error: 'The game has already started.' };
@@ -211,7 +221,9 @@ export function view(room, seat, connected) {
     game: null,
     ev: room.ev,
     due: room.due,
-    turnMs: TURN_MS
+    turnMs: TURN_MS,
+    easyStart: !!room.easyStart,
+    chat: room.chat || []
   };
   if (seat === 0 && room.phase === 'lobby') v.invite = room.inviteToken;
   if (room.game) {
