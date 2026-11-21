@@ -64,6 +64,7 @@ No storage quota. Existing data stays with the owner key; accounts start empty.
 | GET/POST | `/admin/invites` | owner | list / create invite codes |
 | DELETE | `/admin/invites/:code` | owner | revoke an unused invite |
 | GET | `/admin/users` | owner | list accounts |
+| POST | `/admin/users` | owner | `{username, password}` create an account without an invite (see `create-users.mjs`) |
 | POST | `/admin/users/:name/(disable\|enable)` | owner | block / unblock an account |
 | GET | `/sync/:ns` | key | all entries `{ key: { value, ts } }` |
 | POST | `/sync/:ns` | key | `{ entries }` merged LWW; returns merged namespace |
