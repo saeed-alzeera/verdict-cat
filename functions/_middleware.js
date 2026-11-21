@@ -70,6 +70,13 @@ export async function onRequest(context) {
   const { request, next } = context;
   const url = new URL(request.url);
 
+  // The site moved to gastat-data-aggregator.pages.dev. The old production
+  // address forwards there (308 keeps the method and path). Only the exact old
+  // host is redirected; branch previews live on other hostnames.
+  if (url.hostname === 'verdict-cat.pages.dev') {
+    return new Response(null, { status: 308, headers: { Location: 'https://gastat-data-aggregator.pages.dev' + url.pathname + url.search, 'Cache-Control': 'no-store' } });
+  }
+
   if (url.pathname === '/__session' && request.method === 'POST') {
     let key = '';
     try { key = (await request.json()).key || ''; } catch (e) {}
