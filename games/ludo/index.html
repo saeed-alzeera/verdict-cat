@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Ludo</title>
+<style>
+:root[data-theme="dark"] {
+  --bg: #111418; --surface: #1a1d23; --surface2: #22262e;
+  --border: #2e3340; --border2: #3d4455;
+  --ink: #e8eaed; --muted: #8b9099; --faint: #4a5060;
+  --accent: #5b9bd5; --danger: #e05555; --ok: #4caf7d;
+  --cell: #2a303b; --cell-line: #151920; --centre-line: #0d1014;
+  --shadow: 0 4px 24px rgba(0,0,0,.5);
+}
+:root[data-theme="light"] {
+  --bg: #f0f2f5; --surface: #ffffff; --surface2: #e8eaed;
+  --border: #d0d5de; --border2: #b0b8c8;
+  --ink: #1a1d23; --muted: #5a6070; --faint: #a0a8b8;
+  --accent: #2563eb; --danger: #dc2626; --ok: #16a34a;
+  --cell: #ffffff; --cell-line: #c6ccd8; --centre-line: #9aa3b5;
+  --shadow: 0 4px 24px rgba(0,0,0,.12);
+}
+:root {
+  --c-blue: #3b7bd9; --c-yellow: #e8b923; --c-green: #3aa655; --c-red: #d9483b;
+  --t-blue: color-mix(in srgb, var(--c-blue) 55%, var(--cell));
+  --t-yellow: color-mix(in srgb, var(--c-yellow) 55%, var(--cell));
+  --t-green: color-mix(in srgb, var(--c-green) 55%, var(--cell));
+  --t-red: color-mix(in srgb, var(--c-red) 55%, var(--cell));
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { min-height: 100%; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 12px 10px 32px; -webkit-tap-highlight-color: transparent;
+}
+header { width: 100%; max-width: 620px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+header a, header button.link { color: var(--muted); font-size: 13px; text-decoration: none; background: none; border: 0; cursor: pointer; font: inherit; font-size: 13px; }
+header a:hover, header button.link:hover { color: var(--ink); }
+header h1 { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+button { font: inherit; color: var(--ink); }
+.btn { background: var(--surface2); border: 1px solid var(--border2); border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.screen { display: none; width: 100%; flex-direction: column; align-items: center; }
+.screen.on { display: flex; }
+
+/* ---- setup ---- */
+.card { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px; margin-top: 12px; }
+.card h2 { font-size: 18px; margin-bottom: 4px; }
+.card p.sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+.card label.f { display: block; font-size: 12px; color: var(--muted); margin: 14px 0 6px; }
+.seg { display: flex; gap: 6px; }
+.seg button { flex: 1; padding: 8px 0; border-radius: 8px; border: 1px solid var(--border2); background: var(--surface2); cursor: pointer; font-weight: 600; font-size: 13px; }
+.seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.seats { display: grid; gap: 8px; }
+.seatrow { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--border); border-left: 4px solid var(--pc); border-radius: 8px; padding: 6px 8px; }
+.seatrow input, .seatrow select { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 7px 8px; color: var(--ink); font: inherit; font-size: 13px; }
+.seatrow input { flex: 1; min-width: 0; }
+.seatrow select { flex: 0 1 120px; min-width: 0; }
+.seatrow .sw { width: 14px; height: 14px; border-radius: 50%; background: var(--pc); flex: none; }
+
+/* ---- game ---- */
+#game { max-width: 620px; gap: 10px; }
+.status { width: 100%; text-align: center; font-weight: 600; min-height: 24px; font-size: 15px; }
+.status .dotc { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.strip { width: 100%; display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 6px; }
+.pcard { background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--pc); border-radius: 8px; padding: 6px 8px; font-size: 11px; color: var(--muted); line-height: 1.35; }
+.pcard.turn { border-color: var(--pc); box-shadow: 0 0 0 2px color-mix(in srgb, var(--pc) 45%, transparent); }
+.pcard .nm { color: var(--ink); font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.boardwrap { width: min(96vw, 560px); position: relative; }
+#board {
+  position: relative; width: 100%; aspect-ratio: 1; border-radius: 10px; overflow: hidden;
+  background: var(--surface); box-shadow: var(--shadow); border: 1px solid var(--border);
+  display: grid; grid-template-columns: repeat(15, 1fr); grid-template-rows: repeat(15, 1fr);
+}
+.base { border-radius: 6px; margin: 0; }
+.base i { display: block; width: 100%; height: 100%; }
+.base.blue { background: var(--c-blue); } .base.yellow { background: var(--c-yellow); }
+.base.green { background: var(--c-green); } .base.red { background: var(--c-red); }
+.base .plate { position: absolute; inset: 16%; background: rgba(0,0,0,.28); border-radius: 12%; }
+.base { position: relative; }
+.cell { background: var(--cell); border: 1px solid var(--cell-line); position: relative; }
+.cell.t-blue { background: var(--t-blue); } .cell.t-yellow { background: var(--t-yellow); }
+.cell.t-green { background: var(--t-green); } .cell.t-red { background: var(--t-red); }
+.cell.s-blue { background: var(--c-blue); } .cell.s-yellow { background: var(--c-yellow); }
+.cell.s-green { background: var(--c-green); } .cell.s-red { background: var(--c-red); }
+.cell.safe::after { content: "★"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: calc(min(96vw, 560px) / 15 * .55); color: rgba(255,255,255,.55); }
+:root[data-theme="light"] .cell.safe:not([class*="s-"])::after { color: rgba(0,0,0,.35); }
+.centre { grid-area: 7 / 7 / 10 / 10; position: relative; border: 1px solid var(--centre-line); }
+.centre div { position: absolute; inset: 0; }
+.centre .n { background: var(--c-yellow); clip-path: polygon(0 0, 100% 0, 50% 50%); }
+.centre .e { background: var(--c-green); clip-path: polygon(100% 0, 100% 100%, 50% 50%); }
+.centre .s { background: var(--c-red); clip-path: polygon(0 100%, 100% 100%, 50% 50%); }
+.centre .w { background: var(--c-blue); clip-path: polygon(0 0, 0 100%, 50% 50%); }
+
+.pawn {
+  position: absolute; width: calc(100% / 15); height: calc(100% / 15); display: flex; align-items: center; justify-content: center;
+  transition: left .13s linear, top .13s linear, transform .15s; z-index: 2; border: 0; background: none; padding: 0; cursor: default;
+}
+.pawn svg { width: 82%; height: 82%; filter: drop-shadow(0 1px 1px rgba(0,0,0,.55)); }
+.pawn.small svg { width: 60%; height: 60%; }
+.pawn.can { cursor: pointer; z-index: 5; animation: hop .55s ease-in-out infinite; }
+.pawn.can::before { content: ""; position: absolute; inset: 6%; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 8px #fff; }
+@keyframes hop { 50% { transform: translateY(-14%) scale(1.06); } }
+.pawn .fill { fill: var(--pc); stroke: rgba(0,0,0,.45); stroke-width: 1.4; }
+.pawn .shine { fill: rgba(255,255,255,.35); }
+
+.dice-row { display: flex; align-items: center; justify-content: center; gap: 14px; min-height: 64px; }
+#die {
+  width: 56px; height: 56px; border-radius: 12px; background: #fff; border: 2px solid var(--border2); box-shadow: 0 3px 10px rgba(0,0,0,.35);
+  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: 7px; cursor: default; position: relative;
+}
+#die i { border-radius: 50%; margin: 18%; }
+#die i.on { background: #1a1d23; }
+#die.ready { cursor: pointer; border-color: var(--pc); box-shadow: 0 0 0 3px var(--pc), 0 3px 10px rgba(0,0,0,.35); animation: pulse 1s ease-in-out infinite; }
+#die.rolling { animation: shake .12s linear infinite; }
+@keyframes pulse { 50% { transform: scale(1.07); } }
+@keyframes shake { 25% { transform: rotate(-9deg); } 75% { transform: rotate(9deg); } }
+.hint { color: var(--muted); font-size: 12px; text-align: center; }
+.winner { text-align: center; }
+.err { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 18px; }
+.note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+.menu-btn { width: 100%; margin-top: 10px; padding: 14px; font-size: 15px; display: block; text-align: center; text-decoration: none; }
+.invite { display: flex; gap: 8px; margin: 8px 0 4px; }
+.invite input { flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: var(--ink); font: inherit; font-size: 12px; }
+.card input[type=text] { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 9px 10px; color: var(--ink); font: inherit; }
+.seatrow .tag { font-size: 11px; color: var(--muted); }
+.seatrow.empty { border-left-color: var(--border2); color: var(--muted); border-style: dashed; }
+.seatrow .nm { flex: 1; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); flex: none; }
+.dot.on { background: var(--ok); }
+.xbtn { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0 4px; }
+#conn { font-size: 11px; color: var(--muted); min-width: 60px; text-align: center; }
+#conn.bad { color: var(--danger); }
+.winner h2 { font-size: 22px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="../../index.html">← Hub</a>
+  <h1>Ludo</h1>
+  <span id="conn"></span>
+  <button class="link" id="themeBtn" type="button">Theme</button>
+</header>
+
+<!-- menu -->
+<section class="screen" id="menu"><div class="card">
+  <h2>Ludo</h2>
+  <p class="sub">Race all four pawns home. Roll a 6 to leave base.</p>
+  <div id="incoming"></div>
+  <button class="btn primary menu-btn" id="goOnline" type="button">Play online with friends</button>
+  <button class="btn menu-btn" id="goLocal" type="button">Play on this device (bots or pass-and-play)</button>
+</div></section>
+
+<!-- online home: create a room -->
+<section class="screen" id="online"><div class="card">
+  <h2>Play online</h2>
+  <p class="sub">Create a room, then send friends the link or invite players from the site. Add bots to fill empty seats.</p>
+  <label class="f">Players (seats)</label>
+  <div class="seg" id="seatSeg"></div>
+  <button class="btn primary" id="createBtn" style="width:100%;margin-top:18px" type="button">Create room</button>
+  <div class="err" id="onlineErr"></div>
+  <p class="note">Creating a room needs you to be signed in on the hub. Friends joining by link do not.</p>
+  <button class="btn" id="onlineBack" style="width:100%;margin-top:10px" type="button">Back</button>
+</div></section>
+
+<!-- join by invite link -->
+<section class="screen" id="join"><div class="card">
+  <h2>You're invited to a Ludo game</h2>
+  <label class="f">Your name</label>
+  <input type="text" id="jName" maxlength="14" autocomplete="nickname"/>
+  <button class="btn primary" id="joinBtn" style="width:100%;margin-top:16px" type="button">Join game</button>
+  <div class="err" id="joinErr"></div>
+</div></section>
+
+<!-- lobby -->
+<section class="screen" id="lobby"><div class="card">
+  <h2>Waiting room</h2>
+  <p class="sub" id="lobbySub"></p>
+  <div class="seats" id="seatList"></div>
+  <div id="hostTools" style="display:none">
+    <label class="f">Invite link</label>
+    <div class="invite"><input type="text" id="inviteUrl" readonly/><button class="btn" id="copyBtn" type="button">Copy</button><button class="btn" id="shareBtn" type="button" style="display:none">Share</button></div>
+    <label class="f">Add a bot</label>
+    <div class="invite"><select id="botLevel" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--ink);font:inherit"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select><button class="btn" id="addBotBtn" type="button">Add bot</button></div>
+    <label class="f" id="lobbyUsersLbl" style="display:none">Invite a signed-in player</label>
+    <div class="seats" id="lobbyUsers"></div>
+  </div>
+  <button class="btn primary" id="startOnline" style="width:100%;margin-top:18px;display:none" type="button">Start game</button>
+  <div class="note" id="lobbyHint"></div>
+  <div class="err" id="lobbyErr"></div>
+  <button class="btn" id="leaveLobby" style="width:100%;margin-top:10px" type="button">Leave</button>
+</div></section>
+
+<!-- dead end -->
+<section class="screen" id="dead"><div class="card"><h2 id="deadTitle"></h2><p class="sub" id="deadMsg"></p><button class="btn" id="deadBack" type="button">Back to start</button></div></section>
+
+<!-- local setup -->
+<section class="screen" id="setup"><div class="card">
+  <h2>Play on this device</h2>
+  <p class="sub">Race all four pawns home. Roll a 6 to leave base. Play bots, or pass the device around.</p>
+  <label class="f">Players</label>
+  <div class="seg" id="countSeg"></div>
+  <label class="f">Seats</label>
+  <div class="seats" id="seats"></div>
+  <button class="btn primary" id="startBtn" style="width:100%;margin-top:18px" type="button">Start game</button>
+  <button class="btn" id="resumeBtn" style="width:100%;margin-top:8px;display:none" type="button">Resume last game</button>
+  <button class="btn" id="localBack" style="width:100%;margin-top:8px" type="button">Back</button>
+</div></section>
+
+<!-- game -->
+<section class="screen" id="game">
+  <div class="strip" id="strip"></div>
+  <div class="status" id="status"></div>
+  <div class="boardwrap"><div id="board"></div></div>
+  <div class="dice-row"><button id="die" type="button" aria-label="Roll the die"></button></div>
+  <div class="hint" id="hint"></div>
+  <div style="display:flex;gap:8px"><button class="btn" id="newBtn" type="button">New game</button></div>
+</section>
+
+<script src="engine.js"></script>
+<script>
+(function () {
+  'use strict';
+  var E = window.LudoEngine;
+  var NAMES = ['Blue', 'Yellow', 'Green', 'Red'];
+  var CSS = ['var(--c-blue)', 'var(--c-yellow)', 'var(--c-green)', 'var(--c-red)'];
+  var KEY = 'ludo_game', TKEY = 'ludo_theme', PKEY = 'ludo_setup';
+  function $(id) { return document.getElementById(id); }
+  function ls(fn) { try { return fn(); } catch (e) { return null; } }
+
+  // ---- theme ----
+  function setTheme(t) { document.documentElement.dataset.theme = t; $('themeBtn').textContent = t === 'dark' ? 'Light' : 'Dark'; ls(function () { localStorage.setItem(TKEY, t); }); }
+  setTheme(ls(function () { return localStorage.getItem(TKEY); }) === 'light' ? 'light' : 'dark');
+  $('themeBtn').onclick = function () { setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); };
+
+  function show(id) { Array.prototype.forEach.call(document.querySelectorAll('.screen'), function (s) { s.classList.toggle('on', s.id === id); }); }
+  var mode = 'local';   // 'local' (this device) or 'online'
+
+  // ---- setup screen ----
+  var setup = ls(function () { return JSON.parse(localStorage.getItem(PKEY)); }) || { count: 4, seats: [] };
+  var DEFAULTS = [{ name: 'Player 1', bot: '' }, { name: 'Player 2', bot: 'medium' }, { name: 'Player 3', bot: 'medium' }, { name: 'Player 4', bot: 'medium' }];
+  for (var i = 0; i < 4; i++) if (!setup.seats[i]) setup.seats[i] = DEFAULTS[i];
+
+  function seatColors(n) { return E.SEATING[n]; }
+  function drawSetup() {
+    var seg = $('countSeg'); seg.innerHTML = '';
+    [2, 3, 4].forEach(function (n) {
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = n; b.className = n === setup.count ? 'on' : '';
+      b.onclick = function () { setup.count = n; drawSetup(); }; seg.appendChild(b);
+    });
+    var box = $('seats'); box.innerHTML = '';
+    var cols = seatColors(setup.count);
+    for (var i = 0; i < setup.count; i++) (function (i) {
+      var row = document.createElement('div'); row.className = 'seatrow'; row.style.setProperty('--pc', CSS[cols[i]]);
+      var sw = document.createElement('span'); sw.className = 'sw'; row.appendChild(sw);
+      var inp = document.createElement('input'); inp.type = 'text'; inp.maxLength = 14; inp.value = setup.seats[i].name; inp.setAttribute('aria-label', NAMES[cols[i]] + ' name');
+      inp.oninput = function () { setup.seats[i].name = inp.value; }; row.appendChild(inp);
+      var sel = document.createElement('select'); sel.setAttribute('aria-label', NAMES[cols[i]] + ' type');
+      [['', 'Human'], ['easy', 'Bot · Easy'], ['medium', 'Bot · Medium'], ['hard', 'Bot · Hard']].forEach(function (o) {
+        var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; if (o[0] === setup.seats[i].bot) op.selected = true; sel.appendChild(op);
+      });
+      sel.onchange = function () { setup.seats[i].bot = sel.value; }; row.appendChild(sel);
+      box.appendChild(row);
+    })(i);
+  }
+
+  // ---- game state ----
+  var g = null, busy = false, pawnEls = [], timers = [], token = 0;
+
+  function later(fn, ms) { var my = token; var t = setTimeout(function () { if (my === token) fn(); }, ms); timers.push(t); }
+  function stopAll() { token++; timers.forEach(clearTimeout); timers = []; busy = false; }
+  function save() { ls(function () { if (g && g.winner === null) localStorage.setItem(KEY, E.serialize(g)); else localStorage.removeItem(KEY); }); }
+
+  function pname(i) { return g.players[i].name.trim() || NAMES[g.players[i].color]; }
+
+  // ---- board build ----
+  var SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M12 2.5a4.2 4.2 0 0 1 2.4 7.7c2.4 1 3.6 3 4.1 5.3.2 1 .9 1.6 1.7 2.1.9.6.6 2.4-1 2.4H5.8c-1.6 0-1.9-1.8-1-2.4.8-.5 1.5-1.1 1.7-2.1.5-2.3 1.7-4.3 4.1-5.3A4.2 4.2 0 0 1 12 2.5z"/><ellipse class="shine" cx="10.4" cy="6.2" rx="1.5" ry="1.1"/></svg>';
+
+  function buildBoard() {
+    var b = $('board'); b.innerHTML = '';
+    var bases = [['blue', 1, 1], ['yellow', 1, 10], ['red', 10, 1], ['green', 10, 10]];
+    bases.forEach(function (x) {
+      var d = document.createElement('div'); d.className = 'base ' + x[0];
+      d.style.gridArea = x[1] + ' / ' + x[2] + ' / ' + (x[1] + 6) + ' / ' + (x[2] + 6);
+      d.innerHTML = '<span class="plate"></span>'; b.appendChild(d);
+    });
+    var cells = {};
+    function cell(r, c) {
+      var k = r + ',' + c; if (cells[k]) return cells[k];
+      var d = document.createElement('div'); d.className = 'cell'; d.style.gridArea = (r + 1) + ' / ' + (c + 1); b.appendChild(d); return (cells[k] = d);
+    }
+    E.RING_CELLS.forEach(function (rc, idx) {
+      var d = cell(rc[0], rc[1]);
+      E.COLORS.forEach(function (col, ci) { if (col.start === idx) d.classList.add('s-' + col.id); });
+      if ([0, 8, 13, 21, 26, 34, 39, 47].indexOf(idx) >= 0) d.classList.add('safe');
+    });
+    E.COLORS.forEach(function (col, ci) { for (var p = 51; p <= 55; p++) { var rc = E.cellOf(ci, p); cell(rc[0], rc[1]).classList.add('t-' + col.id); } });
+    var c = document.createElement('div'); c.className = 'centre'; c.innerHTML = '<div class="n"></div><div class="e"></div><div class="s"></div><div class="w"></div>'; b.appendChild(c);
+    // pawns
+    pawnEls = [];
+    g.players.forEach(function (p, pi) {
+      pawnEls[pi] = [];
+      for (var k = 0; k < 4; k++) (function (pi, k) {
+        var el = document.createElement('button'); el.type = 'button'; el.className = 'pawn'; el.style.setProperty('--pc', CSS[p.color]);
+        el.setAttribute('aria-label', pname(pi) + ' pawn ' + (k + 1)); el.innerHTML = SVG;
+        el.onclick = function () { onPawn(pi, k); }; b.appendChild(el); pawnEls[pi][k] = el;
+      })(pi, k);
+    });
+  }
+
+  function place(el, rc, dx, dy) { el.style.left = ((rc[1] + (dx || 0)) * 100 / 15) + '%'; el.style.top = ((rc[0] + (dy || 0)) * 100 / 15) + '%'; }
+
+  function render() {
+    var groups = {};
+    g.players.forEach(function (p, pi) {
+      p.pawns.forEach(function (pos, k) {
+        var rc = E.cellOf(p.color, pos, k), key = pos < 0 ? 'b' + pi + k : rc.join(',');
+        (groups[key] = groups[key] || []).push([pi, k, rc]);
+      });
+    });
+    Object.keys(groups).forEach(function (key) {
+      var list = groups[key], n = list.length;
+      list.forEach(function (it, i) {
+        var el = pawnEls[it[0]][it[1]];
+        el.classList.toggle('small', n > 1);
+        var dx = 0, dy = 0;
+        if (n > 1) { var a = (i / n) * Math.PI * 2; dx = Math.cos(a) * 0.22; dy = Math.sin(a) * 0.22; }
+        place(el, it[2], dx, dy);
+      });
+    });
+    drawStrip();
+  }
+
+  function drawStrip() {
+    var s = $('strip'); s.innerHTML = ''; s.style.setProperty('--n', g.players.length);
+    g.players.forEach(function (p, i) {
+      var d = document.createElement('div'); d.className = 'pcard' + (i === g.turn && g.winner === null ? ' turn' : ''); d.style.setProperty('--pc', CSS[p.color]);
+      d.innerHTML = '<div class="nm"></div>Home ' + E.homeCount(p) + '/4 · Caps ' + p.captures;
+      d.firstChild.textContent = pname(i) + (p.bot ? ' (bot)' : ''); s.appendChild(d);
+    });
+  }
+
+  // ---- die ----
+  var PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+  function face(n) {
+    var d = $('die'); d.innerHTML = '';
+    for (var i = 0; i < 9; i++) { var p = document.createElement('i'); if (n && PIPS[n].indexOf(i) >= 0) p.className = 'on'; d.appendChild(p); }
+    d.setAttribute('aria-label', n ? 'Die shows ' + n : 'Roll the die');
+  }
+  function dieReady(on) { var d = $('die'); d.classList.toggle('ready', on); d.disabled = !on; d.style.setProperty('--pc', CSS[g.players[g.turn].color]); }
+
+  function status(html, who) {
+    var s = $('status'); s.innerHTML = '';
+    if (who !== undefined) { var dot = document.createElement('span'); dot.className = 'dotc'; dot.style.background = CSS[g.players[who].color]; s.appendChild(dot); }
+    s.appendChild(document.createTextNode(html));
+  }
+  function clearCan() { pawnEls.forEach(function (row) { row.forEach(function (el) { el.classList.remove('can'); el.disabled = true; }); }); }
+
+  // ---- flow ----
+  function step() {
+    if (!g || g.winner !== null) return;
+    save(); render(); clearCan();
+    var p = g.players[g.turn];
+    if (p.bot) {
+      dieReady(false); status(pname(g.turn) + ' is thinking…', g.turn); $('hint').textContent = '';
+      later(doRoll, 650);
+    } else {
+      dieReady(true); status(pname(g.turn) + ', roll the die', g.turn); $('hint').textContent = 'Tap the die to roll.';
+    }
+  }
+
+  function doRoll() {
+    if (busy || g.roll !== null || g.winner !== null) return;
+    busy = true; dieReady(false); $('hint').textContent = '';
+    var d = $('die'); d.classList.add('rolling');
+    var n = 0, spin = setInterval(function () { face(1 + Math.floor(Math.random() * 6)); if (++n > 5) clearInterval(spin); }, 70);
+    timers.push(spin);
+    later(function () {
+      d.classList.remove('rolling');
+      var who = g.turn, r = E.roll(g);
+      face(r.value); busy = false;
+      if (r.forfeited) { status(pname(who) + ' rolled a third 6: turn lost.', who); later(step, 1400); return; }
+      if (r.passed) { status(pname(who) + ' rolled ' + r.value + ': no move' + (r.again ? ', roll again.' : '.'), who); later(step, 1100); return; }
+      var moves = E.legalMoves(g);
+      if (g.players[g.turn].bot) {
+        status(pname(g.turn) + ' rolled ' + r.value + '.', g.turn);
+        var pick = E.chooseMove(g, g.players[g.turn].bot);
+        highlight([pick]);
+        later(function () { doMove(pick); }, 700);
+      } else if (moves.length === 1) {
+        status(pname(g.turn) + ' rolled ' + r.value + '.', g.turn); highlight(moves);
+        later(function () { doMove(moves[0]); }, 550);
+      } else {
+        status(pname(g.turn) + ' rolled ' + r.value + ': pick a pawn.', g.turn); highlight(moves); $('hint').textContent = 'Tap a highlighted pawn.';
+      }
+    }, 450);
+  }
+
+  function highlight(moves) {
+    clearCan();
+    var humans = !g.players[g.turn].bot;
+    moves.forEach(function (k) { var el = pawnEls[g.turn][k]; el.classList.add('can'); el.disabled = !humans; });
+  }
+
+  function onPawn(pi, k) {
+    if (mode === 'online') return netPawn(pi, k);
+    if (busy || !g || pi !== g.turn || g.roll === null || g.players[pi].bot) return;
+    if (E.legalMoves(g).indexOf(k) < 0) return;
+    doMove(k);
+  }
+
+  // Slide a pawn square by square from `from` to `to`, then call done.
+  function hopPath(el, color, k, from, to, done) {
+    var path = [], i = 0;
+    if (from < 0) path.push(to); else for (var p = from + 1; p <= to; p++) path.push(p);
+    el.style.zIndex = 8;
+    (function hop() {
+      if (i >= path.length) { el.style.zIndex = ''; return done(); }
+      place(el, E.cellOf(color, path[i], k)); i++;
+      later(hop, from < 0 ? 200 : 140);
+    })();
+  }
+
+  function doMove(k) {
+    if (busy) return;
+    busy = true; clearCan(); $('hint').textContent = '';
+    var who = g.turn, res = E.move(g, k), color = g.players[who].color, el = pawnEls[who][k];
+    hopPath(el, color, k, res.from, res.to, land);
+    function land() {
+      busy = false; render();
+      var msg = pname(who) + ' moved ' + (res.roll) + '.';
+      if (res.captured.length) msg = pname(who) + ' captured ' + res.captured.map(function (c) { return pname(c.player); }).join(' and ') + '!';
+      else if (res.finished) msg = pname(who) + ' got a pawn home!';
+      if (res.won) { status(pname(who) + ' wins!', who); return win(who); }
+      if (res.again) msg += ' Rolling again.';
+      status(msg, who);
+      later(step, res.captured.length ? 900 : 650);
+    }
+  }
+
+  function win(who) {
+    save(); render(); dieReady(false);
+    $('hint').innerHTML = '';
+    var h = document.createElement('div'); h.className = 'winner';
+    h.innerHTML = '<h2></h2>'; h.firstChild.textContent = '🏆 ' + pname(who) + ' wins!';
+    var b = document.createElement('button'); b.className = 'btn primary'; b.type = 'button'; b.textContent = 'Play again';
+    b.onclick = function () { start(true); };
+    h.appendChild(b); $('hint').appendChild(h);
+  }
+
+  function start(again) {
+    stopAll();
+    var n = again && g ? g.players.length : setup.count;
+    var players = again && g ? g.players.map(function (p) { return { name: p.name, bot: p.bot }; })
+      : setup.seats.slice(0, n).map(function (s, i) { return { name: s.name.trim() || ('Player ' + (i + 1)), bot: s.bot || null }; });
+    if (!again) ls(function () { localStorage.setItem(PKEY, JSON.stringify(setup)); });
+    g = E.newGame(players);
+    begin();
+  }
+  function begin() { mode = 'local'; $('newBtn').textContent = 'New game'; show('game'); buildBoard(); face(0); render(); step(); }
+
+  $('startBtn').onclick = function () { start(false); };
+  $('die').onclick = function () {
+    if (mode === 'online') return netRoll();
+    if (g && g.roll === null && !g.players[g.turn].bot) doRoll();
+  };
+  $('newBtn').onclick = function () { if (mode === 'online') return leaveOnline(); stopAll(); ls(function () { localStorage.removeItem(KEY); }); g = null; show('setup'); drawSetup(); checkResume(); };
+
+  function checkResume() {
+    var s = ls(function () { return localStorage.getItem(KEY); });
+    $('resumeBtn').style.display = s ? 'block' : 'none';
+  }
+  $('resumeBtn').onclick = function () {
+    var s = ls(function () { return localStorage.getItem(KEY); });
+    if (!s) return;
+    try { g = E.restore(s); } catch (e) { return; }
+    stopAll(); begin();
+  };
+
+
+  // =====================================================================================
+  // Online mode: the server (Cloudflare Worker, same one as Scrabble) is the referee. It rolls
+  // the die, validates moves and plays the bots; this page only sends {roll}/{move} and animates
+  // what the server reports.
+  // =====================================================================================
+  var LS_SYNC = 'verdict-cat-sync-key', LS_KEY = 'wordgrid_key', LS_USER = 'verdict-cat-username', LS_NAME = 'ludo_name';
+  var WORKER = ls(function () { return localStorage.getItem('ludo_worker') || localStorage.getItem('wordgrid_worker'); }) || 'https://gastat-data-aggregator-wordgrid.saeed-a-alzeera.workers.dev';
+  function lsGet(k) { return ls(function () { return localStorage.getItem(k); }); }
+  function lsSet(k, v) { ls(function () { localStorage.setItem(k, v); }); }
+  function myKey() { return lsGet(LS_SYNC) || lsGet(LS_KEY) || ''; }
+  function myName() { return lsGet(LS_USER) || lsGet(LS_NAME) || ''; }
+  function seatKey(id) { return 'ludo_room_' + id; }
+  function wsUrl(path) { return WORKER.replace(/^http/, 'ws') + path; }
+  function api(path, body) {
+    return fetch(WORKER + '/ludo' + path, {
+      method: body ? 'POST' : 'GET',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + myKey() },
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(r.status === 401 ? 'Please sign in again on the hub.' : (j.error || 'Something went wrong.')); return j; }); });
+  }
+  function netErr(e) { return e.message === 'Failed to fetch' ? 'Could not reach the game server.' : e.message; }
+  function dead(title, msg) { $('deadTitle').textContent = title; $('deadMsg').textContent = msg; show('dead'); }
+
+  var net = { ws: null, me: null, roomId: '', S: null, queue: [], busy: false, lastSeq: null, retry: 0, gotState: false, closedByUs: false, ping: null, seats: 4, usersShown: false };
+
+  // ---- menu / create ----
+  $('goLocal').onclick = function () { mode = 'local'; show('setup'); drawSetup(); checkResume(); };
+  $('localBack').onclick = function () { show('menu'); };
+  $('goOnline').onclick = function () { mode = 'online'; show('online'); drawSeatSeg(); $('onlineErr').textContent = myKey() ? '' : 'Sign in on the hub to create a room (joining a friend’s link needs no account).'; };
+  $('onlineBack').onclick = function () { mode = 'local'; show('menu'); };
+  $('deadBack').onclick = function () { leaveOnline(); };
+  function drawSeatSeg() {
+    var seg = $('seatSeg'); seg.innerHTML = '';
+    [2, 3, 4].forEach(function (n) {
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = n; b.className = n === net.seats ? 'on' : '';
+      b.onclick = function () { net.seats = n; drawSeatSeg(); }; seg.appendChild(b);
+    });
+  }
+  $('createBtn').onclick = function () {
+    if (!myKey()) { $('onlineErr').textContent = 'Sign in on the hub first.'; return; }
+    $('onlineErr').textContent = ''; $('createBtn').disabled = true;
+    api('/rooms', { name: myName() || 'Host', seats: net.seats })
+      .then(function (x) { enterRoom(x.roomId, { token: x.token, seat: x.seat, invite: x.invite }); })
+      .catch(function (e) { $('onlineErr').textContent = netErr(e); })
+      .then(function () { $('createBtn').disabled = false; });
+  };
+
+  // ---- join by invite ----
+  var users = null;
+  function joinRequest(roomId, invite, name) {
+    var saved = ls(function () { return JSON.parse(localStorage.getItem(seatKey(roomId))); });
+    var body = { name: name, invite: invite };
+    if (saved && saved.token) body.token = saved.token;
+    return fetch(WORKER + '/ludo/r/' + roomId + '/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not join.'); return j; }); })
+      .then(function (j) { enterRoom(roomId, { token: j.token, seat: j.seat, invite: '' }); if (myKey()) api('/inbox', { roomId: roomId }).catch(function () {}); });
+  }
+  function startJoin(roomId, invite) {
+    mode = 'online';
+    if (lsGet(LS_USER)) {   // a signed-in account goes straight in under its own name
+      joinRequest(roomId, invite, lsGet(LS_USER)).catch(function (e) { dead('Can’t join this game', netErr(e)); });
+      return;
+    }
+    show('join'); $('jName').value = lsGet(LS_NAME) || '';
+    $('joinBtn').onclick = function () {
+      var nm = $('jName').value.trim(); lsSet(LS_NAME, nm);
+      $('joinErr').textContent = ''; $('joinBtn').disabled = true;
+      joinRequest(roomId, invite, nm).catch(function (e) { $('joinErr').textContent = netErr(e); }).then(function () { $('joinBtn').disabled = false; });
+    };
+  }
+  function paintInbox() {
+    var box = $('incoming'); box.innerHTML = '';
+    if (!myKey()) return;
+    api('/inbox').then(function (j) {
+      (j.invites || []).forEach(function (i) {
+        var d = document.createElement('div'); d.className = 'seatrow'; d.style.setProperty('--pc', 'var(--accent)');
+        var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = i.from + ' invited you';
+        var b = document.createElement('button'); b.className = 'btn primary'; b.type = 'button'; b.textContent = 'Join';
+        b.onclick = function () { startJoin(i.roomId, i.invite); };
+        d.appendChild(nm); d.appendChild(b); box.appendChild(d);
+      });
+    }).catch(function () { /* invites are optional */ });
+  }
+
+  // ---- connection ----
+  function enterRoom(id, seatInfo) {
+    net.roomId = id; net.me = seatInfo; net.S = null; net.queue = []; net.busy = false; net.lastSeq = null; net.gotState = false; net.usersShown = false;
+    lsSet(seatKey(id), JSON.stringify(seatInfo));
+    try { history.replaceState(null, '', location.pathname + '#room=' + id); } catch (e) { /* ignore */ }
+    mode = 'online'; stopAll(); connect();
+  }
+  function setConn(text, bad) { var c = $('conn'); c.textContent = text; c.className = bad ? 'bad' : ''; }
+  function connect() {
+    net.closedByUs = false; setConn('Connecting…');
+    var ws = net.ws = new WebSocket(wsUrl('/ludo/r/' + net.roomId + '/ws?t=' + encodeURIComponent(net.me.token)));
+    ws.onopen = function () { net.retry = 0; setConn(''); clearInterval(net.ping); net.ping = setInterval(function () { netSend({ type: 'ping' }); }, 40000); };
+    ws.onmessage = function (e) {
+      var m; try { m = JSON.parse(e.data); } catch (x) { return; }
+      if (m.type === 'state') { net.gotState = true; onNetState(m); }
+      else if (m.type === 'error') netFlash(m.message);
+    };
+    ws.onclose = function () {
+      clearInterval(net.ping);
+      if (net.closedByUs || ws !== net.ws) return;
+      net.retry++;
+      if (!net.gotState && net.retry >= 3) {
+        ls(function () { localStorage.removeItem(seatKey(net.roomId)); });
+        return dead('Can’t open this room', 'Your seat wasn’t recognised, or the room has expired. Ask the host for a fresh invite link.');
+      }
+      setConn('Reconnecting…', true);
+      setTimeout(function () { if (!net.closedByUs && ws === net.ws) connect(); }, Math.min(10000, 800 * Math.pow(2, net.retry - 1)));
+    };
+  }
+  function netSend(o) { if (net.ws && net.ws.readyState === 1) net.ws.send(JSON.stringify(o)); }
+  function netFlash(msg) { if (net.S && net.S.phase !== 'lobby') { $('hint').textContent = msg; } else $('lobbyErr').textContent = msg; }
+  function leaveOnline() {
+    net.closedByUs = true; clearInterval(net.ping); setConn('');
+    if (net.ws) { try { net.ws.close(); } catch (e) { /* ignore */ } net.ws = null; }
+    if (net.roomId) ls(function () { localStorage.removeItem(seatKey(net.roomId)); });
+    stopAll(); net.queue = []; net.busy = false; net.S = null; net.roomId = '';
+    g = null; pawnEls = []; mode = 'local';
+    try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ }
+    show('menu'); paintInbox();
+  }
+
+  // ---- state handling ----
+  function onNetState(m) {
+    if (m.phase === 'lobby') { net.S = m; renderLobby(m); show('lobby'); return; }
+    net.queue.push(m); pump();
+  }
+  function pump() {
+    if (net.busy || !net.queue.length) return;
+    // if we are far behind (tab was in the background), skip straight to the newest state
+    if (net.queue.length > 6) { net.queue = net.queue.slice(-1); net.lastSeq = null; }
+    var m = net.queue.shift(); net.busy = true;
+    applyState(m, function () { net.busy = false; pump(); });
+  }
+  function applyState(m, done) {
+    var ev = m.ev, first = net.lastSeq === null, isNew = !!ev && !first && ev.seq !== net.lastSeq;
+    if (ev) net.lastSeq = ev.seq; else if (first) net.lastSeq = -1;
+    var rebuild = first || !pawnEls.length || !g || g.players.length !== m.game.players.length || (ev && ev.type === 'start' && isNew);
+    function finish() { g = m.game; net.S = m; render(); netUi(m); done(); }
+    show('game');
+    $('newBtn').textContent = 'Leave room';
+    if (rebuild) { g = m.game; net.S = m; buildBoard(); face(ev && ev.type === 'roll' ? ev.value : (ev && ev.type === 'move' ? ev.roll : 0)); return finish(); }
+    if (!isNew) return finish();
+    var who = ev.player, name = m.game.players[who] ? m.game.players[who].name : '';
+    if (ev.type === 'roll') {
+      var d = $('die'); dieReady(false); d.classList.add('rolling');
+      var n = 0, spin = setInterval(function () { face(1 + Math.floor(Math.random() * 6)); if (++n > 4) clearInterval(spin); }, 70);
+      timers.push(spin);
+      later(function () {
+        d.classList.remove('rolling'); face(ev.value);
+        if (ev.forfeited) { status(name + ' rolled a third 6: turn lost.', who); return later(finish, 1100); }
+        if (ev.passed) { status(name + ' rolled ' + ev.value + ': no move' + (ev.again ? ', roll again.' : '.'), who); return later(finish, 900); }
+        status(name + ' rolled ' + ev.value + '.', who); later(finish, 250);
+      }, 450);
+    } else if (ev.type === 'move') {
+      face(ev.roll);
+      var color = g.players[who].color, el = pawnEls[who][ev.pawn];
+      hopPath(el, color, ev.pawn, ev.from, ev.to, function () {
+        var msg = name + ' moved ' + ev.roll + '.';
+        if (ev.captured.length) msg = name + ' captured ' + ev.captured.map(function (c) { return m.game.players[c.player].name; }).join(' and ') + '!';
+        else if (ev.finished) msg = name + ' got a pawn home!';
+        if (ev.won) msg = name + ' wins!';
+        status(msg, who);
+        g = m.game; render();
+        later(finish, ev.captured.length ? 700 : 250);
+      });
+    } else finish();
+  }
+
+  function netUi(m) {
+    var G = m.game, you = m.you, mine = G.turn === you, who = G.turn;
+    clearCan(); $('hint').textContent = '';
+    if (m.phase === 'over') { dieReady(false); return netWin(m); }
+    var name = G.players[who].name;
+    if (mine && G.roll === null) {
+      dieReady(true); status(name + ', roll the die', who); $('hint').textContent = 'Tap the die to roll.';
+    } else if (mine) {
+      dieReady(false);
+      G.legal.forEach(function (k) { var el = pawnEls[who][k]; el.classList.add('can'); el.disabled = false; });
+      status(name + ' rolled ' + G.roll + (G.legal.length > 1 ? ': pick a pawn.' : '.'), who);
+      if (G.legal.length > 1) $('hint').textContent = 'Tap a highlighted pawn.';
+    } else {
+      dieReady(false);
+      status(name + (G.players[who].bot ? ' is thinking…' : (G.roll === null ? ' is rolling…' : ' is moving…')), who);
+    }
+  }
+  function netWin(m) {
+    var G = m.game, w = G.winner;
+    status(G.players[w].name + ' wins!', w); dieReady(false);
+    var h = document.createElement('div'); h.className = 'winner'; h.innerHTML = '<h2></h2>'; h.firstChild.textContent = '🏆 ' + G.players[w].name + ' wins!';
+    if (m.you === 0) {
+      var b = document.createElement('button'); b.className = 'btn primary'; b.type = 'button'; b.textContent = 'Play again';
+      b.onclick = function () { netSend({ type: 'rematch' }); }; h.appendChild(b);
+    } else { var t = document.createElement('div'); t.className = 'hint'; t.textContent = 'Waiting for the host to start a rematch.'; h.appendChild(t); }
+    $('hint').innerHTML = ''; $('hint').appendChild(h);
+  }
+  function netRoll() {
+    var S = net.S; if (!S || S.phase !== 'playing' || S.game.turn !== S.you || S.game.roll !== null) return;
+    dieReady(false); netSend({ type: 'roll' });
+  }
+  function netPawn(pi, k) {
+    var S = net.S; if (!S || S.phase !== 'playing' || pi !== S.you || S.game.turn !== S.you || S.game.legal.indexOf(k) < 0) return;
+    clearCan(); netSend({ type: 'move', pawn: k });
+  }
+
+  // ---- lobby ----
+  function renderLobby(m) {
+    var host = m.you === 0;
+    $('lobbySub').textContent = host ? 'Send the link, invite players, or add bots. Start when you are ready (2 to ' + m.maxSeats + ' players).' : 'Waiting for the host to start the game.';
+    var list = $('seatList'); list.innerHTML = '';
+    var cols = E.SEATING[Math.max(2, Math.min(4, m.seats.length))] || [0, 1, 2, 3];
+    for (var i = 0; i < m.maxSeats; i++) (function (i) {
+      var d = document.createElement('div'), p = m.seats[i];
+      d.className = 'seatrow' + (p ? '' : ' empty'); d.style.setProperty('--pc', CSS[cols[i] !== undefined ? cols[i] : i]);
+      if (p) {
+        var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.name + (p.seat === m.you ? ' (you)' : '');
+        var tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = p.seat === 0 ? 'host' : (p.bot ? 'bot · ' + p.bot : '');
+        d.appendChild(nm); d.appendChild(tg);
+        if (p.bot && host) { var x = document.createElement('button'); x.className = 'xbtn'; x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'Remove bot'); x.onclick = function () { netSend({ type: 'removeBot', seat: p.seat }); }; d.appendChild(x); }
+        else { var dt = document.createElement('span'); dt.className = 'dot' + (p.connected ? ' on' : ''); dt.title = p.connected ? 'online' : 'offline'; d.appendChild(dt); }
+      } else { var w = document.createElement('span'); w.className = 'nm'; w.textContent = 'Waiting for player…'; d.appendChild(w); }
+      list.appendChild(d);
+    })(i);
+    var inv = m.invite || (net.me && net.me.invite);
+    $('hostTools').style.display = host ? 'block' : 'none';
+    if (host && inv) {
+      $('inviteUrl').value = location.origin + location.pathname + '#room=' + net.roomId + '&i=' + inv;
+      $('shareBtn').style.display = navigator.share ? '' : 'none';
+    }
+    $('addBotBtn').disabled = m.seats.length >= m.maxSeats;
+    $('startOnline').style.display = host ? 'block' : 'none';
+    $('startOnline').disabled = m.seats.length < 2;
+    $('lobbyHint').textContent = host ? (m.seats.length < 2 ? 'Add a bot or wait for a friend to join.' : m.seats.length + ' players ready.') : '';
+    $('lobbyErr').textContent = '';
+    if (host && !net.usersShown && myKey()) { net.usersShown = true; $('lobbyUsersLbl').style.display = ''; paintUsers(); }
+  }
+  function paintUsers() {
+    var box = $('lobbyUsers');
+    (users ? Promise.resolve(users) : fetch(WORKER + '/users', { headers: { Authorization: 'Bearer ' + myKey() } }).then(function (r) { return r.json(); }).then(function (j) { users = j.users || []; return users; }))
+      .then(function (list) {
+        box.innerHTML = '';
+        if (!list.length) { box.innerHTML = '<div class="note">No other players yet.</div>'; return; }
+        list.forEach(function (u) {
+          var d = document.createElement('div'); d.className = 'seatrow'; d.style.setProperty('--pc', 'var(--border2)');
+          var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = u;
+          var b = document.createElement('button'); b.className = 'btn'; b.type = 'button'; b.textContent = 'Invite';
+          b.onclick = function () {
+            b.disabled = true;
+            api('/r/' + net.roomId + '/invite', { token: net.me.token, username: u }).then(function () { b.textContent = 'Invited'; }).catch(function (e) { b.disabled = false; $('lobbyErr').textContent = netErr(e); });
+          };
+          d.appendChild(nm); d.appendChild(b); box.appendChild(d);
+        });
+      }).catch(function (e) { $('lobbyErr').textContent = netErr(e); });
+  }
+  $('copyBtn').onclick = function () {
+    var u = $('inviteUrl'); u.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(u.value) : Promise.reject()).catch(function () { document.execCommand('copy'); })
+      .then(function () { $('copyBtn').textContent = 'Copied'; setTimeout(function () { $('copyBtn').textContent = 'Copy'; }, 1500); });
+  };
+  $('shareBtn').onclick = function () { navigator.share({ title: 'Ludo', text: 'Join my Ludo game', url: $('inviteUrl').value }).catch(function () {}); };
+  $('addBotBtn').onclick = function () { netSend({ type: 'addBot', level: $('botLevel').value }); };
+  $('startOnline').onclick = function () { netSend({ type: 'start' }); };
+  $('leaveLobby').onclick = function () { leaveOnline(); };
+
+  // ---- routing ----
+  var hash = new URLSearchParams(location.hash.slice(1));
+  var hRoom = hash.get('room') || hash.get('r') || '', hInvite = hash.get('i') || '';
+  if (/^[a-f0-9]{24}$/.test(hRoom)) {
+    var saved = ls(function () { return JSON.parse(localStorage.getItem(seatKey(hRoom))); });
+    if (saved && saved.token) { mode = 'online'; enterRoom(hRoom, saved); }
+    else if (hInvite) startJoin(hRoom, hInvite);
+    else dead('Can’t open this room', 'Open the invite link your friend sent you.');
+  } else { show('menu'); paintInbox(); }
+
+})();
+</script>
+</body>
+</html>

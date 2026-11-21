@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node src/room.test.js",
+    "test": "node src/room.test.js && node src/ludo-room.test.js",
     "dev": "wrangler dev"
   }
 }

@@ -12,6 +12,10 @@ class_name = "Room"
 name = "INBOX"
 class_name = "Inbox"
 
+[[durable_objects.bindings]]
+name = "LUDO_ROOM"
+class_name = "LudoRoom"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Room"]
@@ -19,6 +23,10 @@ new_sqlite_classes = ["Room"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["Inbox"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["LudoRoom"]
 
 # The word list ships inside the Worker as a text module.
 [[rules]]

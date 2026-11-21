@@ -65,3 +65,17 @@ python3 -m http.server 8765                     # from the repo root
 ```
 
 Tests: `node games/scrabble/engine.test.js && node scrabble-worker/src/room.test.js`
+
+
+## Ludo rooms (same Worker)
+
+Online Ludo (2–4 seats, people and bots) uses the same Worker under the `/ludo/` prefix
+(`POST /ludo/rooms`, `POST /ludo/r/:id/join`, `GET /ludo/r/:id/ws`, `/ludo/r/:id/invite`,
+`/ludo/inbox`). It has its own Durable Object class, `LudoRoom` (migration `v3`), and its own
+inbox namespace, so Ludo invites never appear in Scrabble. It runs the shared
+`games/ludo/engine.js`: the server rolls the die from a seeded RNG that never leaves it,
+validates every move, plays the bot seats, and auto-plays a human who is idle for 30 seconds.
+Same credential model as Scrabble: your sync key creates a room, friends join by invite link,
+each seat has its own token. Rooms delete themselves after 3 idle days.
+
+Tests: `npm test` here (also run by the deploy workflow).
