@@ -9,6 +9,7 @@ const COOKIE = 'vc_session';
 // reset or the account being disabled.
 const MAX_AGE = 60 * 60 * 24 * 180;
 const cache = new Map(); // key -> expiry ms (per isolate, short-lived)
+const PUBLIC_PATHS = new Set(['/', '/index.html', '/sw.js', '/favicon.svg', '/favicon.ico', '/favicon-32.png', '/favicon-180.png']);
 
 async function keyValid(key) {
   if (!key || key.length > 200) return false;
@@ -81,6 +82,10 @@ export async function onRequest(context) {
   if (url.pathname === '/__logout') {
     return new Response(null, { status: 302, headers: { Location: '/', 'Set-Cookie': cookie('', 0), 'Cache-Control': 'no-store' } });
   }
+
+  // The public homepage (and the few static files it needs) is served to
+  // everyone, signed in or not. Everything else below still requires a session.
+  if ((request.method === 'GET' || request.method === 'HEAD') && PUBLIC_PATHS.has(url.pathname)) return next();
 
   const key = getCookie(request);
   if (await keyValid(key)) {

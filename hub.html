@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>GASTAT DATA AGGREGATOR</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
+<link rel="shortcut icon" href="favicon.ico" />
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #1a1d23;
+    --line: #2e3238;
+    --ink: #e8eaed;
+    --muted: #8b9099;
+    --accent: #5b9bd5;
+    --warn: #e8a730;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; line-height: 1.45;
+    min-height: 100vh;
+  }
+
+
+  /* ── Hub ── */
+  #hub {
+    display: none;
+    min-height: 100vh;
+    align-items: center; justify-content: center;
+    flex-direction: column;
+    padding: 40px 20px;
+  }
+  #hub h1 { font-size: 20px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+  #hub .sub { font-size: 13px; color: var(--muted); margin: 0 0 36px; }
+
+  .hub-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+    width: 100%;
+    max-width: 680px;
+  }
+  .hub-card {
+    flex: 1 1 180px;
+    max-width: 200px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 28px 20px 24px;
+    text-align: center;
+    cursor: pointer;
+    text-decoration: none;
+    color: var(--ink);
+    transition: border-color 0.15s, transform 0.15s;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  .hub-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .hub-card .icon { font-size: 32px; line-height: 1; }
+  .hub-card .label { font-size: 15px; font-weight: 600; }
+  .hub-card .desc  { font-size: 12px; color: var(--muted); }
+
+  /* ── Hub topbar ── */
+  #hub-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 48px;
+    display: none;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 20px;
+    z-index: 500;
+  }
+  #pat-btn {
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  #pat-btn:hover { border-color: var(--accent); color: var(--accent); }
+  #pat-btn.active { border-color: var(--accent); color: var(--accent); }
+
+  /* ── PAT modal ── */
+  #pat-modal {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #pat-box {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 32px 36px;
+    width: 420px;
+    max-width: calc(100vw - 32px);
+  }
+  #pat-box h2 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+  #pat-box .pat-sub { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 20px; }
+  #pat-box .pat-steps { margin: 0 0 18px 18px; }
+  #pat-box .pat-steps li { font-size: 13px; color: var(--ink); line-height: 1.7; }
+  #pat-box .pat-steps a { color: var(--accent); text-decoration: none; }
+  #pat-box .pat-steps a:hover { text-decoration: underline; }
+  #pat-input {
+    width: 100%; padding: 10px 12px;
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; color: var(--ink);
+    font-size: 14px; font-family: monospace; outline: none;
+    margin-bottom: 8px; transition: border-color 0.15s;
+  }
+  #pat-input:focus { border-color: var(--accent); }
+  #pat-save {
+    width: 100%; padding: 10px;
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    margin-bottom: 8px; transition: opacity 0.15s;
+  }
+  #pat-save:hover { opacity: 0.88; }
+  #pat-remove {
+    width: 100%; padding: 8px;
+    background: none; border: 1px solid var(--line);
+    border-radius: 8px; color: #e05c5c;
+    font-size: 13px; cursor: pointer;
+    margin-bottom: 6px;
+    transition: border-color 0.15s;
+  }
+  #pat-remove:hover { border-color: #e05c5c; }
+  #pat-cancel {
+    width: 100%; padding: 8px;
+    background: none; border: 1px solid var(--line);
+    border-radius: 8px; color: var(--muted);
+    font-size: 13px; cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  #pat-cancel:hover { border-color: var(--muted); color: var(--ink); }
+</style>
+</head>
+<body>
+
+<!-- Hub topbar -->
+<div id="hub-bar">
+  <button id="pat-btn" onclick="openPATModal()">Sync Key</button>
+</div>
+
+<!-- Hub page -->
+<div id="hub">
+  <h1>GASTAT DATA AGGREGATOR</h1>
+  <p class="sub">Choose a section</p>
+  <div class="hub-cards">
+    <div class="hub-card" onclick="go('library.html')">
+      <div class="icon">📚</div>
+      <div class="label">Library</div>
+      <div class="desc">Browse &amp; read books</div>
+    </div>
+<div class="hub-card" onclick="go('keybr/index.html')">
+      <div class="icon">⌨️</div>
+      <div class="label">Keybr</div>
+      <div class="desc">Typing speed trainer</div>
+    </div>
+    <div class="hub-card" onclick="go('text-transport.html')">
+      <div class="icon">📋</div>
+      <div class="label">Text Transporter</div>
+      <div class="desc">Paste here, copy anywhere</div>
+    </div>
+    <div class="hub-card" onclick="go('markdown-editor.html')">
+      <div class="icon">📝</div>
+      <div class="label">Markdown Editor</div>
+      <div class="desc">Write &amp; preview Markdown</div>
+    </div>
+    <div class="hub-card" onclick="go('games/scrabble/')">
+      <div class="icon">🔤</div>
+      <div class="label">Scrabble</div>
+      <div class="desc">Online word game for 2–4 players</div>
+    </div>
+    <div class="hub-card" onclick="go('reso.html')">
+      <div class="icon">🗂️</div>
+      <div class="label">Reso</div>
+      <div class="desc">Texas, SEC Financials &amp; Numbers</div>
+    </div>
+    <div class="hub-card" onclick="go('bigcos.html')">
+      <div class="icon">🏢</div>
+      <div class="label">Big Cos.</div>
+      <div class="desc">Large organizations I track</div>
+    </div>
+    <div class="hub-card" onclick="go('clyde.html')">
+      <div class="icon">🤖</div>
+      <div class="label">Clyde</div>
+      <div class="desc">Send prompts and commands</div>
+    </div>
+  </div>
+</div>
+
+<script src="gist.js?v=8"></script>
+<script>
+  function showHub() {
+        document.getElementById('hub').style.display = 'flex';
+    document.getElementById('hub-bar').style.display = 'flex';
+    updatePATBtn();
+  }
+
+  function updatePATBtn() {
+    var btn = document.getElementById('pat-btn');
+    if (Gist.isConnected()) {
+      btn.classList.add('active');
+      btn.textContent = Gist.username() ? 'Sync: ' + Gist.username() : 'Sync: on';
+    } else {
+      btn.classList.remove('active');
+      btn.textContent = 'Sign in to sync';
+    }
+  }
+
+  function openPATModal() {
+    Gist.showAccountDialog({ onChange: updatePATBtn });
+  }
+
+
+  function go(page) {
+    window.location.replace(page);
+  }
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js');
+  }
+
+  (function () {
+    showHub();
+  })();
+</script>
+</body>
+</html>
