@@ -38,7 +38,7 @@ h1{font-size:20px;margin:0 0 6px}p{font-size:13px;color:#8b9099;margin:0 0 16px}
 input{width:100%;box-sizing:border-box;padding:10px 12px;margin-bottom:10px;background:#0f1117;color:#e8eaed;border:1px solid #2e3238;border-radius:8px;font-size:15px}
 button{width:100%;padding:10px;border:0;border-radius:8px;background:#5b9bd5;color:#fff;font-size:15px;cursor:pointer}
 button:disabled{opacity:.5}a{display:block;margin-top:12px;font-size:12px;color:#8b9099;cursor:pointer}#e{color:#e05c5c;font-size:13px;min-height:18px;margin-bottom:8px}
-</style></head><body><form id="f"><h1>Sign in</h1><p>Use your Verdict Cat account.</p>
+</style></head><body><form id="f"><h1>Sign in</h1><p>Use your GASTAT DATA AGGREGATOR account.</p>
 <input id="u" placeholder="Username" autocomplete="username" autocapitalize="none" spellcheck="false" autofocus>
 <input id="p" type="password" placeholder="Password" autocomplete="current-password">
 <input id="i" placeholder="Invite code" autocomplete="off" style="display:none">
