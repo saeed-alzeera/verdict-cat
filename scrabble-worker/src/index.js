@@ -1,5 +1,5 @@
 /*
- * verdict-cat-wordgrid — online rooms for the Wordgrid game.
+ * verdict-cat-wordgrid — online rooms for the Scrabble game.
  *
  *   Auth model:
  *     sync key       the same key as the sync worker, checked by asking that worker (service
@@ -14,7 +14,7 @@
  *   GET  /ping            key    check a key
  */
 import { DurableObject } from 'cloudflare:workers';
-import WORDS from '../../games/wordgrid/enable.txt';
+import WORDS from '../../games/scrabble/enable.txt';
 import { newRoom, join, command, view, seatForToken } from './room.js';
 
 // Dictionary lookup without parsing 173k words into a Set (a cold start would

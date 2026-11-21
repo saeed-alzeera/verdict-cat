@@ -20,7 +20,7 @@ fallthrough = true
 
 [vars]
 # Browsers from these origins may call the API / open sockets. Add your own domain if you use one.
-ALLOWED_ORIGINS = "https://saeed-alzeera.github.io,http://127.0.0.1:8765,http://localhost:8765"
+ALLOWED_ORIGINS = "https://saeed-alzeera.github.io,https://verdict-cat.pages.dev,http://127.0.0.1:8765,http://localhost:8765"
 
 # Room creation is allowed when the sync worker accepts the presented key. This binding
 # lets this Worker ask it directly; no secret has to be copied here, and rotating the sync

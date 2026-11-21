@@ -1,7 +1,7 @@
 # verdict-cat-wordgrid
 
-Cloudflare Worker for **online Wordgrid rooms** (2–4 players). It runs the same
-`games/wordgrid/engine.js` as the browser, but the server is the referee: it
+Cloudflare Worker for **online Scrabble rooms** (2–4 players). It runs the same
+`games/scrabble/engine.js` as the browser, but the server is the referee: it
 deals the tiles, validates every move, and sends each player only their own rack.
 
 ## Keys — one key for you, none for friends
@@ -20,15 +20,15 @@ Object and code); it only learns yes/no. A leaked invite link only gets someone 
 
 ## Deploy
 
-Merge to `main` (or run **Deploy Wordgrid Worker** from the Actions tab). It deploys to
+Merge to `main` (or run **Deploy Scrabble Worker** from the Actions tab). It deploys to
 `https://verdict-cat-wordgrid.<your-subdomain>.workers.dev`; if your subdomain differs from the one
-hard-coded in `games/wordgrid/index.html`, update `DEFAULT_WORKER` there. Add any custom site
+hard-coded in `games/scrabble/index.html`, update `DEFAULT_WORKER` there. Add any custom site
 domain to `ALLOWED_ORIGINS` in `wrangler.toml`. The `verdict-cat-sync` Worker must already exist
 (the binding points at it by name).
 
 ## Using it
 
-1. Open the Wordgrid card on the homepage (`games/wordgrid/`); your sync key is picked up automatically if this device has it (otherwise paste it once),
+1. Open the Scrabble card on the homepage (`games/scrabble/`); your sync key is picked up automatically if this device has it (otherwise paste it once),
    choose 2–4 seats, pick your name and icon, **Create room**.
 2. Send the invite link. A friend opens it, sees a name/icon page **prefilled from their last
    game** (nothing is assumed — they press *Join*), and lands in the waiting room.
@@ -64,4 +64,4 @@ python3 -m http.server 8765                     # from the repo root
 # in the browser console on the game page:  localStorage.wordgrid_worker = 'http://127.0.0.1:8787'
 ```
 
-Tests: `node games/wordgrid/engine.test.js && node wordgrid-worker/src/room.test.js`
+Tests: `node games/scrabble/engine.test.js && node scrabble-worker/src/room.test.js`

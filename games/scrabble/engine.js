@@ -1,10 +1,10 @@
-/* Wordgrid engine — rules for a 2–4 player crossword tile game.
- * Pure logic, no DOM. Works in the browser (window.WordgridEngine) and Node (module.exports).
+/* Scrabble engine — rules for a 2–4 player crossword tile game.
+ * Pure logic, no DOM. Works in the browser (window.ScrabbleEngine) and Node (module.exports).
  * The caller supplies the dictionary as an isWord(string) predicate (upper-case input).
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.WordgridEngine = factory();
+  else root.ScrabbleEngine = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
@@ -73,7 +73,7 @@
   function newGame(names, opts) {
     opts = opts || {};
     if (!Array.isArray(names) || names.length < MIN_PLAYERS || names.length > MAX_PLAYERS)
-      throw new Error('Wordgrid supports ' + MIN_PLAYERS + '–' + MAX_PLAYERS + ' players');
+      throw new Error('Scrabble supports ' + MIN_PLAYERS + '–' + MAX_PLAYERS + ' players');
     var seed = opts.seed != null ? opts.seed : (Math.random() * 4294967296) >>> 0;
     var rng = mulberry32(seed);
     var board = [];
