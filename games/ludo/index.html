@@ -124,6 +124,20 @@ button { font: inherit; color: var(--ink); }
 @keyframes shake { 25% { transform: rotate(-9deg); } 75% { transform: rotate(9deg); } }
 .hint { color: var(--muted); font-size: 12px; text-align: center; }
 .winner { text-align: center; }
+.err { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 18px; }
+.note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+.menu-btn { width: 100%; margin-top: 10px; padding: 14px; font-size: 15px; display: block; text-align: center; text-decoration: none; }
+.invite { display: flex; gap: 8px; margin: 8px 0 4px; }
+.invite input { flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; color: var(--ink); font: inherit; font-size: 12px; }
+.card input[type=text] { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 9px 10px; color: var(--ink); font: inherit; }
+.seatrow .tag { font-size: 11px; color: var(--muted); }
+.seatrow.empty { border-left-color: var(--border2); color: var(--muted); border-style: dashed; }
+.seatrow .nm { flex: 1; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); flex: none; }
+.dot.on { background: var(--ok); }
+.xbtn { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 16px; padding: 0 4px; }
+#conn { font-size: 11px; color: var(--muted); min-width: 60px; text-align: center; }
+#conn.bad { color: var(--danger); }
 .winner h2 { font-size: 22px; margin-bottom: 8px; }
 </style>
 </head>
@@ -132,12 +146,65 @@ button { font: inherit; color: var(--ink); }
 <header>
   <a href="../../index.html">← Hub</a>
   <h1>Ludo</h1>
+  <span id="conn"></span>
   <button class="link" id="themeBtn" type="button">Theme</button>
 </header>
 
-<!-- setup -->
+<!-- menu -->
+<section class="screen" id="menu"><div class="card">
+  <h2>Ludo</h2>
+  <p class="sub">Race all four pawns home. Roll a 6 to leave base.</p>
+  <div id="incoming"></div>
+  <button class="btn primary menu-btn" id="goOnline" type="button">Play online with friends</button>
+  <button class="btn menu-btn" id="goLocal" type="button">Play on this device (bots or pass-and-play)</button>
+</div></section>
+
+<!-- online home: create a room -->
+<section class="screen" id="online"><div class="card">
+  <h2>Play online</h2>
+  <p class="sub">Create a room, then send friends the link or invite players from the site. Add bots to fill empty seats.</p>
+  <label class="f">Players (seats)</label>
+  <div class="seg" id="seatSeg"></div>
+  <button class="btn primary" id="createBtn" style="width:100%;margin-top:18px" type="button">Create room</button>
+  <div class="err" id="onlineErr"></div>
+  <p class="note">Creating a room needs you to be signed in on the hub. Friends joining by link do not.</p>
+  <button class="btn" id="onlineBack" style="width:100%;margin-top:10px" type="button">Back</button>
+</div></section>
+
+<!-- join by invite link -->
+<section class="screen" id="join"><div class="card">
+  <h2>You're invited to a Ludo game</h2>
+  <label class="f">Your name</label>
+  <input type="text" id="jName" maxlength="14" autocomplete="nickname"/>
+  <button class="btn primary" id="joinBtn" style="width:100%;margin-top:16px" type="button">Join game</button>
+  <div class="err" id="joinErr"></div>
+</div></section>
+
+<!-- lobby -->
+<section class="screen" id="lobby"><div class="card">
+  <h2>Waiting room</h2>
+  <p class="sub" id="lobbySub"></p>
+  <div class="seats" id="seatList"></div>
+  <div id="hostTools" style="display:none">
+    <label class="f">Invite link</label>
+    <div class="invite"><input type="text" id="inviteUrl" readonly/><button class="btn" id="copyBtn" type="button">Copy</button><button class="btn" id="shareBtn" type="button" style="display:none">Share</button></div>
+    <label class="f">Add a bot</label>
+    <div class="invite"><select id="botLevel" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--ink);font:inherit"><option value="easy">Easy</option><option value="medium" selected>Medium</option><option value="hard">Hard</option></select><button class="btn" id="addBotBtn" type="button">Add bot</button></div>
+    <label class="f" id="lobbyUsersLbl" style="display:none">Invite a signed-in player</label>
+    <div class="seats" id="lobbyUsers"></div>
+  </div>
+  <button class="btn primary" id="startOnline" style="width:100%;margin-top:18px;display:none" type="button">Start game</button>
+  <div class="note" id="lobbyHint"></div>
+  <div class="err" id="lobbyErr"></div>
+  <button class="btn" id="leaveLobby" style="width:100%;margin-top:10px" type="button">Leave</button>
+</div></section>
+
+<!-- dead end -->
+<section class="screen" id="dead"><div class="card"><h2 id="deadTitle"></h2><p class="sub" id="deadMsg"></p><button class="btn" id="deadBack" type="button">Back to start</button></div></section>
+
+<!-- local setup -->
 <section class="screen" id="setup"><div class="card">
-  <h2>Play Ludo</h2>
+  <h2>Play on this device</h2>
   <p class="sub">Race all four pawns home. Roll a 6 to leave base. Play bots, or pass the device around.</p>
   <label class="f">Players</label>
   <div class="seg" id="countSeg"></div>
@@ -145,6 +212,7 @@ button { font: inherit; color: var(--ink); }
   <div class="seats" id="seats"></div>
   <button class="btn primary" id="startBtn" style="width:100%;margin-top:18px" type="button">Start game</button>
   <button class="btn" id="resumeBtn" style="width:100%;margin-top:8px;display:none" type="button">Resume last game</button>
+  <button class="btn" id="localBack" style="width:100%;margin-top:8px" type="button">Back</button>
 </div></section>
 
 <!-- game -->
@@ -173,7 +241,8 @@ button { font: inherit; color: var(--ink); }
   setTheme(ls(function () { return localStorage.getItem(TKEY); }) === 'light' ? 'light' : 'dark');
   $('themeBtn').onclick = function () { setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); };
 
-  function show(id) { ['setup', 'game'].forEach(function (s) { $(s).classList.toggle('on', s === id); }); }
+  function show(id) { Array.prototype.forEach.call(document.querySelectorAll('.screen'), function (s) { s.classList.toggle('on', s.id === id); }); }
+  var mode = 'local';   // 'local' (this device) or 'online'
 
   // ---- setup screen ----
   var setup = ls(function () { return JSON.parse(localStorage.getItem(PKEY)); }) || { count: 4, seats: [] };
@@ -342,24 +411,29 @@ button { font: inherit; color: var(--ink); }
   }
 
   function onPawn(pi, k) {
+    if (mode === 'online') return netPawn(pi, k);
     if (busy || !g || pi !== g.turn || g.roll === null || g.players[pi].bot) return;
     if (E.legalMoves(g).indexOf(k) < 0) return;
     doMove(k);
+  }
+
+  // Slide a pawn square by square from `from` to `to`, then call done.
+  function hopPath(el, color, k, from, to, done) {
+    var path = [], i = 0;
+    if (from < 0) path.push(to); else for (var p = from + 1; p <= to; p++) path.push(p);
+    el.style.zIndex = 8;
+    (function hop() {
+      if (i >= path.length) { el.style.zIndex = ''; return done(); }
+      place(el, E.cellOf(color, path[i], k)); i++;
+      later(hop, from < 0 ? 200 : 140);
+    })();
   }
 
   function doMove(k) {
     if (busy) return;
     busy = true; clearCan(); $('hint').textContent = '';
     var who = g.turn, res = E.move(g, k), color = g.players[who].color, el = pawnEls[who][k];
-    var path = [];
-    if (res.from < 0) path.push(res.to); else for (var p = res.from + 1; p <= res.to; p++) path.push(p);
-    var i = 0;
-    el.style.zIndex = 8;
-    (function hop() {
-      if (i >= path.length) { el.style.zIndex = ''; return land(); }
-      place(el, E.cellOf(color, path[i], k)); i++;
-      later(hop, res.from < 0 ? 200 : 140);
-    })();
+    hopPath(el, color, k, res.from, res.to, land);
     function land() {
       busy = false; render();
       var msg = pname(who) + ' moved ' + (res.roll) + '.';
@@ -391,11 +465,14 @@ button { font: inherit; color: var(--ink); }
     g = E.newGame(players);
     begin();
   }
-  function begin() { show('game'); buildBoard(); face(0); render(); step(); }
+  function begin() { mode = 'local'; $('newBtn').textContent = 'New game'; show('game'); buildBoard(); face(0); render(); step(); }
 
   $('startBtn').onclick = function () { start(false); };
-  $('die').onclick = function () { if (g && g.roll === null && !g.players[g.turn].bot) doRoll(); };
-  $('newBtn').onclick = function () { stopAll(); ls(function () { localStorage.removeItem(KEY); }); g = null; show('setup'); drawSetup(); checkResume(); };
+  $('die').onclick = function () {
+    if (mode === 'online') return netRoll();
+    if (g && g.roll === null && !g.players[g.turn].bot) doRoll();
+  };
+  $('newBtn').onclick = function () { if (mode === 'online') return leaveOnline(); stopAll(); ls(function () { localStorage.removeItem(KEY); }); g = null; show('setup'); drawSetup(); checkResume(); };
 
   function checkResume() {
     var s = ls(function () { return localStorage.getItem(KEY); });
@@ -408,7 +485,284 @@ button { font: inherit; color: var(--ink); }
     stopAll(); begin();
   };
 
-  show('setup'); drawSetup(); checkResume();
+
+  // =====================================================================================
+  // Online mode: the server (Cloudflare Worker, same one as Scrabble) is the referee. It rolls
+  // the die, validates moves and plays the bots; this page only sends {roll}/{move} and animates
+  // what the server reports.
+  // =====================================================================================
+  var LS_SYNC = 'verdict-cat-sync-key', LS_KEY = 'wordgrid_key', LS_USER = 'verdict-cat-username', LS_NAME = 'ludo_name';
+  var WORKER = ls(function () { return localStorage.getItem('ludo_worker') || localStorage.getItem('wordgrid_worker'); }) || 'https://gastat-data-aggregator-wordgrid.saeed-a-alzeera.workers.dev';
+  function lsGet(k) { return ls(function () { return localStorage.getItem(k); }); }
+  function lsSet(k, v) { ls(function () { localStorage.setItem(k, v); }); }
+  function myKey() { return lsGet(LS_SYNC) || lsGet(LS_KEY) || ''; }
+  function myName() { return lsGet(LS_USER) || lsGet(LS_NAME) || ''; }
+  function seatKey(id) { return 'ludo_room_' + id; }
+  function wsUrl(path) { return WORKER.replace(/^http/, 'ws') + path; }
+  function api(path, body) {
+    return fetch(WORKER + '/ludo' + path, {
+      method: body ? 'POST' : 'GET',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + myKey() },
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(r.status === 401 ? 'Please sign in again on the hub.' : (j.error || 'Something went wrong.')); return j; }); });
+  }
+  function netErr(e) { return e.message === 'Failed to fetch' ? 'Could not reach the game server.' : e.message; }
+  function dead(title, msg) { $('deadTitle').textContent = title; $('deadMsg').textContent = msg; show('dead'); }
+
+  var net = { ws: null, me: null, roomId: '', S: null, queue: [], busy: false, lastSeq: null, retry: 0, gotState: false, closedByUs: false, ping: null, seats: 4, usersShown: false };
+
+  // ---- menu / create ----
+  $('goLocal').onclick = function () { mode = 'local'; show('setup'); drawSetup(); checkResume(); };
+  $('localBack').onclick = function () { show('menu'); };
+  $('goOnline').onclick = function () { mode = 'online'; show('online'); drawSeatSeg(); $('onlineErr').textContent = myKey() ? '' : 'Sign in on the hub to create a room (joining a friend’s link needs no account).'; };
+  $('onlineBack').onclick = function () { mode = 'local'; show('menu'); };
+  $('deadBack').onclick = function () { leaveOnline(); };
+  function drawSeatSeg() {
+    var seg = $('seatSeg'); seg.innerHTML = '';
+    [2, 3, 4].forEach(function (n) {
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = n; b.className = n === net.seats ? 'on' : '';
+      b.onclick = function () { net.seats = n; drawSeatSeg(); }; seg.appendChild(b);
+    });
+  }
+  $('createBtn').onclick = function () {
+    if (!myKey()) { $('onlineErr').textContent = 'Sign in on the hub first.'; return; }
+    $('onlineErr').textContent = ''; $('createBtn').disabled = true;
+    api('/rooms', { name: myName() || 'Host', seats: net.seats })
+      .then(function (x) { enterRoom(x.roomId, { token: x.token, seat: x.seat, invite: x.invite }); })
+      .catch(function (e) { $('onlineErr').textContent = netErr(e); })
+      .then(function () { $('createBtn').disabled = false; });
+  };
+
+  // ---- join by invite ----
+  var users = null;
+  function joinRequest(roomId, invite, name) {
+    var saved = ls(function () { return JSON.parse(localStorage.getItem(seatKey(roomId))); });
+    var body = { name: name, invite: invite };
+    if (saved && saved.token) body.token = saved.token;
+    return fetch(WORKER + '/ludo/r/' + roomId + '/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not join.'); return j; }); })
+      .then(function (j) { enterRoom(roomId, { token: j.token, seat: j.seat, invite: '' }); if (myKey()) api('/inbox', { roomId: roomId }).catch(function () {}); });
+  }
+  function startJoin(roomId, invite) {
+    mode = 'online';
+    if (lsGet(LS_USER)) {   // a signed-in account goes straight in under its own name
+      joinRequest(roomId, invite, lsGet(LS_USER)).catch(function (e) { dead('Can’t join this game', netErr(e)); });
+      return;
+    }
+    show('join'); $('jName').value = lsGet(LS_NAME) || '';
+    $('joinBtn').onclick = function () {
+      var nm = $('jName').value.trim(); lsSet(LS_NAME, nm);
+      $('joinErr').textContent = ''; $('joinBtn').disabled = true;
+      joinRequest(roomId, invite, nm).catch(function (e) { $('joinErr').textContent = netErr(e); }).then(function () { $('joinBtn').disabled = false; });
+    };
+  }
+  function paintInbox() {
+    var box = $('incoming'); box.innerHTML = '';
+    if (!myKey()) return;
+    api('/inbox').then(function (j) {
+      (j.invites || []).forEach(function (i) {
+        var d = document.createElement('div'); d.className = 'seatrow'; d.style.setProperty('--pc', 'var(--accent)');
+        var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = i.from + ' invited you';
+        var b = document.createElement('button'); b.className = 'btn primary'; b.type = 'button'; b.textContent = 'Join';
+        b.onclick = function () { startJoin(i.roomId, i.invite); };
+        d.appendChild(nm); d.appendChild(b); box.appendChild(d);
+      });
+    }).catch(function () { /* invites are optional */ });
+  }
+
+  // ---- connection ----
+  function enterRoom(id, seatInfo) {
+    net.roomId = id; net.me = seatInfo; net.S = null; net.queue = []; net.busy = false; net.lastSeq = null; net.gotState = false; net.usersShown = false;
+    lsSet(seatKey(id), JSON.stringify(seatInfo));
+    try { history.replaceState(null, '', location.pathname + '#room=' + id); } catch (e) { /* ignore */ }
+    mode = 'online'; stopAll(); connect();
+  }
+  function setConn(text, bad) { var c = $('conn'); c.textContent = text; c.className = bad ? 'bad' : ''; }
+  function connect() {
+    net.closedByUs = false; setConn('Connecting…');
+    var ws = net.ws = new WebSocket(wsUrl('/ludo/r/' + net.roomId + '/ws?t=' + encodeURIComponent(net.me.token)));
+    ws.onopen = function () { net.retry = 0; setConn(''); clearInterval(net.ping); net.ping = setInterval(function () { netSend({ type: 'ping' }); }, 40000); };
+    ws.onmessage = function (e) {
+      var m; try { m = JSON.parse(e.data); } catch (x) { return; }
+      if (m.type === 'state') { net.gotState = true; onNetState(m); }
+      else if (m.type === 'error') netFlash(m.message);
+    };
+    ws.onclose = function () {
+      clearInterval(net.ping);
+      if (net.closedByUs || ws !== net.ws) return;
+      net.retry++;
+      if (!net.gotState && net.retry >= 3) {
+        ls(function () { localStorage.removeItem(seatKey(net.roomId)); });
+        return dead('Can’t open this room', 'Your seat wasn’t recognised, or the room has expired. Ask the host for a fresh invite link.');
+      }
+      setConn('Reconnecting…', true);
+      setTimeout(function () { if (!net.closedByUs && ws === net.ws) connect(); }, Math.min(10000, 800 * Math.pow(2, net.retry - 1)));
+    };
+  }
+  function netSend(o) { if (net.ws && net.ws.readyState === 1) net.ws.send(JSON.stringify(o)); }
+  function netFlash(msg) { if (net.S && net.S.phase !== 'lobby') { $('hint').textContent = msg; } else $('lobbyErr').textContent = msg; }
+  function leaveOnline() {
+    net.closedByUs = true; clearInterval(net.ping); setConn('');
+    if (net.ws) { try { net.ws.close(); } catch (e) { /* ignore */ } net.ws = null; }
+    if (net.roomId) ls(function () { localStorage.removeItem(seatKey(net.roomId)); });
+    stopAll(); net.queue = []; net.busy = false; net.S = null; net.roomId = '';
+    g = null; pawnEls = []; mode = 'local';
+    try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ }
+    show('menu'); paintInbox();
+  }
+
+  // ---- state handling ----
+  function onNetState(m) {
+    if (m.phase === 'lobby') { net.S = m; renderLobby(m); show('lobby'); return; }
+    net.queue.push(m); pump();
+  }
+  function pump() {
+    if (net.busy || !net.queue.length) return;
+    // if we are far behind (tab was in the background), skip straight to the newest state
+    if (net.queue.length > 6) { net.queue = net.queue.slice(-1); net.lastSeq = null; }
+    var m = net.queue.shift(); net.busy = true;
+    applyState(m, function () { net.busy = false; pump(); });
+  }
+  function applyState(m, done) {
+    var ev = m.ev, first = net.lastSeq === null, isNew = !!ev && !first && ev.seq !== net.lastSeq;
+    if (ev) net.lastSeq = ev.seq; else if (first) net.lastSeq = -1;
+    var rebuild = first || !pawnEls.length || !g || g.players.length !== m.game.players.length || (ev && ev.type === 'start' && isNew);
+    function finish() { g = m.game; net.S = m; render(); netUi(m); done(); }
+    show('game');
+    $('newBtn').textContent = 'Leave room';
+    if (rebuild) { g = m.game; net.S = m; buildBoard(); face(ev && ev.type === 'roll' ? ev.value : (ev && ev.type === 'move' ? ev.roll : 0)); return finish(); }
+    if (!isNew) return finish();
+    var who = ev.player, name = m.game.players[who] ? m.game.players[who].name : '';
+    if (ev.type === 'roll') {
+      var d = $('die'); dieReady(false); d.classList.add('rolling');
+      var n = 0, spin = setInterval(function () { face(1 + Math.floor(Math.random() * 6)); if (++n > 4) clearInterval(spin); }, 70);
+      timers.push(spin);
+      later(function () {
+        d.classList.remove('rolling'); face(ev.value);
+        if (ev.forfeited) { status(name + ' rolled a third 6: turn lost.', who); return later(finish, 1100); }
+        if (ev.passed) { status(name + ' rolled ' + ev.value + ': no move' + (ev.again ? ', roll again.' : '.'), who); return later(finish, 900); }
+        status(name + ' rolled ' + ev.value + '.', who); later(finish, 250);
+      }, 450);
+    } else if (ev.type === 'move') {
+      face(ev.roll);
+      var color = g.players[who].color, el = pawnEls[who][ev.pawn];
+      hopPath(el, color, ev.pawn, ev.from, ev.to, function () {
+        var msg = name + ' moved ' + ev.roll + '.';
+        if (ev.captured.length) msg = name + ' captured ' + ev.captured.map(function (c) { return m.game.players[c.player].name; }).join(' and ') + '!';
+        else if (ev.finished) msg = name + ' got a pawn home!';
+        if (ev.won) msg = name + ' wins!';
+        status(msg, who);
+        g = m.game; render();
+        later(finish, ev.captured.length ? 700 : 250);
+      });
+    } else finish();
+  }
+
+  function netUi(m) {
+    var G = m.game, you = m.you, mine = G.turn === you, who = G.turn;
+    clearCan(); $('hint').textContent = '';
+    if (m.phase === 'over') { dieReady(false); return netWin(m); }
+    var name = G.players[who].name;
+    if (mine && G.roll === null) {
+      dieReady(true); status(name + ', roll the die', who); $('hint').textContent = 'Tap the die to roll.';
+    } else if (mine) {
+      dieReady(false);
+      G.legal.forEach(function (k) { var el = pawnEls[who][k]; el.classList.add('can'); el.disabled = false; });
+      status(name + ' rolled ' + G.roll + (G.legal.length > 1 ? ': pick a pawn.' : '.'), who);
+      if (G.legal.length > 1) $('hint').textContent = 'Tap a highlighted pawn.';
+    } else {
+      dieReady(false);
+      status(name + (G.players[who].bot ? ' is thinking…' : (G.roll === null ? ' is rolling…' : ' is moving…')), who);
+    }
+  }
+  function netWin(m) {
+    var G = m.game, w = G.winner;
+    status(G.players[w].name + ' wins!', w); dieReady(false);
+    var h = document.createElement('div'); h.className = 'winner'; h.innerHTML = '<h2></h2>'; h.firstChild.textContent = '🏆 ' + G.players[w].name + ' wins!';
+    if (m.you === 0) {
+      var b = document.createElement('button'); b.className = 'btn primary'; b.type = 'button'; b.textContent = 'Play again';
+      b.onclick = function () { netSend({ type: 'rematch' }); }; h.appendChild(b);
+    } else { var t = document.createElement('div'); t.className = 'hint'; t.textContent = 'Waiting for the host to start a rematch.'; h.appendChild(t); }
+    $('hint').innerHTML = ''; $('hint').appendChild(h);
+  }
+  function netRoll() {
+    var S = net.S; if (!S || S.phase !== 'playing' || S.game.turn !== S.you || S.game.roll !== null) return;
+    dieReady(false); netSend({ type: 'roll' });
+  }
+  function netPawn(pi, k) {
+    var S = net.S; if (!S || S.phase !== 'playing' || pi !== S.you || S.game.turn !== S.you || S.game.legal.indexOf(k) < 0) return;
+    clearCan(); netSend({ type: 'move', pawn: k });
+  }
+
+  // ---- lobby ----
+  function renderLobby(m) {
+    var host = m.you === 0;
+    $('lobbySub').textContent = host ? 'Send the link, invite players, or add bots. Start when you are ready (2 to ' + m.maxSeats + ' players).' : 'Waiting for the host to start the game.';
+    var list = $('seatList'); list.innerHTML = '';
+    var cols = E.SEATING[Math.max(2, Math.min(4, m.seats.length))] || [0, 1, 2, 3];
+    for (var i = 0; i < m.maxSeats; i++) (function (i) {
+      var d = document.createElement('div'), p = m.seats[i];
+      d.className = 'seatrow' + (p ? '' : ' empty'); d.style.setProperty('--pc', CSS[cols[i] !== undefined ? cols[i] : i]);
+      if (p) {
+        var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.name + (p.seat === m.you ? ' (you)' : '');
+        var tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = p.seat === 0 ? 'host' : (p.bot ? 'bot · ' + p.bot : '');
+        d.appendChild(nm); d.appendChild(tg);
+        if (p.bot && host) { var x = document.createElement('button'); x.className = 'xbtn'; x.type = 'button'; x.textContent = '✕'; x.setAttribute('aria-label', 'Remove bot'); x.onclick = function () { netSend({ type: 'removeBot', seat: p.seat }); }; d.appendChild(x); }
+        else { var dt = document.createElement('span'); dt.className = 'dot' + (p.connected ? ' on' : ''); dt.title = p.connected ? 'online' : 'offline'; d.appendChild(dt); }
+      } else { var w = document.createElement('span'); w.className = 'nm'; w.textContent = 'Waiting for player…'; d.appendChild(w); }
+      list.appendChild(d);
+    })(i);
+    var inv = m.invite || (net.me && net.me.invite);
+    $('hostTools').style.display = host ? 'block' : 'none';
+    if (host && inv) {
+      $('inviteUrl').value = location.origin + location.pathname + '#room=' + net.roomId + '&i=' + inv;
+      $('shareBtn').style.display = navigator.share ? '' : 'none';
+    }
+    $('addBotBtn').disabled = m.seats.length >= m.maxSeats;
+    $('startOnline').style.display = host ? 'block' : 'none';
+    $('startOnline').disabled = m.seats.length < 2;
+    $('lobbyHint').textContent = host ? (m.seats.length < 2 ? 'Add a bot or wait for a friend to join.' : m.seats.length + ' players ready.') : '';
+    $('lobbyErr').textContent = '';
+    if (host && !net.usersShown && myKey()) { net.usersShown = true; $('lobbyUsersLbl').style.display = ''; paintUsers(); }
+  }
+  function paintUsers() {
+    var box = $('lobbyUsers');
+    (users ? Promise.resolve(users) : fetch(WORKER + '/users', { headers: { Authorization: 'Bearer ' + myKey() } }).then(function (r) { return r.json(); }).then(function (j) { users = j.users || []; return users; }))
+      .then(function (list) {
+        box.innerHTML = '';
+        if (!list.length) { box.innerHTML = '<div class="note">No other players yet.</div>'; return; }
+        list.forEach(function (u) {
+          var d = document.createElement('div'); d.className = 'seatrow'; d.style.setProperty('--pc', 'var(--border2)');
+          var nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = u;
+          var b = document.createElement('button'); b.className = 'btn'; b.type = 'button'; b.textContent = 'Invite';
+          b.onclick = function () {
+            b.disabled = true;
+            api('/r/' + net.roomId + '/invite', { token: net.me.token, username: u }).then(function () { b.textContent = 'Invited'; }).catch(function (e) { b.disabled = false; $('lobbyErr').textContent = netErr(e); });
+          };
+          d.appendChild(nm); d.appendChild(b); box.appendChild(d);
+        });
+      }).catch(function (e) { $('lobbyErr').textContent = netErr(e); });
+  }
+  $('copyBtn').onclick = function () {
+    var u = $('inviteUrl'); u.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(u.value) : Promise.reject()).catch(function () { document.execCommand('copy'); })
+      .then(function () { $('copyBtn').textContent = 'Copied'; setTimeout(function () { $('copyBtn').textContent = 'Copy'; }, 1500); });
+  };
+  $('shareBtn').onclick = function () { navigator.share({ title: 'Ludo', text: 'Join my Ludo game', url: $('inviteUrl').value }).catch(function () {}); };
+  $('addBotBtn').onclick = function () { netSend({ type: 'addBot', level: $('botLevel').value }); };
+  $('startOnline').onclick = function () { netSend({ type: 'start' }); };
+  $('leaveLobby').onclick = function () { leaveOnline(); };
+
+  // ---- routing ----
+  var hash = new URLSearchParams(location.hash.slice(1));
+  var hRoom = hash.get('room') || hash.get('r') || '', hInvite = hash.get('i') || '';
+  if (/^[a-f0-9]{24}$/.test(hRoom)) {
+    var saved = ls(function () { return JSON.parse(localStorage.getItem(seatKey(hRoom))); });
+    if (saved && saved.token) { mode = 'online'; enterRoom(hRoom, saved); }
+    else if (hInvite) startJoin(hRoom, hInvite);
+    else dead('Can’t open this room', 'Open the invite link your friend sent you.');
+  } else { show('menu'); paintInbox(); }
+
 })();
 </script>
 </body>

@@ -12,10 +12,16 @@
  *   POST /r/:id/join      -      {invite | token, name, icon} -> {seat, token, name, icon}
  *   GET  /r/:id/ws?t=...  seat   WebSocket: server pushes {type:'state'}; client sends commands
  *   GET  /ping            key    check a key
+ *
+ * Ludo shares this Worker: every route above also exists under /ludo/ (rooms, join, ws,
+ * invite, inbox) and talks to the LudoRoom Durable Object instead.
  */
 import { DurableObject } from 'cloudflare:workers';
 import WORDS from '../../games/scrabble/enable.txt';
 import { newRoom, join, command, view, seatForToken } from './room.js';
+import { LudoRoom } from './ludo-do.js';
+
+export { LudoRoom };
 
 // Dictionary lookup without parsing 173k words into a Set (a cold start would
 // burn CPU): one substring scan of the newline-delimited, upper-case list.
@@ -109,25 +115,32 @@ export default {
       return new Response(null, { status: origin.ok ? 204 : 403, headers: corsHeaders(request, env) });
     if (!origin.ok) return json(request, env, { error: 'Origin not allowed.' }, 403);
 
-    if (url.pathname === '/ping' && request.method === 'GET') {
+    // /ludo/... is the same API backed by the LudoRoom Durable Object; invites live in their own
+    // inbox namespace so a Ludo invite never shows up in Scrabble (and vice versa).
+    const ludo = url.pathname.startsWith('/ludo/');
+    const path = ludo ? url.pathname.slice(5) : url.pathname;
+    const ROOMS = ludo ? env.LUDO_ROOM : env.ROOM;
+    const BOX = ludo ? 'ludo:' : '';
+
+    if (path === '/ping' && request.method === 'GET') {
       return (await rejectKey(request, env)) || json(request, env, { ok: true });
     }
 
-    if (url.pathname === '/rooms' && request.method === 'POST') {
+    if (path === '/rooms' && request.method === 'POST') {
       const denied = await rejectKey(request, env);
       if (denied) return denied;
       let body;
       try { body = await request.json(); } catch { return json(request, env, { error: 'Bad JSON.' }, 400); }
       const bytes = new Uint8Array(12); crypto.getRandomValues(bytes);
       const roomId = Array.from(bytes, (x) => x.toString(16).padStart(2, '0')).join('');
-      const stub = env.ROOM.get(env.ROOM.idFromName(roomId));
-      const res = await stub.init({ name: body && body.name, icon: body && body.icon });   // always 2-4 seats
+      const stub = ROOMS.get(ROOMS.idFromName(roomId));
+      const res = await stub.init({ name: body && body.name, icon: body && body.icon, seats: ludo ? (body && body.seats) : undefined });   // always 2-4 seats
       if (!res.ok) return json(request, env, { error: res.error }, 400);
       return json(request, env, { roomId, seat: res.seat, token: res.token, invite: res.invite, name: res.name, icon: res.icon }, 201);
     }
 
     // Other signed-in accounts, for the invite list.
-    if (url.pathname === '/users' && request.method === 'GET') {
+    if (path === '/users' && request.method === 'GET') {
       const denied = await rejectKey(request, env);
       if (denied) return denied;
       const me = await identify(request, env);
@@ -142,7 +155,7 @@ export default {
     }
 
     // Invite an account to a room: {token (your seat token), username}.
-    const inv = url.pathname.match(/^\/r\/([a-f0-9]{24})\/invite$/);
+    const inv = path.match(/^\/r\/([a-f0-9]{24})\/invite$/);
     if (inv && request.method === 'POST') {
       const denied = await rejectKey(request, env);
       if (denied) return denied;
@@ -150,14 +163,14 @@ export default {
       try { body = await request.json(); } catch { return json(request, env, { error: 'Bad JSON.' }, 400); }
       const username = String((body && body.username) || '').trim().toLowerCase();
       if (!/^[a-z0-9_-]{1,40}$/.test(username)) return json(request, env, { error: 'Unknown player.' }, 400);
-      const info = await env.ROOM.get(env.ROOM.idFromName(inv[1])).inviteFor(body.token);
+      const info = await ROOMS.get(ROOMS.idFromName(inv[1])).inviteFor(body.token);
       if (!info.ok) return json(request, env, { error: info.error }, info.status || 400);
-      await env.INBOX.get(env.INBOX.idFromName('inbox')).add(username, { roomId: inv[1], invite: info.invite, from: info.from });
+      await env.INBOX.get(env.INBOX.idFromName('inbox')).add(BOX + username, { roomId: inv[1], invite: info.invite, from: info.from });
       return json(request, env, { ok: true });
     }
 
     // Your pending invitations.
-    if (url.pathname === '/inbox' && (request.method === 'GET' || request.method === 'POST')) {
+    if (path === '/inbox' && (request.method === 'GET' || request.method === 'POST')) {
       const denied = await rejectKey(request, env);
       if (denied) return denied;
       const me = await identify(request, env);
@@ -165,14 +178,14 @@ export default {
       const box = env.INBOX.get(env.INBOX.idFromName('inbox'));
       if (request.method === 'POST') {   // dismiss {roomId}
         let body; try { body = await request.json(); } catch { body = {}; }
-        await box.dismiss(me.username, body && body.roomId);
+        await box.dismiss(BOX + me.username, body && body.roomId);
       }
-      return json(request, env, { invites: await box.list(me.username) });
+      return json(request, env, { invites: await box.list(BOX + me.username) });
     }
 
-    const m = url.pathname.match(/^\/r\/([a-f0-9]{24})\/(join|ws)$/);
+    const m = path.match(/^\/r\/([a-f0-9]{24})\/(join|ws)$/);
     if (m && ID_RE.test(m[1])) {
-      const stub = env.ROOM.get(env.ROOM.idFromName(m[1]));
+      const stub = ROOMS.get(ROOMS.idFromName(m[1]));
       if (m[2] === 'join' && request.method === 'POST') {
         let body;
         try { body = await request.json(); } catch { return json(request, env, { error: 'Bad JSON.' }, 400); }

@@ -9,6 +9,8 @@ on:
       - "games/scrabble/engine.js"
       - "games/scrabble/icons.js"
       - "games/scrabble/enable.txt"
+      # Ludo rooms run in the same Worker
+      - "games/ludo/engine.js"
       - ".github/workflows/deploy-scrabble-worker.yml"
   workflow_dispatch:
 
@@ -27,6 +29,8 @@ jobs:
         run: |
           node games/scrabble/engine.test.js
           node scrabble-worker/src/room.test.js
+          node games/ludo/engine.test.js
+          node scrabble-worker/src/ludo-room.test.js
 
       # No secret to set: room creation is authorised by asking the sync worker (service
       # binding SYNC), so the sync key is only ever stored there.
