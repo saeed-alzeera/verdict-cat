@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
 <link rel="shortcut icon" href="favicon.ico" />
-<script src="gist.js?v=6"></script>
+<script src="gist.js?v=7"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -431,11 +431,12 @@
         }
         il.appendChild(row);
       });
+      var me = await Gist.account.me();
       var users = await Gist.account.users.list();
       ul.innerHTML = users.length ? '' : '<div style="font-size:13px;color:var(--muted);">No accounts yet.</div>';
       users.forEach(function(u) {
         var row = document.createElement('div'); row.className = 'book-item';
-        row.innerHTML = '<span class="book-title">' + esc(u.username) + '</span><span class="book-author">' + (u.disabled ? 'disabled' : 'active') + '</span>';
+        row.innerHTML = '<span class="book-title">' + esc(u.username) + '</span><span class="book-author">' + (u.disabled ? 'disabled' : 'active') + (u.admin ? ' · admin' : '') + '</span>';
         var b = document.createElement('button'); b.className = 'secondary'; b.style.width = 'auto'; b.style.padding = '4px 10px';
         b.textContent = u.disabled ? 'Enable' : 'Disable';
         b.onclick = async function() { await Gist.account.users.setDisabled(u.username, !u.disabled); loadAccounts(); };
@@ -448,6 +449,12 @@
           try { await Gist.account.users.setPassword(u.username, pw); setUserStatus('ok', u.username + ' password set to: ' + pw); } catch (e) { setUserStatus('err', e.message); }
         };
         row.appendChild(rp);
+        if (me.owner) {
+          var ad = document.createElement('button'); ad.className = 'secondary'; ad.style.width = 'auto'; ad.style.padding = '4px 10px'; ad.style.marginLeft = '6px';
+          ad.textContent = u.admin ? 'Remove admin' : 'Make admin';
+          ad.onclick = async function() { try { await Gist.account.users.setAdmin(u.username, !u.admin); loadAccounts(); } catch (e) { setUserStatus('err', e.message); } };
+          row.appendChild(ad);
+        }
         var del = document.createElement('button'); del.className = 'danger'; del.style.width = 'auto'; del.style.padding = '4px 10px'; del.style.marginLeft = '6px';
         del.textContent = 'Delete';
         del.onclick = async function() {
@@ -459,7 +466,7 @@
       });
     } catch (e) {
       il.innerHTML = ''; ul.innerHTML = '';
-      setInviteStatus('err', /Owner only|rejected/.test(e.message) ? 'Sign in with the owner key to manage invites.' : e.message);
+      setInviteStatus('err', /Owner only|Admin only|rejected/.test(e.message) ? 'Only the owner key or an admin account can manage users.' : e.message);
     }
   }
   function setUserStatus(cls, msg) {
