@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="favicon-180.png" />
 <link rel="shortcut icon" href="favicon.ico" />
-<script src="gist.js?v=5"></script>
+<script src="gist.js?v=6"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -173,7 +173,7 @@
   <section>
     <h2>Invites &amp; Accounts</h2>
     <div class="card">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Owner key only. People create their own account on the Library or hub page; each signup needs one single-use invite code. Send the code to them privately.</p>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Owner key only. Add users here and hand out the username and password, or create single-use invite codes for people to sign up themselves. Resetting a password signs that user out on all other devices.</p>
       <div class="pat-row">
         <input type="text" id="invite-label" placeholder="Who is it for? (optional)" autocomplete="off" />
         <button onclick="makeInvite()">New invite</button>
@@ -181,6 +181,13 @@
       <div class="pat-status" id="invite-status"></div>
       <div class="book-list" id="invite-list" style="margin-top:12px;"></div>
       <h2 style="margin-top:20px;">Accounts</h2>
+      <div class="pat-row">
+        <input type="text" id="new-user" placeholder="Username (a-z, 0-9, - _)" autocomplete="off" autocapitalize="none" />
+        <input type="text" id="new-pass" placeholder="Password" autocomplete="off" />
+        <button class="secondary" onclick="fillRandom()">Random</button>
+        <button onclick="addUser()">Add user</button>
+      </div>
+      <div class="pat-status" id="user-status"></div>
       <div class="book-list" id="user-list" style="margin-top:8px;"></div>
     </div>
   </section>
@@ -433,12 +440,52 @@
         b.textContent = u.disabled ? 'Enable' : 'Disable';
         b.onclick = async function() { await Gist.account.users.setDisabled(u.username, !u.disabled); loadAccounts(); };
         row.appendChild(b);
+        var rp = document.createElement('button'); rp.className = 'secondary'; rp.style.width = 'auto'; rp.style.padding = '4px 10px'; rp.style.marginLeft = '6px';
+        rp.textContent = 'Reset password';
+        rp.onclick = async function() {
+          var pw = prompt('New password for ' + u.username + ' (they will be signed out everywhere):');
+          if (!pw) return;
+          try { await Gist.account.users.setPassword(u.username, pw); setUserStatus('ok', u.username + ' password set to: ' + pw); } catch (e) { setUserStatus('err', e.message); }
+        };
+        row.appendChild(rp);
+        var del = document.createElement('button'); del.className = 'danger'; del.style.width = 'auto'; del.style.padding = '4px 10px'; del.style.marginLeft = '6px';
+        del.textContent = 'Delete';
+        del.onclick = async function() {
+          if (!confirm('Delete ' + u.username + ' and all their synced data? This cannot be undone.')) return;
+          try { await Gist.account.users.remove(u.username); setUserStatus('ok', 'Deleted ' + u.username); loadAccounts(); } catch (e) { setUserStatus('err', e.message); }
+        };
+        row.appendChild(del);
         ul.appendChild(row);
       });
     } catch (e) {
       il.innerHTML = ''; ul.innerHTML = '';
       setInviteStatus('err', /Owner only|rejected/.test(e.message) ? 'Sign in with the owner key to manage invites.' : e.message);
     }
+  }
+  function setUserStatus(cls, msg) {
+    var el = document.getElementById('user-status');
+    el.className = 'pat-status' + (cls ? ' ' + cls : '');
+    el.textContent = msg;
+  }
+  function randStr(n) {
+    var A = 'abcdefghjkmnpqrstuvwxyz23456789', b = crypto.getRandomValues(new Uint8Array(n)), s = '';
+    for (var i = 0; i < n; i++) s += A[b[i] % A.length];
+    return s;
+  }
+  function fillRandom() {
+    document.getElementById('new-user').value = 'cat-' + randStr(6);
+    document.getElementById('new-pass').value = randStr(16);
+  }
+  async function addUser() {
+    var u = document.getElementById('new-user').value.trim().toLowerCase(), p = document.getElementById('new-pass').value;
+    if (!u || !p) { setUserStatus('err', 'Enter a username and password (or press Random).'); return; }
+    setUserStatus('', 'Creating…');
+    try {
+      await Gist.account.users.create(u, p);
+      setUserStatus('ok', 'Created ' + u + ' / ' + p);
+      document.getElementById('new-user').value = ''; document.getElementById('new-pass').value = '';
+      loadAccounts();
+    } catch (e) { setUserStatus('err', e.message); }
   }
   async function makeInvite() {
     setInviteStatus('', 'Creating…');
